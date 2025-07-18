@@ -56,6 +56,11 @@ def webhook():
             print("[WARNING] No open position to sell.")
             return jsonify({"warning": "No position to close"}), 200
 
+@app.route('/ping', methods=['GET'])
+def ping():
+    print("[PING] Received keep-alive ping.")
+    return "pong", 200
+
 def place_binance_order(symbol, side, quantity):
     url = "https://api.binance.com/api/v3/order"
     params = {
