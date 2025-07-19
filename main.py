@@ -15,7 +15,6 @@ open_position_size = 0.0
 @app.route('/', methods=['POST'])
 def webhook():
     global open_position_size
-    print("in webhook...")
     print(f"[STATE] Current open_position_size before processing: {open_position_size}")
 
     data = request.json
