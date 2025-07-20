@@ -11,6 +11,9 @@ app = Flask(__name__)
 BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")
 
+# Allowed trading pairs
+ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT"}
+
 POSITIONS_DIR = "positions"
 os.makedirs(POSITIONS_DIR, exist_ok=True)
 
@@ -27,6 +30,10 @@ def webhook():
     if action not in ["BUY", "SELL"]:
         print("[ERROR] Invalid action received:", action)
         return jsonify({"error": "Invalid action"}), 400
+    
+    if symbol not in ALLOWED_SYMBOLS:
+        print(f"[ERROR] Symbol '{symbol}' is not in allowed list.")
+        return jsonify({"error": f"Symbol '{symbol}' is not allowed"}), 400
 
     if action == "BUY":
         usdt_balance = get_asset_balance("USDT")
