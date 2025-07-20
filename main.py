@@ -21,8 +21,9 @@ def webhook():
 
     action = data.get("action", "").upper()
     symbol = data.get("symbol", "BTCUSDT").upper()
+    buy_pct = data.get("buy_pct", 0.001)
 
-    print(f"[INFO] Action: {action}, Symbol: {symbol}")
+    print(f"[INFO] Action: {action}, Symbol: {symbol}, Buy %: {buy_pct}")
 
     if action not in ["BUY", "SELL"]:
         print("[ERROR] Invalid action received:", action)
@@ -33,12 +34,20 @@ def webhook():
         return jsonify({"error": f"Symbol '{symbol}' is not allowed"}), 400
 
     if action == "BUY":
+        try:
+            buy_pct = Decimal(str(buy_pct))
+            if not (Decimal("0") < buy_pct <= Decimal("1")):
+                raise ValueError("Out of range")
+        except Exception:
+            buy_pct = Decimal("0.001")
+            print(f"[WARNING] Invalid 'buy_pct' provided. Defaulting to 0.001 (0.1%)")
+
         usdt_balance = get_asset_balance("USDT")
-        invest_usdt = Decimal(str(usdt_balance)) * Decimal("0.001")  # 0.1%
+        invest_usdt = Decimal(str(usdt_balance)) * buy_pct
         price = Decimal(str(get_current_price(symbol)))
         quantity = (invest_usdt / price).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
 
-        print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest 0.1%: {invest_usdt:.4f}")
+        print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
         print(f"[INFO] {symbol} Price: {price}, Quantity to BUY: {quantity}")
 
         place_binance_order(symbol, "BUY", quantity)
