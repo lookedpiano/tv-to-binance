@@ -1,26 +1,25 @@
 from flask import Flask, request, jsonify
 import hmac, hashlib
 import requests
-import os
+import os, json
+from decimal import Decimal, ROUND_DOWN
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 
-# Load API keys from Render environment variables
+# Load API keys from environment variables
 BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")
 
-# In-memory tracker of currently held position size
-open_position_size = 0.0
+POSITIONS_DIR = "positions"
+os.makedirs(POSITIONS_DIR, exist_ok=True)
 
 @app.route('/', methods=['POST'])
 def webhook():
-    global open_position_size
-    print(f"[STATE] Current open_position_size before processing: {open_position_size}")
-
     data = request.json
     print("[WEBHOOK] Received payload:", data)
 
-    action = data.get("action", "").upper() # Expected: "BUY" or "SELL"
+    action = data.get("action", "").upper()
     symbol = data.get("symbol", "BTCUSDT").upper()
 
     print(f"[INFO] Action: {action}, Symbol: {symbol}")
@@ -30,27 +29,27 @@ def webhook():
         return jsonify({"error": "Invalid action"}), 400
 
     if action == "BUY":
-        # Calculate 1‰ (0.1%) of available USDT
         usdt_balance = get_asset_balance("USDT")
-        invest_usdt = usdt_balance * 0.001
-        price = get_current_price(symbol)
-        quantity = round(invest_usdt / price, 6)
+        invest_usdt = Decimal(str(usdt_balance)) * Decimal("0.001")  # 0.1%
+        price = Decimal(str(get_current_price(symbol)))
+        quantity = (invest_usdt / price).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
 
-        # Place market buy
-        print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest 0.1% (1‰): {invest_usdt:.4f}")
-        print(f"[INFO] {symbol} Price: {price:.4f}, Calculated Quantity to BUY: {quantity:.6f}")
+        print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest 0.1%: {invest_usdt:.4f}")
+        print(f"[INFO] {symbol} Price: {price}, Quantity to BUY: {quantity}")
 
         place_binance_order(symbol, "BUY", quantity)
-        open_position_size = quantity # Save the position
+        write_position(symbol, quantity, price)
         print(f"[ORDER] BUY executed: {quantity} {symbol}")
         return jsonify({"status": f"Bought {quantity} {symbol}"}), 200
 
     elif action == "SELL":
-        if open_position_size > 0:
-            print(f"[INFO] Selling open position: {open_position_size} {symbol}")
-            place_binance_order(symbol, "SELL", open_position_size)
-            print(f"[ORDER] SELL executed: {open_position_size} {symbol}")
-            open_position_size = 0.0 # Reset position tracker
+        position = read_position(symbol)
+        if position:
+            quantity = Decimal(position["quantity"])
+            print(f"[INFO] Selling quantity: {quantity} {symbol}")
+            place_binance_order(symbol, "SELL", quantity)
+            delete_position(symbol)
+            print(f"[ORDER] SELL executed: {quantity} {symbol}")
             return jsonify({"status": f"Sold {symbol}"}), 200
         else:
             print("[WARNING] No open position to sell.")
@@ -58,7 +57,7 @@ def webhook():
 
 @app.route('/ping', methods=['GET'])
 def ping():
-    print("[PING] Received keep-alive ping.")
+    print("[PING] Keep-alive ping received.")
     return "pong", 200
 
 def place_binance_order(symbol, side, quantity):
@@ -67,7 +66,7 @@ def place_binance_order(symbol, side, quantity):
         "symbol": symbol,
         "side": side,
         "type": "MARKET",
-        "quantity": quantity,
+        "quantity": str(quantity),
         "timestamp": get_timestamp()
     }
     headers = {
@@ -107,7 +106,41 @@ def get_current_price(symbol):
     return price
 
 def get_timestamp():
-    return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"])
+    # Binance serverTime is in milliseconds, convert to seconds for UNIX timestamp
+    return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"] / 1000)
+
+# --- Position file helpers ---
+def position_filepath(symbol):
+    return os.path.join(POSITIONS_DIR, f"{symbol}.json")
+
+def write_position(symbol, quantity, buy_price):
+    timestamp = get_timestamp()
+    data = {
+        "quantity": str(quantity),
+        "buy_price": str(buy_price),
+        "timestamp": timestamp,
+        "timestamp_human": datetime.fromtimestamp(timestamp, timezone.utc).isoformat()
+    }
+    with open(position_filepath(symbol), "w") as f:
+        json.dump(data, f, indent=2)
+    print(f"[FILE] Position saved to {position_filepath(symbol)}")
+
+def read_position(symbol):
+    path = position_filepath(symbol)
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            data = json.load(f)
+            print(f"[FILE] Read position file: {data}")
+            return data
+    else:
+        print(f"[FILE] No position file for {symbol}")
+        return None
+
+def delete_position(symbol):
+    path = position_filepath(symbol)
+    if os.path.exists(path):
+        os.remove(path)
+        print(f"[FILE] Deleted position file: {path}")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
