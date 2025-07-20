@@ -26,7 +26,7 @@ def webhook():
     print(f"[INFO] Action: {action}, Symbol: {symbol}")
 
     if action not in ["BUY", "SELL"]:
-        print("[ERROR] Invalid action received:_", action)
+        print("[ERROR] Invalid action received:", action)
         return jsonify({"error": "Invalid action"}), 400
 
     if action == "BUY":
