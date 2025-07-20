@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 import hmac, hashlib
 import requests
-import os, json
+import os
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime, timezone
 
@@ -13,9 +13,6 @@ BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")
 
 # Allowed trading pairs
 ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT"}
-
-POSITIONS_DIR = "positions"
-os.makedirs(POSITIONS_DIR, exist_ok=True)
 
 @app.route('/', methods=['POST'])
 def webhook():
@@ -45,22 +42,21 @@ def webhook():
         print(f"[INFO] {symbol} Price: {price}, Quantity to BUY: {quantity}")
 
         place_binance_order(symbol, "BUY", quantity)
-        write_position(symbol, quantity, price)
-        print(f"[ORDER] BUY executed: {quantity} {symbol}")
+        print(f"[ORDER] BUY executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
         return jsonify({"status": f"Bought {quantity} {symbol}"}), 200
 
     elif action == "SELL":
-        position = read_position(symbol)
-        if position:
-            quantity = Decimal(position["quantity"])
-            print(f"[INFO] Selling quantity: {quantity} {symbol}")
+        base_asset = symbol.replace("USDT", "")
+        asset_balance = Decimal(str(get_asset_balance(base_asset)))
+        if asset_balance > 0:
+            quantity = asset_balance.quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
             place_binance_order(symbol, "SELL", quantity)
-            delete_position(symbol)
-            print(f"[ORDER] SELL executed: {quantity} {symbol}")
-            return jsonify({"status": f"Sold {symbol}"}), 200
+            price = Decimal(str(get_current_price(symbol)))
+            print(f"[ORDER] SELL executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+            return jsonify({"status": f"Sold {quantity} {symbol}"}), 200
         else:
-            print("[WARNING] No open position to sell.")
-            return jsonify({"warning": "No position to close"}), 200
+            print("[WARNING] No asset balance to sell.")
+            return jsonify({"warning": "No asset to sell"}), 200
 
 @app.route('/ping', methods=['GET'])
 def ping():
@@ -113,41 +109,7 @@ def get_current_price(symbol):
     return price
 
 def get_timestamp():
-    # Binance serverTime is in milliseconds, convert to seconds for UNIX timestamp
     return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"] / 1000)
-
-# --- Position file helpers ---
-def position_filepath(symbol):
-    return os.path.join(POSITIONS_DIR, f"{symbol}.json")
-
-def write_position(symbol, quantity, buy_price):
-    timestamp = get_timestamp()
-    data = {
-        "quantity": str(quantity),
-        "buy_price": str(buy_price),
-        "timestamp": timestamp,
-        "timestamp_human": datetime.fromtimestamp(timestamp, timezone.utc).isoformat()
-    }
-    with open(position_filepath(symbol), "w") as f:
-        json.dump(data, f, indent=2)
-    print(f"[FILE] Position saved to {position_filepath(symbol)}")
-
-def read_position(symbol):
-    path = position_filepath(symbol)
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            data = json.load(f)
-            print(f"[FILE] Read position file: {data}")
-            return data
-    else:
-        print(f"[FILE] No position file for {symbol}")
-        return None
-
-def delete_position(symbol):
-    path = position_filepath(symbol)
-    if os.path.exists(path):
-        os.remove(path)
-        print(f"[FILE] Deleted position file: {path}")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
