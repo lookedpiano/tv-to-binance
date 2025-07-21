@@ -21,10 +21,11 @@ def webhook():
     print("[WEBHOOK] Received payload:", data)
 
     action = data.get("action", "").upper()
+    is_buy = action == "BUY"
     symbol = data.get("symbol", "BTCUSDT").upper()
     buy_pct = data.get("buy_pct", 0.001)
 
-    print(f"[INFO] Action: {action}, Symbol: {symbol}, Buy %: {buy_pct}")
+    print(f"[INFO] Action: {action}, Symbol: {symbol}" + (f", Buy %: {buy_pct}" if is_buy else ""))
 
     if action not in ["BUY", "SELL"]:
         print("[ERROR] Invalid action received:", action)
@@ -34,7 +35,7 @@ def webhook():
         print(f"[ERROR] Symbol '{symbol}' is not in allowed list.")
         return jsonify({"error": f"Symbol '{symbol}' is not allowed"}), 400
 
-    if action == "BUY":
+    if is_buy:
         try:
             buy_pct = Decimal(str(buy_pct))
             if not (Decimal("0") < buy_pct <= Decimal("1")):
@@ -55,7 +56,7 @@ def webhook():
         print(f"[ORDER] BUY executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
         return jsonify({"status": f"Bought {quantity} {symbol}"}), 200
 
-    elif action == "SELL":
+    else:
         base_asset = symbol.replace("USDT", "")
         asset_balance = Decimal(str(get_asset_balance(base_asset)))
         if asset_balance > 0:
