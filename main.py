@@ -14,6 +14,9 @@ BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")
 # Allowed trading pairs
 ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT"}
 
+# Default Buy Percentage: 0.1 %
+DEFAULT_BUY_PCT = Decimal("0.001")
+
 
 @app.route('/', methods=['POST'])
 def webhook():
@@ -23,26 +26,26 @@ def webhook():
     action = data.get("action", "").upper()
     is_buy = action == "BUY"
     symbol = data.get("symbol", "BTCUSDT").upper()
-    buy_pct = data.get("buy_pct", 0.001)
+    buy_pct_raw = data.get("buy_pct", DEFAULT_BUY_PCT)
 
-    print(f"[INFO] Action: {action}, Symbol: {symbol}" + (f", Buy %: {buy_pct}" if is_buy else ""))
+    print(f"[INFO] Action: {action}, Symbol: {symbol}" + (f", Buy %: {buy_pct_raw}" if is_buy else ""))
 
     if action not in ["BUY", "SELL"]:
         print("[ERROR] Invalid action received:", action)
         return jsonify({"error": "Invalid action"}), 400
-    
+
     if symbol not in ALLOWED_SYMBOLS:
         print(f"[ERROR] Symbol '{symbol}' is not in allowed list.")
         return jsonify({"error": f"Symbol '{symbol}' is not allowed"}), 400
 
     if is_buy:
         try:
-            buy_pct = Decimal(str(buy_pct))
+            buy_pct = Decimal(str(buy_pct_raw))
             if not (Decimal("0") < buy_pct <= Decimal("1")):
                 raise ValueError("Out of range")
         except Exception:
-            buy_pct = Decimal("0.001")
-            print(f"[WARNING] Invalid 'buy_pct' provided. Defaulting to 0.001 (0.1%)")
+            buy_pct = DEFAULT_BUY_PCT
+            print(f"[WARNING] Invalid 'buy_pct' provided. Defaulting to {DEFAULT_BUY_PCT} (= 0.1 %)")
 
         usdt_balance = get_asset_balance("USDT")
         invest_usdt = Decimal(str(usdt_balance)) * buy_pct
