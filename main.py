@@ -45,7 +45,7 @@ def webhook():
                 raise ValueError("Out of range")
         except Exception:
             buy_pct = DEFAULT_BUY_PCT
-            print(f"[WARNING] Invalid 'buy_pct' provided. Defaulting to {DEFAULT_BUY_PCT} (= 0.1 %)")
+            print(f"[WARNING] Invalid 'buy_pct' provided ({buy_pct_raw}). Defaulting to {DEFAULT_BUY_PCT} (= 0.1 %)")
 
         usdt_balance = get_asset_balance("USDT")
         invest_usdt = Decimal(str(usdt_balance)) * buy_pct
