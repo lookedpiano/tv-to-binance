@@ -14,6 +14,7 @@ BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")
 # Allowed trading pairs
 ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT"}
 
+
 @app.route('/', methods=['POST'])
 def webhook():
     data = request.json
