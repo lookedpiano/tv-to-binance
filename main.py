@@ -23,17 +23,24 @@ def webhook():
     data = request.json
     print("[WEBHOOK] Received payload:", data)
 
-    action = data.get("action", "").upper()
-    is_buy = action == "BUY"
-    symbol = data.get("symbol", "BTCUSDT").upper()
+    action = data.get("action", "").strip().upper()
+    symbol = data.get("symbol", "BTCUSDT").strip().upper()
     buy_pct_raw = data.get("buy_pct", DEFAULT_BUY_PCT)
 
-    print(f"[INFO] Action: {action}, Symbol: {symbol}" + (f", Buy %: {buy_pct_raw}" if is_buy else ""))
+    is_buy = action == "BUY"
 
-    if action not in ["BUY", "SELL"]:
-        print("[ERROR] Invalid action received:", action)
+    # Info log
+    info = f"[INFO] Action: {action}, Symbol: {symbol}"
+    if is_buy:
+        info += f", Buy %: {buy_pct_raw}"
+    print(info)
+
+    # Validate action
+    if action not in {"BUY", "SELL"}:
+        print(f"[ERROR] Invalid action received: {action}")
         return jsonify({"error": "Invalid action"}), 400
-
+    
+    # Validate symbol
     if symbol not in ALLOWED_SYMBOLS:
         print(f"[ERROR] Symbol '{symbol}' is not in allowed list.")
         return jsonify({"error": f"Symbol '{symbol}' is not allowed"}), 400
