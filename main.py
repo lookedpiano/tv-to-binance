@@ -11,6 +11,8 @@ app = Flask(__name__)
 BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
+if not WEBHOOK_SECRET:
+    raise RuntimeError("Missing required environment variable: WEBHOOK_SECRET")
 
 # Allowed trading pairs
 ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT"}
@@ -21,14 +23,15 @@ DEFAULT_BUY_PCT = Decimal("0.001")
 
 @app.route('/to-the-moon', methods=['POST'])
 def webhook():
-    data = request.json
     print("=====================start=====================")
+    data = request.json
     print("[WEBHOOK] Received payload:", data)
-    
-    received_secret = data.get("client_secret")
-    if received_secret != WEBHOOK_SECRET:
-        print("[ERROR] Unauthorized webhook attempt.")
-        return jsonify({"error": "Unauthorized"}), 403
+
+    # Secret validation
+    secret_from_request = data.get("client_secret")
+    if not secret_from_request or secret_from_request != WEBHOOK_SECRET:
+        print("[SECURITY] Unauthorized access attempt. Invalid or missing secret.")
+        return jsonify({"error": "Unauthorized"}), 401
 
     action = data.get("action", "").strip().upper()
     symbol = data.get("symbol", "BTCUSDT").strip().upper()
