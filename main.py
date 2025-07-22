@@ -19,7 +19,7 @@ ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT"}
 DEFAULT_BUY_PCT = Decimal("0.001")
 
 
-@app.route('/', methods=['POST'])
+@app.route('/to-the-moon', methods=['POST'])
 def webhook():
     data = request.json
     print("=====================start=====================")
