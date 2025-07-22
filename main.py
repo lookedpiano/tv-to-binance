@@ -114,29 +114,48 @@ def place_binance_order(symbol, side, quantity):
     print("[BINANCE RESPONSE]", response.json())
 
 def get_asset_balance(asset):
-    url = "https://api.binance.com/api/v3/account"
-    timestamp = get_timestamp()
-    query_string = f"timestamp={timestamp}"
-    signature = hmac.new(BINANCE_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
-    headers = {
-        "X-MBX-APIKEY": BINANCE_API_KEY
-    }
-    full_url = f"{url}?{query_string}&signature={signature}"
-    response = requests.get(full_url, headers=headers)
-    result = response.json()
-    balances = result.get("balances", [])
-    print("[DEBUG] START")
-    print("[DEBUG] Listing all balances returned by Binance:")
-    for b in balances:
-        print(f"  - {b['asset']}: {b['free']} (free), {b['locked']} (locked)")
-    print("[DEBUG] FIN")
+    try:
+        url = "https://api.binance.com/api/v3/account"
+        timestamp = get_timestamp()
+        query_string = f"timestamp={timestamp}"
+        signature = hmac.new(BINANCE_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
+        headers = {
+            "X-MBX-APIKEY": BINANCE_API_KEY
+        }
+        full_url = f"{url}?{query_string}&signature={signature}"
+        response = requests.get(full_url, headers=headers)
+        result = response.json()
 
-    for b in balances:
-        if b["asset"] == asset:
-            print(f"[BALANCE] {asset} balance: {b['free']}")
-            return float(b["free"])
-    print(f"[WARNING] {asset} balance not found.")
-    return 0.0
+        # Handle Binance API errors
+        if "code" in result and result["code"] < 0:
+            print("---")
+            print("print result code:")
+            print(result["code"])
+            print("print result:")
+            print(result)
+            print("---")
+            print(f"[ERROR] Binance API error: {result.get('msg', 'Unknown error')}")
+            return 0.0
+
+        balances = result.get("balances", [])
+
+        print("[DEBUG] START")
+        print("[DEBUG] Listing all balances returned by Binance:")
+        for b in balances:
+            print(f"  - {b['asset']}: {b['free']} (free), {b['locked']} (locked)")
+        print("[DEBUG] FIN")
+
+        for b in balances:
+            if b["asset"] == asset:
+                print(f"[BALANCE] {asset} balance: {b['free']}")
+                return float(b["free"])
+            
+        print(f"[WARNING] {asset} balance not found.")
+        return 0.0
+    
+    except Exception as e:
+        print(f"[EXCEPTION] Failed to fetch asset balance: {e}")
+        return 0.0    
 
 def get_current_price(symbol):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
