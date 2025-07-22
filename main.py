@@ -10,6 +10,7 @@ app = Flask(__name__)
 # Load API keys from environment variables
 BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
 
 # Allowed trading pairs
 ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT"}
@@ -23,6 +24,11 @@ def webhook():
     data = request.json
     print("=====================start=====================")
     print("[WEBHOOK] Received payload:", data)
+    
+    received_secret = data.get("client_secret")
+    if received_secret != WEBHOOK_SECRET:
+        print("[ERROR] Unauthorized webhook attempt.")
+        return jsonify({"error": "Unauthorized"}), 403
 
     action = data.get("action", "").strip().upper()
     symbol = data.get("symbol", "BTCUSDT").strip().upper()
