@@ -29,7 +29,7 @@ def webhook():
 
     # Secret validation
     secret_from_request = data.get("client_secret")
-    if not secret_from_request or secret_from_request != WEBHOOK_SECRET:
+    if not secret_from_request or not hmac.compare_digest(secret_from_request, WEBHOOK_SECRET):
         print("[SECURITY] Unauthorized access attempt. Invalid or missing secret.")
         return jsonify({"error": "Unauthorized"}), 401
 
