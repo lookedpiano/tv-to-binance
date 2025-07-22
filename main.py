@@ -68,7 +68,7 @@ def webhook():
         response = jsonify({"status": f"Bought {quantity} {symbol}"}), 200
         print("[INFO] Buy order completed successfully, returning response:", response)
         print("=====================end=====================")
-        return response        
+        return response
 
     else:
         base_asset = symbol.replace("USDT", "")
@@ -155,7 +155,7 @@ def get_asset_balance(asset):
     
     except Exception as e:
         print(f"[EXCEPTION] Failed to fetch asset balance: {e}")
-        return 0.0    
+        return 0.0
 
 def get_current_price(symbol):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
