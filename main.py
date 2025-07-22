@@ -21,6 +21,7 @@ DEFAULT_BUY_PCT = Decimal("0.001")
 @app.route('/', methods=['POST'])
 def webhook():
     data = request.json
+    print("=====================start=====================")
     print("[WEBHOOK] Received payload:", data)
 
     action = data.get("action", "").strip().upper()
@@ -64,7 +65,10 @@ def webhook():
 
         place_binance_order(symbol, "BUY", quantity)
         print(f"[ORDER] BUY executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-        return jsonify({"status": f"Bought {quantity} {symbol}"}), 200
+        response = jsonify({"status": f"Bought {quantity} {symbol}"}), 200
+        print("[INFO] Buy order completed successfully, returning response:", response)
+        print("=====================end=====================")
+        return response        
 
     else:
         base_asset = symbol.replace("USDT", "")
@@ -74,10 +78,16 @@ def webhook():
             place_binance_order(symbol, "SELL", quantity)
             price = Decimal(str(get_current_price(symbol)))
             print(f"[ORDER] SELL executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-            return jsonify({"status": f"Sold {quantity} {symbol}"}), 200
+            response = jsonify({"status": f"Sold {quantity} {symbol}"}), 200
+            print("[INFO] Sell order completed successfully, returning response:", response)
+            print("=====================end=====================")
+            return response
         else:
             print("[WARNING] No asset balance to sell.")
-            return jsonify({"warning": "No asset to sell"}), 200
+            response = jsonify({"warning": "No asset to sell"}), 200
+            print("[INFO] Sell attempt aborted due to empty balance, returning response:", response)
+            print("=====================end=====================")
+            return response
 
 @app.route('/ping', methods=['GET'])
 def ping():
@@ -115,6 +125,12 @@ def get_asset_balance(asset):
     response = requests.get(full_url, headers=headers)
     result = response.json()
     balances = result.get("balances", [])
+    print("[DEBUG] START")
+    print("[DEBUG] Listing all balances returned by Binance:")
+    for b in balances:
+        print(f"  - {b['asset']}: {b['free']} (free), {b['locked']} (locked)")
+    print("[DEBUG] FIN")
+
     for b in balances:
         if b["asset"] == asset:
             print(f"[BALANCE] {asset} balance: {b['free']}")
