@@ -20,17 +20,21 @@ ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT"}
 # Default Buy Percentage: 0.1 %
 DEFAULT_BUY_PCT = Decimal("0.001")
 
+# Authenticates the alert request
+SECRET_FIELD = "client_secret"
+
 
 @app.route('/to-the-moon', methods=['POST'])
 def webhook():
     print("=====================start=====================")
     data = request.json
-    print("[WEBHOOK] Received payload:", data)
+    data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
+    print(f"[WEBHOOK] Received payload (no {SECRET_FIELD}):", data_for_log)
 
     # Secret validation
-    secret_from_request = data.get("client_secret")
+    secret_from_request = data.get(SECRET_FIELD)
     if not secret_from_request or not hmac.compare_digest(secret_from_request, WEBHOOK_SECRET):
-        print("[SECURITY] Unauthorized access attempt. Invalid or missing secret.")
+        print(f"[SECURITY] Unauthorized access attempt. Invalid or missing {SECRET_FIELD}.")
         return jsonify({"error": "Unauthorized"}), 401
 
     action = data.get("action", "").strip().upper()
