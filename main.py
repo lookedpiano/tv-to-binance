@@ -79,9 +79,11 @@ def webhook():
             print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
             print(f"[INFO] {symbol} Price: {price}, Quantity to BUY: {quantity}")
 
+            # Fetch filters and extract stepSize
             filters = get_symbol_filters(symbol)
             step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
             print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
+
             step_sized_quantity = quantize_quantity(invest_usdt / price, step_size)
             print(f"[ORDER] Rounded quantity to conform to LOT_SIZE: {step_sized_quantity}")
         except Exception as e:
@@ -98,30 +100,45 @@ def webhook():
         except Exception as e:
             print("[ERROR] Failed to place buy order:", str(e))
             return jsonify({"error": f"Order failed: {str(e)}"}), 500
-
+        
     if is_sell:
         base_asset = symbol.replace("USDT", "")
-        asset_balance = Decimal(str(get_asset_balance(base_asset)))
-        if asset_balance > 0:
-            quantity = asset_balance.quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
-            try:
-                place_binance_order(symbol, "SELL", quantity)
-                price = Decimal(str(get_current_price(symbol)))
-                print(f"[ORDER] SELL executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-                response = jsonify({"status": f"Sold {quantity} {symbol}"}), 200
-                print("[INFO] Sell order completed successfully, returning response:", response)
+        try:
+            asset_balance = Decimal(str(get_asset_balance(base_asset)))
+            if asset_balance > 0:
+                # Fetch filters and extract stepSize
+                filters = get_symbol_filters(symbol)
+                step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
+                print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
+
+                # Round down to conform to Binance stepSize rules
+                quantity = quantize_quantity(asset_balance, step_size)
+                print(f"[ORDER] Rounded sell quantity to conform to LOT_SIZE: {quantity}")
+
+                if quantity <= Decimal("0"):
+                    print("[WARNING] Rounded sell quantity is zero or below minimum tradable size. Aborting.")
+                    return jsonify({"warning": "Sell amount too small after rounding."}), 200
+
+                try:
+                    place_binance_order(symbol, "SELL", quantity)
+                    price = Decimal(str(get_current_price(symbol)))
+                    print(f"[ORDER] SELL executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                    response = jsonify({"status": f"Sold {quantity} {symbol}"}), 200
+                    print("[INFO] Sell order completed successfully, returning response:", response)
+                    print("=====================end=====================")
+                    return response
+                except Exception as e:
+                    print("[ERROR] Failed to place sell order:", str(e))
+                    return jsonify({"error": f"Order failed: {str(e)}"}), 500
+            else:
+                print("[WARNING] No asset balance to sell.")
+                response = jsonify({"warning": "No asset to sell"}), 200
+                print("[INFO] Sell attempt aborted due to empty balance, returning response:", response)
                 print("=====================end=====================")
                 return response
-            except Exception as e:
-                print("[ERROR] Failed to place sell order:", str(e))
-                return jsonify({"error": f"Order failed: {str(e)}"}), 500
-            
-        else:
-            print("[WARNING] No asset balance to sell.")
-            response = jsonify({"warning": "No asset to sell"}), 200
-            print("[INFO] Sell attempt aborted due to empty balance, returning response:", response)
-            print("=====================end=====================")
-            return response
+        except Exception as e:
+            print("[ERROR] Sell pre-check failed:", str(e))
+            return jsonify({"error": f"Sell preparation failed: {str(e)}"}), 500
 
 @app.route('/ping', methods=['GET'])
 def ping():
