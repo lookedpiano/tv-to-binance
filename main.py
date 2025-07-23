@@ -69,26 +69,34 @@ def webhook():
             buy_pct = DEFAULT_BUY_PCT
             print(f"[WARNING] Invalid 'buy_pct' provided ({buy_pct_raw}). Defaulting to {DEFAULT_BUY_PCT} (= 0.1 %)")
 
-        usdt_balance = get_asset_balance("USDT")
-        invest_usdt = Decimal(str(usdt_balance)) * buy_pct
-        price = Decimal(str(get_current_price(symbol)))
-        quantity = (invest_usdt / price).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
+        try:
+            usdt_balance = get_asset_balance("USDT")
+            invest_usdt = Decimal(str(usdt_balance)) * buy_pct
+            price = Decimal(str(get_current_price(symbol)))
+            quantity = (invest_usdt / price).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
 
-        print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
-        print(f"[INFO] {symbol} Price: {price}, Quantity to BUY: {quantity}")
+            print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
+            print(f"[INFO] {symbol} Price: {price}, Quantity to BUY: {quantity}")
 
-        filters = get_symbol_filters(symbol)
-        step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
-        print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
-        step_sized_quantity = quantize_quantity(invest_usdt / price, step_size)
-        print(f"[ORDER] Rounded quantity to conform to LOT_SIZE: {step_sized_quantity}")
+            filters = get_symbol_filters(symbol)
+            step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
+            print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
+            step_sized_quantity = quantize_quantity(invest_usdt / price, step_size)
+            print(f"[ORDER] Rounded quantity to conform to LOT_SIZE: {step_sized_quantity}")
+        except Exception as e:
+            print("[ERROR] Pre-order calculation failed:", str(e))
+            return jsonify({"error": f"Buy calculation failed: {str(e)}"}), 500
 
-        place_binance_order(symbol, "BUY", step_sized_quantity)
-        print(f"[ORDER] BUY executed: {step_sized_quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-        response = jsonify({"status": f"Bought {step_sized_quantity} {symbol}"}), 200
-        print("[INFO] Buy order completed successfully, returning response:", response)
-        print("=====================end=====================")
-        return response
+        try:
+            place_binance_order(symbol, "BUY", step_sized_quantity)
+            print(f"[ORDER] BUY executed: {step_sized_quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+            response = jsonify({"status": f"Bought {step_sized_quantity} {symbol}"}), 200
+            print("[INFO] Buy order completed successfully, returning response:", response)
+            print("=====================end=====================")
+            return response
+        except Exception as e:
+            print("[ERROR] Failed to place buy order:", str(e))
+            return jsonify({"error": f"Order failed: {str(e)}"}), 500
 
     else:
         base_asset = symbol.replace("USDT", "")
@@ -170,17 +178,7 @@ def get_asset_balance(asset):
             return 0.0
 
         balances = result.get("balances", [])
-        print("[DEBUG] START")
-        print("[DEBUG] Listing all balances returned by Binance with a Total greater than 0:")
-        for b in balances:
-            current_asset = b["asset"]
-            free = float(b.get("free", 0))
-            locked = float(b.get("locked", 0))
-            total = free + locked
-            if total > 0:
-                print(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
-        print("[DEBUG] FIN")
-
+        # print_balances(balances)
         for b in balances:
             if b["asset"] == asset:
                 print(f"[BALANCE] {asset} free balance: {b['free']}")
@@ -208,8 +206,7 @@ def get_symbol_filters(symbol):
 
         symbol_info = data.get("symbols", [])[0]
         filters = symbol_info.get("filters", [])
-        print_filters(symbol, filters)
-
+        # print_filters(symbol, filters)
         return filters
 
     except requests.RequestException as e:
@@ -220,6 +217,16 @@ def print_filters(symbol, filters):
     print(f"[INFO] Filters for {symbol}:")
     for f in filters:
         print(f"  - {f['filterType']}: {f}")
+
+def print_balances(balances):
+    print("[INFO] Listing all balances returned by Binance with a Total greater than 0:")
+    for b in balances:
+        current_asset = b["asset"]
+        free = float(b.get("free", 0))
+        locked = float(b.get("locked", 0))
+        total = free + locked
+        if total > 0:
+            print(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
 
 def get_current_price(symbol):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
