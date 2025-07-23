@@ -74,10 +74,9 @@ def webhook():
             usdt_balance = get_asset_balance("USDT")
             invest_usdt = Decimal(str(usdt_balance)) * buy_pct
             price = Decimal(str(get_current_price(symbol)))
-            quantity = (invest_usdt / price).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
-
+            raw_quantity = (invest_usdt / price).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
             print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
-            print(f"[INFO] {symbol} Price: {price}, Quantity to BUY: {quantity}")
+            print(f"[INFO] {symbol} Price: {price}, Raw quantity before step size rounding: {raw_quantity}")
 
             # Fetch filters and extract stepSize
             filters = get_symbol_filters(symbol)
@@ -112,9 +111,7 @@ def webhook():
                 print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
 
                 # Round down to conform to Binance stepSize rules
-                quarter_balance = asset_balance * Decimal("0.25")
-                quantity = quantize_quantity(quarter_balance, step_size) # only use a quarter of the whole balance
-                # quantity = quantize_quantity(asset_balance, step_size)
+                quantity = quantize_quantity(asset_balance, step_size)
                 print(f"[ORDER] Rounded sell quantity to conform to LOT_SIZE: {quantity}")
 
                 if quantity <= Decimal("0"):
