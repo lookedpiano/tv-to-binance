@@ -77,6 +77,8 @@ def webhook():
         print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
         print(f"[INFO] {symbol} Price: {price}, Quantity to BUY: {quantity}")
 
+        get_symbol_filters(symbol)
+
         place_binance_order(symbol, "BUY", quantity)
         print(f"[ORDER] BUY executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
         response = jsonify({"status": f"Bought {quantity} {symbol}"}), 200
@@ -186,6 +188,32 @@ def get_asset_balance(asset):
     except Exception as e:
         print(f"[EXCEPTION] Failed to fetch asset balance: {e}")
         return 0.0
+
+def get_symbol_filters(symbol):
+    """
+    Fetches and prints Binance trading rules (filters) for the given symbol.
+
+    Args:
+        symbol (str): Trading pair symbol, e.g., 'BTCUSDT'.
+    """
+    url = "https://api.binance.com/api/v3/exchangeInfo"
+    try:
+        response = requests.get(url, params={"symbol": symbol})
+        response.raise_for_status()
+        data = response.json()
+
+        symbol_info = data.get("symbols", [])[0]
+        filters = symbol_info.get("filters", [])
+
+        print(f"[INFO] Filters for {symbol}:")
+        for f in filters:
+            print(f"  - {f['filterType']}: {f}")
+
+        return filters
+
+    except requests.RequestException as e:
+        print(f"[ERROR] Failed to fetch exchange info for {symbol}: {e}")
+        return []
 
 def get_current_price(symbol):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
