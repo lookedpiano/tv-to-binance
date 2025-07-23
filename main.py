@@ -178,7 +178,7 @@ def get_current_price(symbol):
     return price
 
 def get_timestamp():
-    return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"] / 1000)
+    return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"])
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
