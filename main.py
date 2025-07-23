@@ -163,16 +163,20 @@ def get_asset_balance(asset):
             return 0.0
 
         balances = result.get("balances", [])
-
         print("[DEBUG] START")
-        print("[DEBUG] Listing all balances returned by Binance:")
+        print("[DEBUG] Listing all balances returned by Binance with a Total greater than 0:")
         for b in balances:
-            print(f"  - {b['asset']}: {b['free']} (free), {b['locked']} (locked)")
+            asset = b["asset"]
+            free = float(b.get("free", 0))
+            locked = float(b.get("locked", 0))
+            total = free + locked
+            if total > 0:
+                print(f"[BALANCE] {asset} - Free: {free}, Locked: {locked}, Total: {total}")
         print("[DEBUG] FIN")
 
         for b in balances:
             if b["asset"] == asset:
-                print(f"[BALANCE] {asset} balance: {b['free']}")
+                print(f"[BALANCE] {asset} free balance: {b['free']}")
                 return float(b["free"])
             
         print(f"[WARNING] {asset} balance not found.")
