@@ -150,8 +150,9 @@ def place_binance_order(symbol, side, quantity):
 
     # Handle Binance API error (in place_binance_order)
     if "code" in result and result["code"] < 0:
-        print_binance_api_error(result)        
-        return 0.0
+        print(f"[ERROR] Print result code: {result['code']}")
+        print(f"[ERROR] Print result: {result}")
+        raise Exception(f"[ERROR] Binance API error: {result.get('msg', 'Unknown error')}")
 
 def get_asset_balance(asset):
     try:
@@ -168,8 +169,9 @@ def get_asset_balance(asset):
 
         # Handle Binance API error (in get_asset_balace)
         if "code" in result and result["code"] < 0:
-            print_binance_api_error(result)
-            return 0.0
+            print(f"[ERROR] Print result code: {result['code']}")
+            print(f"[ERROR] Print result: {result}")
+            raise Exception(f"[ERROR] Binance API error: {result.get('msg', 'Unknown error')}")
 
         balances = result.get("balances", [])
         # print_balances(balances)
@@ -221,12 +223,6 @@ def print_balances(balances):
         total = free + locked
         if total > 0:
             print(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
-
-def print_binance_api_error(result):
-    print("[INFO] Printing Binance API Error:")
-    print(f"[INFO] Print result code: {result['code']}")
-    print(f"[INFO] Print result: {result}")
-    print(f"[ERROR] Binance API error: {result.get('msg', 'Unknown error')}")
 
 def get_current_price(symbol):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
