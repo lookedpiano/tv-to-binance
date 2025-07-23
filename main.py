@@ -124,7 +124,19 @@ def place_binance_order(symbol, side, quantity):
     params["signature"] = signature
     print(f"[REQUEST] Sending {side} order to Binance for {symbol}, Quantity: {quantity}")
     response = requests.post(url, headers=headers, params=params)
-    print("[BINANCE RESPONSE]", response.json())
+    result = response.json()
+    print("[BINANCE RESPONSE]", result)
+
+    # Handle Binance API errors (in place_binance_order fun...)
+    if "code" in result and result["code"] < 0:
+        print("---x---")
+        print("print result code:")
+        print(result["code"])
+        print("print result:")
+        print(result)
+        print("---x---")
+        print(f"[ERROR] Binance API error (in place_binance_order fun...): {result.get('msg', 'Unknown error')}")
+        return 0.0
 
 def get_asset_balance(asset):
     try:
