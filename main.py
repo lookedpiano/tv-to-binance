@@ -42,6 +42,7 @@ def webhook():
     buy_pct_raw = data.get("buy_pct", DEFAULT_BUY_PCT)
 
     is_buy = action == "BUY"
+    is_buy_small_btc = action == "BUY_BTC_SMALL"
 
     # Info log
     info = f"[INFO] Action: {action}, Symbol: {symbol}"
@@ -50,7 +51,7 @@ def webhook():
     print(info)
 
     # Validate action
-    if action not in {"BUY", "SELL"}:
+    if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
         print(f"[ERROR] Invalid action received: {action}")
         return jsonify({"error": "Invalid action"}), 400
     
@@ -59,7 +60,7 @@ def webhook():
         print(f"[ERROR] Symbol '{symbol}' is not in allowed list.")
         return jsonify({"error": f"Symbol '{symbol}' is not allowed"}), 400
 
-    if is_buy:
+    if is_buy or is_buy_small_btc:
         try:
             buy_pct = Decimal(str(buy_pct_raw))
             if not (Decimal("0") < buy_pct <= Decimal("1")):
