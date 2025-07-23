@@ -167,12 +167,12 @@ def get_asset_balance(asset):
         print("[DEBUG] START")
         print("[DEBUG] Listing all balances returned by Binance with a Total greater than 0:")
         for b in balances:
-            asset = b["asset"]
+            current_asset = b["asset"]
             free = float(b.get("free", 0))
             locked = float(b.get("locked", 0))
             total = free + locked
             if total > 0:
-                print(f"[BALANCE] {asset} - Free: {free}, Locked: {locked}, Total: {total}")
+                print(f"[BALANCE] {current_asset} - Free: {free}, Locked: {locked}, Total: {total}")
         print("[DEBUG] FIN")
 
         for b in balances:
