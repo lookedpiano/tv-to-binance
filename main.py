@@ -112,7 +112,9 @@ def webhook():
                 print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
 
                 # Round down to conform to Binance stepSize rules
-                quantity = quantize_quantity(asset_balance, step_size)
+                quarter_balance = asset_balance * Decimal("0.25")
+                quantity = quantize_quantity(quarter_balance, step_size) # only use a quarter of the whole balance
+                # quantity = quantize_quantity(asset_balance, step_size)
                 print(f"[ORDER] Rounded sell quantity to conform to LOT_SIZE: {quantity}")
 
                 if quantity <= Decimal("0"):
