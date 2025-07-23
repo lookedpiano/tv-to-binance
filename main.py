@@ -150,8 +150,6 @@ def place_binance_order(symbol, side, quantity):
 
     # Handle Binance API error (in place_binance_order)
     if "code" in result and result["code"] < 0:
-        print(f"[ERROR] Print result code: {result['code']}")
-        print(f"[ERROR] Print result: {result}")
         raise Exception(f"[ERROR] Binance API error: {result.get('msg', 'Unknown error')}")
 
 def get_asset_balance(asset):
@@ -169,8 +167,6 @@ def get_asset_balance(asset):
 
         # Handle Binance API error (in get_asset_balace)
         if "code" in result and result["code"] < 0:
-            print(f"[ERROR] Print result code: {result['code']}")
-            print(f"[ERROR] Print result: {result}")
             raise Exception(f"[ERROR] Binance API error: {result.get('msg', 'Unknown error')}")
 
         balances = result.get("balances", [])
