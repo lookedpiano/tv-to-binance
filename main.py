@@ -46,7 +46,7 @@ def webhook():
 
     # Info log
     info = f"[INFO] Action: {action}, Symbol: {symbol}"
-    if is_buy:
+    if is_buy or is_buy_small_btc:
         info += f", Buy %: {buy_pct_raw}"
     print(info)
 
@@ -208,16 +208,18 @@ def get_symbol_filters(symbol):
 
         symbol_info = data.get("symbols", [])[0]
         filters = symbol_info.get("filters", [])
-
-        print(f"[INFO] Filters for {symbol}:")
-        for f in filters:
-            print(f"  - {f['filterType']}: {f}")
+        print_filters(symbol, filters)
 
         return filters
 
     except requests.RequestException as e:
         print(f"[ERROR] Failed to fetch exchange info for {symbol}: {e}")
         return []
+    
+def print_filters(symbol, filters):
+    print(f"[INFO] Filters for {symbol}:")
+    for f in filters:
+        print(f"  - {f['filterType']}: {f}")
 
 def get_current_price(symbol):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
