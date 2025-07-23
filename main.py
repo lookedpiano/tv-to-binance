@@ -77,11 +77,15 @@ def webhook():
         print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
         print(f"[INFO] {symbol} Price: {price}, Quantity to BUY: {quantity}")
 
-        get_symbol_filters(symbol)
+        filters = get_symbol_filters(symbol)
+        step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
+        print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
+        step_sized_quantity = quantize_quantity(invest_usdt / price, step_size)
+        print(f"[ORDER] Rounded quantity to conform to LOT_SIZE: {step_sized_quantity}")
 
-        place_binance_order(symbol, "BUY", quantity)
-        print(f"[ORDER] BUY executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-        response = jsonify({"status": f"Bought {quantity} {symbol}"}), 200
+        place_binance_order(symbol, "BUY", step_sized_quantity)
+        print(f"[ORDER] BUY executed: {step_sized_quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+        response = jsonify({"status": f"Bought {step_sized_quantity} {symbol}"}), 200
         print("[INFO] Buy order completed successfully, returning response:", response)
         print("=====================end=====================")
         return response
@@ -221,6 +225,16 @@ def get_current_price(symbol):
     price = float(response["price"])
     print(f"[PRICE] Current price for {symbol}: {price}")
     return price
+
+def quantize_quantity(quantity, step_size):
+    step = Decimal(step_size)
+    return (Decimal(quantity) // step * step).quantize(step, rounding=ROUND_DOWN)
+
+def get_filter_value(filters, filter_type, key):
+    for f in filters:
+        if f["filterType"] == filter_type:
+            return f.get(key)
+    raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
 
 def get_timestamp():
     return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"])
