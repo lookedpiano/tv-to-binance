@@ -43,6 +43,7 @@ def webhook():
 
     is_buy = action == "BUY"
     is_buy_small_btc = action == "BUY_BTC_SMALL"
+    is_sell = action == "SELL"
 
     # Info log
     info = f"[INFO] Action: {action}, Symbol: {symbol}"
@@ -98,18 +99,23 @@ def webhook():
             print("[ERROR] Failed to place buy order:", str(e))
             return jsonify({"error": f"Order failed: {str(e)}"}), 500
 
-    else:
+    if is_sell:
         base_asset = symbol.replace("USDT", "")
         asset_balance = Decimal(str(get_asset_balance(base_asset)))
         if asset_balance > 0:
             quantity = asset_balance.quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
-            place_binance_order(symbol, "SELL", quantity)
-            price = Decimal(str(get_current_price(symbol)))
-            print(f"[ORDER] SELL executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-            response = jsonify({"status": f"Sold {quantity} {symbol}"}), 200
-            print("[INFO] Sell order completed successfully, returning response:", response)
-            print("=====================end=====================")
-            return response
+            try:
+                place_binance_order(symbol, "SELL", quantity)
+                price = Decimal(str(get_current_price(symbol)))
+                print(f"[ORDER] SELL executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                response = jsonify({"status": f"Sold {quantity} {symbol}"}), 200
+                print("[INFO] Sell order completed successfully, returning response:", response)
+                print("=====================end=====================")
+                return response
+            except Exception as e:
+                print("[ERROR] Failed to place sell order:", str(e))
+                return jsonify({"error": f"Order failed: {str(e)}"}), 500
+            
         else:
             print("[WARNING] No asset balance to sell.")
             response = jsonify({"warning": "No asset to sell"}), 200
