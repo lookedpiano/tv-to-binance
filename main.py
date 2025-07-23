@@ -172,7 +172,7 @@ def get_asset_balance(asset):
             locked = float(b.get("locked", 0))
             total = free + locked
             if total > 0:
-                print(f"[BALANCE] {current_asset} - Free: {free}, Locked: {locked}, Total: {total}")
+                print(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
         print("[DEBUG] FIN")
 
         for b in balances:
