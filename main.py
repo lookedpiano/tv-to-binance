@@ -116,7 +116,10 @@ def webhook():
 
                 if quantity <= Decimal("0"):
                     print("[WARNING] Rounded sell quantity is zero or below minimum tradable size. Aborting.")
-                    return jsonify({"warning": "Sell amount too small after rounding."}), 200
+                    response = jsonify({"warning": "Sell amount too small after rounding."}), 200
+                    print("[INFO] Sell attempt aborted due to to a balance below the minimum size, returning response:", response)
+                    print("=====================end=====================")
+                    return response
 
                 try:
                     place_binance_order(symbol, "SELL", quantity)
