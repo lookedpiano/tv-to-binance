@@ -144,7 +144,7 @@ def webhook():
 
 @app.route('/ping', methods=['GET'])
 def ping():
-    print("[PING] Keep-alive ping received.")
+    # print("[PING] Keep-alive ping received.")
     return "pong", 200
 
 def place_binance_order(symbol, side, quantity):
