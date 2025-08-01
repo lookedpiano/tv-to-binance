@@ -27,12 +27,13 @@ SECRET_FIELD = "client_secret"
 
 @app.before_request
 def log_request_info():
-    if request.path != '/health-check':
+    if should_log_request():
         print(f"[REQUEST] Method:'{request.method}', Path:'{request.path}'")
 
 @app.after_request
 def log_response_info(response):
-    print(f"[RESPONSE] Method:'{request.method}', Path:'{request.path}' -> Status Code:'{response.status_code}'")
+    if should_log_request():
+        print(f"[RESPONSE] Method:'{request.method}', Path:'{request.path}' -> Status Code:'{response.status_code}'")
     return response
 
 @app.route('/ping', methods=['GET'])
@@ -276,6 +277,9 @@ def print_balances(balances):
         total = free + locked
         if total > 0:
             print(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
+
+def should_log_request():
+    return request.path != '/health-check'
 
 def get_timestamp():
     return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"])
