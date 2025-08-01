@@ -150,7 +150,7 @@ def ping():
 
 @app.before_request
 def log_request_info():
-    print(f"[REQUEST] {request.method} {request.path}")
+    print(f"[REQUEST] Method:'{request.method}', Path:'{request.path}'")
 
 @app.route('/', methods=['GET'])
 def root():
