@@ -43,17 +43,17 @@ def ping():
 
 @app.route('/', methods=['GET', 'HEAD'])
 def root():
-    print("[ROOT] Call to root received.")
+    print("[ROOT] Call to root endpoint received.")
     return '', 204
 
 @app.route('/health-check', methods=['GET', 'HEAD'])
 def health_check():
-    # print("[HEALTH CHECK] Call to health-check received.")
+    # print("[HEALTH CHECK] Call to health-check endpoint received.")
     return jsonify({"status": "healthy"}), 200
 
 @app.route('/healthz', methods=['GET', 'HEAD'])
 def healthz():
-    # print("[HEALTHZ CHECK] Call to health-check received.")
+    # print("[HEALTHZ CHECK] Call to healthz endpoint received.")
     return jsonify({"status": "healthzy"}), 200
 
 @app.route('/to-the-moon', methods=['POST'])
