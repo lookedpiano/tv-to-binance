@@ -284,7 +284,7 @@ def print_balances(balances):
             print(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
 
 def should_log_request():
-    return request.path != '/health-check'
+    return request.path not in ('/health-check', '/healthz')
 
 def get_timestamp():
     return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"])
