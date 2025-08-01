@@ -51,6 +51,11 @@ def health_check():
     # print("[HEALTH CHECK] Call to health-check received.")
     return jsonify({"status": "healthy"}), 200
 
+@app.route('/healthz', methods=['GET', 'HEAD'])
+def healthz():
+    # print("[HEALTHZ CHECK] Call to health-check received.")
+    return jsonify({"status": "healthzy"}), 200
+
 @app.route('/to-the-moon', methods=['POST'])
 def webhook():
     print("=====================start=====================")
