@@ -148,6 +148,15 @@ def ping():
     # print("[PING] Keep-alive ping received.")
     return "pong", 200
 
+@app.before_request
+def log_request_info():
+    print(f"[REQUEST] {request.method} {request.path}")
+
+@app.route('/', methods=['GET'])
+def root():
+    print("===basic root handler===")
+    return jsonify({"status": "root-ok"}), 200
+
 def place_binance_order(symbol, side, quantity):
     url = "https://api.binance.com/api/v3/order"
     params = {
