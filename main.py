@@ -48,7 +48,7 @@ def root():
 
 @app.route('/health-check', methods=['GET', 'HEAD'])
 def health_check():
-    print("[HEALTH CHECK] Call to health-check received.")
+    # print("[HEALTH CHECK] Call to health-check received.")
     return jsonify({"status": "healthy"}), 200
 
 @app.route('/to-the-moon', methods=['POST'])
