@@ -36,15 +36,16 @@ def log_response_info(response):
         print(f"[RESPONSE] Method:'{request.method}', Path:'{request.path}' -> Status Code:'{response.status_code}'")
     return response
 
+@app.route('/', methods=['GET', 'HEAD'])
+def root():
+    print("[ROOT] Call to root endpoint received.")
+    # return '', 204
+    return jsonify({"status": "rooty"}), 200
+
 @app.route('/ping', methods=['GET'])
 def ping():
     # print("[PING] Keep-alive ping received.")
     return "pong", 200
-
-@app.route('/', methods=['GET', 'HEAD'])
-def root():
-    print("[ROOT] Call to root endpoint received.")
-    return '', 204
 
 @app.route('/health-check', methods=['GET', 'HEAD'])
 def health_check():
@@ -284,7 +285,7 @@ def print_balances(balances):
             print(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
 
 def should_log_request():
-    return request.path not in ('/health-check', '/healthz')
+    return request.path not in ('/health-check', '/healthz', '/ping')
 
 def get_timestamp():
     return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"])
