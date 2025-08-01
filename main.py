@@ -25,6 +25,25 @@ SECRET_FIELD = "client_secret"
 
 
 
+@app.before_request
+def log_request_info():
+    print(f"[REQUEST] Method:'{request.method}', Path:'{request.path}'")
+
+@app.after_request
+def log_response_info(response):
+    print(f"[RESPONSE] Method:'{request.method}', Path:'{request.path}' -> Status Code:'{response.status_code}'")
+    return response
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    # print("[PING] Keep-alive ping received.")
+    return "pong", 200
+
+@app.route('/', methods=['GET'])
+def root():
+    print("===basic root handler===")
+    return jsonify({"status": "root-ok"}), 200
+
 @app.route('/to-the-moon', methods=['POST'])
 def webhook():
     print("=====================start=====================")
@@ -143,20 +162,6 @@ def webhook():
             print("[ERROR] Sell pre-check failed:", str(e))
             return jsonify({"error": f"Sell preparation failed: {str(e)}"}), 500
 
-@app.route('/ping', methods=['GET'])
-def ping():
-    # print("[PING] Keep-alive ping received.")
-    return "pong", 200
-
-@app.before_request
-def log_request_info():
-    print(f"[REQUEST] Method:'{request.method}', Path:'{request.path}'")
-
-@app.route('/', methods=['GET'])
-def root():
-    print("===basic root handler===")
-    return jsonify({"status": "root-ok"}), 200
-
 def place_binance_order(symbol, side, quantity):
     url = "https://api.binance.com/api/v3/order"
     params = {
@@ -233,21 +238,6 @@ def get_symbol_filters(symbol):
     except requests.RequestException as e:
         print(f"[ERROR] Failed to fetch exchange info for {symbol}: {e}")
         return []
-    
-def print_filters(symbol, filters):
-    print(f"[INFO] Filters for {symbol}:")
-    for f in filters:
-        print(f"  - {f['filterType']}: {f}")
-
-def print_balances(balances):
-    print("[INFO] Listing all balances returned by Binance with a Total greater than 0:")
-    for b in balances:
-        current_asset = b["asset"]
-        free = float(b.get("free", 0))
-        locked = float(b.get("locked", 0))
-        total = free + locked
-        if total > 0:
-            print(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
 
 def get_current_price(symbol):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
@@ -265,6 +255,21 @@ def get_filter_value(filters, filter_type, key):
         if f["filterType"] == filter_type:
             return f.get(key)
     raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
+
+def print_filters(symbol, filters):
+    print(f"[INFO] Filters for {symbol}:")
+    for f in filters:
+        print(f"  - {f['filterType']}: {f}")
+
+def print_balances(balances):
+    print("[INFO] Listing all balances returned by Binance with a Total greater than 0:")
+    for b in balances:
+        current_asset = b["asset"]
+        free = float(b.get("free", 0))
+        locked = float(b.get("locked", 0))
+        total = free + locked
+        if total > 0:
+            print(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
 
 def get_timestamp():
     return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"])
