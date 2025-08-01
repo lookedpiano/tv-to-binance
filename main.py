@@ -39,10 +39,15 @@ def ping():
     # print("[PING] Keep-alive ping received.")
     return "pong", 200
 
-@app.route('/', methods=['GET'])
+@app.route('/', methods=['GET', 'HEAD'])
 def root():
-    print("===basic root handler===")
-    return jsonify({"status": "root-ok"}), 200
+    print("[ROOT] Call to root received.")
+    return '', 204
+
+@app.route('/health-check', methods=['GET', 'HEAD'])
+def health_check():
+    print("[HEALTH CHECK] Call to health-check received.")
+    return jsonify({"status": "healthy"}), 200
 
 @app.route('/to-the-moon', methods=['POST'])
 def webhook():
