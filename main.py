@@ -27,7 +27,8 @@ SECRET_FIELD = "client_secret"
 
 @app.before_request
 def log_request_info():
-    print(f"[REQUEST] Method:'{request.method}', Path:'{request.path}'")
+    if request.path != '/health-check':
+        print(f"[REQUEST] Method:'{request.method}', Path:'{request.path}'")
 
 @app.after_request
 def log_response_info(response):
