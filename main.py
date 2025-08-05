@@ -8,8 +8,7 @@ from datetime import datetime, timezone
 
 logging.basicConfig(
     level=logging.INFO,
-    format='[%(asctime)s] [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format='[%(levelname)s] %(message)s'
 )
 
 app = Flask(__name__)
@@ -49,38 +48,37 @@ SECRET_FIELD = "client_secret"
 @app.before_request
 def log_request_info():
     if should_log_request():
-        print(f"[REQUEST] Method:'{request.method}', Path:'{request.path}'")
+        logging.info(f"[REQUEST] Method: '{request.method}', Path: '{request.path}'")
 
 @app.after_request
 def log_response_info(response):
     if should_log_request():
-        print(f"[RESPONSE] Method:'{request.method}', Path:'{request.path}' -> Status Code:'{response.status_code}'")
+        logging.info(f"[RESPONSE] Method: '{request.method}', Path: '{request.path}' -> Status Code: '{response.status_code}'")
     return response
 
 @app.route('/', methods=['GET', 'HEAD'])
 def root():
-    # print("[ROOT] Call to root endpoint received.")
+    # logging.info(f"[ROOT] Call to root endpoint received.")
     # return '', 204
     return jsonify({"status": "rooty"}), 200
 
 @app.route('/ping', methods=['GET'])
 def ping():
-    # print("[PING] Keep-alive ping received.")
+    # logging.info("[PING] Keep-alive ping received.")
     return "pong", 200
 
 @app.route('/health-check', methods=['GET', 'HEAD'])
 def health_check():
-    # print("[HEALTH CHECK] Call to health-check endpoint received.")
+    # logging.info("[HEALTH CHECK] Call to health-check endpoint received.")
     return jsonify({"status": "healthy"}), 200
 
 @app.route('/healthz', methods=['GET', 'HEAD'])
 def healthz():
-    # print("[HEALTHZ CHECK] Call to healthz endpoint received.")
+    # logging.info("[HEALTHZ CHECK] Call to healthz endpoint received.")
     return jsonify({"status": "healthzy"}), 200
 
 @app.route('/to-the-moon', methods=['POST'])
 def webhook():
-    print("=====================start=====================")
     logging.info("=====================start=====================")
     try:
         # Validate and parse JSON payload
@@ -90,13 +88,12 @@ def webhook():
 
         # Log without secret
         data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
-        print(f"[WEBHOOK] Received payload (no {SECRET_FIELD}):", data_for_log)
         logging.info(f"[WEBHOOK] Received payload (no {SECRET_FIELD}): {data_for_log}")
 
         # Secret validation
         secret_from_request = data.get(SECRET_FIELD)
         if not secret_from_request or not hmac.compare_digest(secret_from_request, WEBHOOK_SECRET):
-            print(f"[SECURITY] Unauthorized access attempt. Invalid or missing {SECRET_FIELD}.")
+            logging.info(f"[SECURITY] Unauthorized access attempt. Invalid or missing {SECRET_FIELD}.")
             return jsonify({"error": "Unauthorized"}), 401
 
         # Field Extraction
@@ -109,24 +106,23 @@ def webhook():
             is_buy_small_btc = action == "BUY_BTC_SMALL"
             is_sell = action == "SELL"
         except Exception as parse_err:
-            print(f"[ERROR] Failed to parse required fields: {parse_err}")
+            logging.exception(f"Failed to parse required fields: {parse_err}")
             return jsonify({"error": "Invalid field formatting"}), 400
 
         # Info log
-        info = f"[INFO] Action: {action}, Symbol: {symbol}"
+        info = f"Action: {action}, Symbol: {symbol}"
         if is_buy or is_buy_small_btc:
             info += f", Buy %: {buy_pct_raw}"
-        print(info)
         logging.info(info)
 
         # Validate action
         if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
-            print(f"[ERROR] Invalid action received: {action}")
+            logging.error(f"Invalid action received: {action}")
             return jsonify({"error": "Invalid action"}), 400
 
         # Validate symbol
         if symbol not in ALLOWED_SYMBOLS:
-            print(f"[ERROR] Symbol '{symbol}' is not in allowed list.")
+            logging.error(f"Symbol '{symbol}' is not in allowed list.")
             return jsonify({"error": f"Symbol '{symbol}' is not allowed"}), 400
 
         if is_buy or is_buy_small_btc:
@@ -136,36 +132,36 @@ def webhook():
                     raise ValueError("Out of range")
             except Exception:
                 buy_pct = DEFAULT_BUY_PCT
-                print(f"[WARNING] Invalid 'buy_pct' provided ({buy_pct_raw}). Defaulting to {DEFAULT_BUY_PCT} (= 0.1 %)")
+                logging.warning(f"Invalid 'buy_pct' provided ({buy_pct_raw}). Defaulting to {DEFAULT_BUY_PCT} (= 0.1 %)")
 
             try:
                 usdt_balance = get_asset_balance("USDT")
                 invest_usdt = Decimal(str(usdt_balance)) * buy_pct
                 price = Decimal(str(get_current_price(symbol)))
                 raw_quantity = (invest_usdt / price).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
-                print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
-                print(f"[INFO] {symbol} Price: {price}, Raw quantity before step size rounding: {raw_quantity}")
+                logging.info(f"USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
+                logging.info(f"{symbol} Price: {price}, Raw quantity before step size rounding: {raw_quantity}")
 
                 # Fetch filters and extract stepSize
                 filters = get_symbol_filters(symbol)
                 step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
-                print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
+                logging.info(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
 
                 step_sized_quantity = quantize_quantity(invest_usdt / price, step_size)
-                print(f"[ORDER] Rounded quantity to conform to LOT_SIZE: {step_sized_quantity}")
+                logging.info(f"[ORDER] Rounded quantity to conform to LOT_SIZE: {step_sized_quantity}")
             except Exception as e:
-                print("[ERROR] Pre-order calculation failed:", str(e))
+                logging.exception(f"Pre-order calculation failed: {str(e)}")
                 return jsonify({"error": f"Buy calculation failed: {str(e)}"}), 500
 
             try:
                 place_binance_order(symbol, "BUY", step_sized_quantity)
-                print(f"[ORDER] BUY executed: {step_sized_quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                logging.info(f"[ORDER] BUY executed: {step_sized_quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
                 response = jsonify({"status": f"Bought {step_sized_quantity} {symbol}"}), 200
-                print("[INFO] Buy order completed successfully, returning response:", response)
-                print("=====================end=====================")
+                logging.info(f"Buy order completed successfully, returning response: {response}")
+                logging.info("=====================end=====================")
                 return response
             except Exception as e:
-                print("[ERROR] Failed to place buy order:", str(e))
+                logging.exception(f"Failed to place buy order: {str(e)}")
                 return jsonify({"error": f"Order failed: {str(e)}"}), 500
             
         if is_sell:
@@ -176,44 +172,44 @@ def webhook():
                     # Fetch filters and extract stepSize
                     filters = get_symbol_filters(symbol)
                     step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
-                    print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
+                    logging.info(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
 
                     # Round down to conform to Binance stepSize rules
                     quantity = quantize_quantity(asset_balance, step_size)
-                    print(f"[ORDER] Rounded sell quantity to conform to LOT_SIZE: {quantity}")
+                    logging.info(f"[ORDER] Rounded sell quantity to conform to LOT_SIZE: {quantity}")
 
                     if quantity <= Decimal("0"):
-                        print("[WARNING] Rounded sell quantity is zero or below minimum tradable size. Aborting.")
+                        logging.warning("Rounded sell quantity is zero or below minimum tradable size. Aborting.")
                         response = jsonify({"warning": "Sell amount too small after rounding."}), 200
-                        print("[INFO] Sell attempt aborted due to to a balance below the minimum size, returning response:", response)
-                        print("=====================end=====================")
+                        logging.info(f"Sell attempt aborted due to to a balance below the minimum size, returning response: {response}")
+                        logging.info("=====================end=====================")
                         return response
 
                     try:
                         place_binance_order(symbol, "SELL", quantity)
                         price = Decimal(str(get_current_price(symbol)))
-                        print(f"[ORDER] SELL executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                        logging.info(f"[ORDER] SELL executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
                         response = jsonify({"status": f"Sold {quantity} {symbol}"}), 200
-                        print("[INFO] Sell order completed successfully, returning response:", response)
-                        print("=====================end=====================")
+                        logging.info(f"Sell order completed successfully, returning response: {response}")
+                        logging.info("=====================end=====================")
                         return response
                     except Exception as e:
-                        print("[ERROR] Failed to place sell order:", str(e))
+                        logging.exception(f"Failed to place sell order: {str(e)}")
                         return jsonify({"error": f"Order failed: {str(e)}"}), 500
                 else:
-                    print("[WARNING] No asset balance to sell.")
+                    logging.warning("No asset balance to sell.")
                     response = jsonify({"warning": "No asset to sell"}), 200
-                    print("[INFO] Sell attempt aborted due to empty balance, returning response:", response)
-                    print("=====================end=====================")
+                    logging.info(f"Sell attempt aborted due to empty balance, returning response: {response}")
+                    logging.info("=====================end=====================")
                     return response
             except Exception as e:
-                print("[ERROR] Sell pre-check failed:", str(e))
+                logging.exception(f"Sell pre-check failed: {str(e)}")
                 return jsonify({"error": f"Sell preparation failed: {str(e)}"}), 500
 
     except Exception as e:
         raw = request.data.decode("utf-8", errors="ignore")
-        print(f"[FATAL ERROR] Could not process webhook: {e}")
-        print(f"[RAW DATA]\n{raw}")
+        logging.exception(f"[FATAL ERROR] Could not process webhook: {e}")
+        logging.info(f"[RAW DATA]\n{raw}")
         return jsonify({"error": "Malformed request"}), 400
 
     
@@ -233,10 +229,10 @@ def place_binance_order(symbol, side, quantity):
     query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
     signature = hmac.new(BINANCE_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
     params["signature"] = signature
-    print(f"[REQUEST] Sending {side} order to Binance for {symbol}, Quantity: {quantity}")
+    logging.info(f"[REQUEST] Sending {side} order to Binance for {symbol}, Quantity: {quantity}")
     response = requests.post(url, headers=headers, params=params)
     result = response.json()
-    print("[BINANCE RESPONSE]", result)
+    logging.info(f"[BINANCE RESPONSE] {result}")
 
     # Handle Binance API error (in place_binance_order)
     if "code" in result and result["code"] < 0:
@@ -260,22 +256,22 @@ def get_asset_balance(asset):
             raise Exception(f"[ERROR] Binance API error: {result.get('msg', 'Unknown error')}")
 
         balances = result.get("balances", [])
-        # print_balances(balances)
+        # log_balances(balances)
         for b in balances:
             if b["asset"] == asset:
-                print(f"[BALANCE] {asset} free balance: {b['free']}")
+                logging.info(f"[BALANCE] {asset} free balance: {b['free']}")
                 return float(b["free"])
             
-        print(f"[WARNING] {asset} balance not found.")
+        logging.warning(f"{asset} balance not found.")
         return 0.0
     
     except Exception as e:
-        print(f"[EXCEPTION] Failed to fetch asset balance: {e}")
+        logging.exception(f"Failed to fetch asset balance: {e}")
         return 0.0
 
 def get_symbol_filters(symbol):
     """
-    Fetches and prints Binance trading rules (filters) for the given symbol.
+    Fetches and logs Binance trading rules (filters) for the given symbol.
 
     Args:
         symbol (str): Trading pair symbol, e.g., 'BTCUSDT'.
@@ -288,18 +284,18 @@ def get_symbol_filters(symbol):
 
         symbol_info = data.get("symbols", [])[0]
         filters = symbol_info.get("filters", [])
-        # print_filters(symbol, filters)
+        # log_filters(symbol, filters)
         return filters
 
     except requests.RequestException as e:
-        print(f"[ERROR] Failed to fetch exchange info for {symbol}: {e}")
+        logging.exception(f"Failed to fetch exchange info for {symbol}: {e}")
         return []
 
 def get_current_price(symbol):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
     response = requests.get(url).json()
     price = float(response["price"])
-    print(f"[PRICE] Current price for {symbol}: {price}")
+    logging.info(f"[PRICE] Current price for {symbol}: {price}")
     return price
 
 def quantize_quantity(quantity, step_size):
@@ -312,20 +308,20 @@ def get_filter_value(filters, filter_type, key):
             return f.get(key)
     raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
 
-def print_filters(symbol, filters):
-    print(f"[INFO] Filters for {symbol}:")
+def log_filters(symbol, filters):
+    logging.info(f"Filters for {symbol}:")
     for f in filters:
-        print(f"  - {f['filterType']}: {f}")
+        logging.info(f"  - {f['filterType']}: {f}")
 
-def print_balances(balances):
-    print("[INFO] Listing all balances returned by Binance with a Total greater than 0:")
+def log_balances(balances):
+    logging.info("Listing all balances returned by Binance with a Total greater than 0:")
     for b in balances:
         current_asset = b["asset"]
         free = float(b.get("free", 0))
         locked = float(b.get("locked", 0))
         total = free + locked
         if total > 0:
-            print(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
+            logging.info(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
 
 def should_log_request():
     return request.path not in ('/health-check', '/healthz', '/ping', '/')
