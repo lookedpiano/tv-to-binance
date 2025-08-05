@@ -7,12 +7,19 @@ from datetime import datetime, timezone
 
 app = Flask(__name__)
 
-# Load API keys from environment variables
+# Load from environment variables
 BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
+PORT = os.environ.get("PORT")
+
+if not BINANCE_API_KEY:
+    raise RuntimeError("Missing required environment variable: BINANCE_API_KEY")
+if not BINANCE_SECRET_KEY:
+    raise RuntimeError("Missing required environment variable: BINANCE_SECRET_KEY")
 if not WEBHOOK_SECRET:
     raise RuntimeError("Missing required environment variable: WEBHOOK_SECRET")
+
 
 # Allowed trading pairs
 ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT"}
@@ -309,5 +316,14 @@ def should_log_request():
 def get_timestamp():
     return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"])
 
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    if PORT:
+        try:
+            PORT = int(PORT)
+        except ValueError:
+            raise RuntimeError("Environment variable PORT must be an integer.")
+    else:
+        PORT = 5000  # Default for local dev
+
+    app.run(host='0.0.0.0', port=PORT)
