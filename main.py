@@ -60,120 +60,139 @@ def healthz():
 @app.route('/to-the-moon', methods=['POST'])
 def webhook():
     print("=====================start=====================")
-    data = request.json
-    data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
-    print(f"[WEBHOOK] Received payload (no {SECRET_FIELD}):", data_for_log)
+    try:
+        # Validate and parse JSON payload
+        data = request.get_json(force=False, silent=False)
+        if not isinstance(data, dict):
+            raise ValueError("Payload is not a valid JSON object.")
 
-    # Secret validation
-    secret_from_request = data.get(SECRET_FIELD)
-    if not secret_from_request or not hmac.compare_digest(secret_from_request, WEBHOOK_SECRET):
-        print(f"[SECURITY] Unauthorized access attempt. Invalid or missing {SECRET_FIELD}.")
-        return jsonify({"error": "Unauthorized"}), 401
+        # Log without secret
+        data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
+        print(f"[WEBHOOK] Received payload (no {SECRET_FIELD}):", data_for_log)
 
-    action = data.get("action", "").strip().upper()
-    symbol = data.get("symbol", "BTCUSDT").strip().upper()
-    buy_pct_raw = data.get("buy_pct", DEFAULT_BUY_PCT)
+        # Secret validation
+        secret_from_request = data.get(SECRET_FIELD)
+        if not secret_from_request or not hmac.compare_digest(secret_from_request, WEBHOOK_SECRET):
+            print(f"[SECURITY] Unauthorized access attempt. Invalid or missing {SECRET_FIELD}.")
+            return jsonify({"error": "Unauthorized"}), 401
 
-    is_buy = action == "BUY"
-    is_buy_small_btc = action == "BUY_BTC_SMALL"
-    is_sell = action == "SELL"
-
-    # Info log
-    info = f"[INFO] Action: {action}, Symbol: {symbol}"
-    if is_buy or is_buy_small_btc:
-        info += f", Buy %: {buy_pct_raw}"
-    print(info)
-
-    # Validate action
-    if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
-        print(f"[ERROR] Invalid action received: {action}")
-        return jsonify({"error": "Invalid action"}), 400
-    
-    # Validate symbol
-    if symbol not in ALLOWED_SYMBOLS:
-        print(f"[ERROR] Symbol '{symbol}' is not in allowed list.")
-        return jsonify({"error": f"Symbol '{symbol}' is not allowed"}), 400
-
-    if is_buy or is_buy_small_btc:
+        # Field Extraction
         try:
-            buy_pct = Decimal(str(buy_pct_raw))
-            if not (Decimal("0") < buy_pct <= Decimal("1")):
-                raise ValueError("Out of range")
-        except Exception:
-            buy_pct = DEFAULT_BUY_PCT
-            print(f"[WARNING] Invalid 'buy_pct' provided ({buy_pct_raw}). Defaulting to {DEFAULT_BUY_PCT} (= 0.1 %)")
+            action = data.get("action", "").strip().upper()
+            symbol = data.get("symbol", "BTCUSDT").strip().upper()
+            buy_pct_raw = data.get("buy_pct", DEFAULT_BUY_PCT)
 
-        try:
-            usdt_balance = get_asset_balance("USDT")
-            invest_usdt = Decimal(str(usdt_balance)) * buy_pct
-            price = Decimal(str(get_current_price(symbol)))
-            raw_quantity = (invest_usdt / price).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
-            print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
-            print(f"[INFO] {symbol} Price: {price}, Raw quantity before step size rounding: {raw_quantity}")
+            is_buy = action == "BUY"
+            is_buy_small_btc = action == "BUY_BTC_SMALL"
+            is_sell = action == "SELL"
+        except Exception as parse_err:
+            print(f"[ERROR] Failed to parse required fields: {parse_err}")
+            return jsonify({"error": "Invalid field formatting"}), 400
 
-            # Fetch filters and extract stepSize
-            filters = get_symbol_filters(symbol)
-            step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
-            print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
+        # Info log
+        info = f"[INFO] Action: {action}, Symbol: {symbol}"
+        if is_buy or is_buy_small_btc:
+            info += f", Buy %: {buy_pct_raw}"
+        print(info)
 
-            step_sized_quantity = quantize_quantity(invest_usdt / price, step_size)
-            print(f"[ORDER] Rounded quantity to conform to LOT_SIZE: {step_sized_quantity}")
-        except Exception as e:
-            print("[ERROR] Pre-order calculation failed:", str(e))
-            return jsonify({"error": f"Buy calculation failed: {str(e)}"}), 500
+        # Validate action
+        if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
+            print(f"[ERROR] Invalid action received: {action}")
+            return jsonify({"error": "Invalid action"}), 400
 
-        try:
-            place_binance_order(symbol, "BUY", step_sized_quantity)
-            print(f"[ORDER] BUY executed: {step_sized_quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-            response = jsonify({"status": f"Bought {step_sized_quantity} {symbol}"}), 200
-            print("[INFO] Buy order completed successfully, returning response:", response)
-            print("=====================end=====================")
-            return response
-        except Exception as e:
-            print("[ERROR] Failed to place buy order:", str(e))
-            return jsonify({"error": f"Order failed: {str(e)}"}), 500
-        
-    if is_sell:
-        base_asset = symbol.replace("USDT", "")
-        try:
-            asset_balance = Decimal(str(get_asset_balance(base_asset)))
-            if asset_balance > 0:
+        # Validate symbol
+        if symbol not in ALLOWED_SYMBOLS:
+            print(f"[ERROR] Symbol '{symbol}' is not in allowed list.")
+            return jsonify({"error": f"Symbol '{symbol}' is not allowed"}), 400
+
+        if is_buy or is_buy_small_btc:
+            try:
+                buy_pct = Decimal(str(buy_pct_raw))
+                if not (Decimal("0") < buy_pct <= Decimal("1")):
+                    raise ValueError("Out of range")
+            except Exception:
+                buy_pct = DEFAULT_BUY_PCT
+                print(f"[WARNING] Invalid 'buy_pct' provided ({buy_pct_raw}). Defaulting to {DEFAULT_BUY_PCT} (= 0.1 %)")
+
+            try:
+                usdt_balance = get_asset_balance("USDT")
+                invest_usdt = Decimal(str(usdt_balance)) * buy_pct
+                price = Decimal(str(get_current_price(symbol)))
+                raw_quantity = (invest_usdt / price).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
+                print(f"[INFO] USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
+                print(f"[INFO] {symbol} Price: {price}, Raw quantity before step size rounding: {raw_quantity}")
+
                 # Fetch filters and extract stepSize
                 filters = get_symbol_filters(symbol)
                 step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
                 print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
 
-                # Round down to conform to Binance stepSize rules
-                quantity = quantize_quantity(asset_balance, step_size)
-                print(f"[ORDER] Rounded sell quantity to conform to LOT_SIZE: {quantity}")
+                step_sized_quantity = quantize_quantity(invest_usdt / price, step_size)
+                print(f"[ORDER] Rounded quantity to conform to LOT_SIZE: {step_sized_quantity}")
+            except Exception as e:
+                print("[ERROR] Pre-order calculation failed:", str(e))
+                return jsonify({"error": f"Buy calculation failed: {str(e)}"}), 500
 
-                if quantity <= Decimal("0"):
-                    print("[WARNING] Rounded sell quantity is zero or below minimum tradable size. Aborting.")
-                    response = jsonify({"warning": "Sell amount too small after rounding."}), 200
-                    print("[INFO] Sell attempt aborted due to to a balance below the minimum size, returning response:", response)
-                    print("=====================end=====================")
-                    return response
-
-                try:
-                    place_binance_order(symbol, "SELL", quantity)
-                    price = Decimal(str(get_current_price(symbol)))
-                    print(f"[ORDER] SELL executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-                    response = jsonify({"status": f"Sold {quantity} {symbol}"}), 200
-                    print("[INFO] Sell order completed successfully, returning response:", response)
-                    print("=====================end=====================")
-                    return response
-                except Exception as e:
-                    print("[ERROR] Failed to place sell order:", str(e))
-                    return jsonify({"error": f"Order failed: {str(e)}"}), 500
-            else:
-                print("[WARNING] No asset balance to sell.")
-                response = jsonify({"warning": "No asset to sell"}), 200
-                print("[INFO] Sell attempt aborted due to empty balance, returning response:", response)
+            try:
+                place_binance_order(symbol, "BUY", step_sized_quantity)
+                print(f"[ORDER] BUY executed: {step_sized_quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                response = jsonify({"status": f"Bought {step_sized_quantity} {symbol}"}), 200
+                print("[INFO] Buy order completed successfully, returning response:", response)
                 print("=====================end=====================")
                 return response
-        except Exception as e:
-            print("[ERROR] Sell pre-check failed:", str(e))
-            return jsonify({"error": f"Sell preparation failed: {str(e)}"}), 500
+            except Exception as e:
+                print("[ERROR] Failed to place buy order:", str(e))
+                return jsonify({"error": f"Order failed: {str(e)}"}), 500
+            
+        if is_sell:
+            base_asset = symbol.replace("USDT", "")
+            try:
+                asset_balance = Decimal(str(get_asset_balance(base_asset)))
+                if asset_balance > 0:
+                    # Fetch filters and extract stepSize
+                    filters = get_symbol_filters(symbol)
+                    step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
+                    print(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
+
+                    # Round down to conform to Binance stepSize rules
+                    quantity = quantize_quantity(asset_balance, step_size)
+                    print(f"[ORDER] Rounded sell quantity to conform to LOT_SIZE: {quantity}")
+
+                    if quantity <= Decimal("0"):
+                        print("[WARNING] Rounded sell quantity is zero or below minimum tradable size. Aborting.")
+                        response = jsonify({"warning": "Sell amount too small after rounding."}), 200
+                        print("[INFO] Sell attempt aborted due to to a balance below the minimum size, returning response:", response)
+                        print("=====================end=====================")
+                        return response
+
+                    try:
+                        place_binance_order(symbol, "SELL", quantity)
+                        price = Decimal(str(get_current_price(symbol)))
+                        print(f"[ORDER] SELL executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                        response = jsonify({"status": f"Sold {quantity} {symbol}"}), 200
+                        print("[INFO] Sell order completed successfully, returning response:", response)
+                        print("=====================end=====================")
+                        return response
+                    except Exception as e:
+                        print("[ERROR] Failed to place sell order:", str(e))
+                        return jsonify({"error": f"Order failed: {str(e)}"}), 500
+                else:
+                    print("[WARNING] No asset balance to sell.")
+                    response = jsonify({"warning": "No asset to sell"}), 200
+                    print("[INFO] Sell attempt aborted due to empty balance, returning response:", response)
+                    print("=====================end=====================")
+                    return response
+            except Exception as e:
+                print("[ERROR] Sell pre-check failed:", str(e))
+                return jsonify({"error": f"Sell preparation failed: {str(e)}"}), 500
+
+    except Exception as e:
+        raw = request.data.decode("utf-8", errors="ignore")
+        print(f"[FATAL ERROR] Could not process webhook: {e}")
+        print(f"[RAW DATA] {raw}")
+        return jsonify({"error": "Malformed request"}), 400
+
+    
 
 def place_binance_order(symbol, side, quantity):
     url = "https://api.binance.com/api/v3/order"
