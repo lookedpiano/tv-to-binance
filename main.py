@@ -2,9 +2,15 @@ from flask import Flask, request, jsonify
 import hmac, hashlib
 import requests
 import os
+import logging
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime, timezone
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 app = Flask(__name__)
 
@@ -75,6 +81,7 @@ def healthz():
 @app.route('/to-the-moon', methods=['POST'])
 def webhook():
     print("=====================start=====================")
+    logging.info("=====================start=====================")
     try:
         # Validate and parse JSON payload
         data = request.get_json(force=False, silent=False)
@@ -84,6 +91,7 @@ def webhook():
         # Log without secret
         data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
         print(f"[WEBHOOK] Received payload (no {SECRET_FIELD}):", data_for_log)
+        logging.info(f"[WEBHOOK] Received payload (no {SECRET_FIELD}): {data_for_log}")
 
         # Secret validation
         secret_from_request = data.get(SECRET_FIELD)
@@ -109,6 +117,7 @@ def webhook():
         if is_buy or is_buy_small_btc:
             info += f", Buy %: {buy_pct_raw}"
         print(info)
+        logging.info(info)
 
         # Validate action
         if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
