@@ -21,6 +21,12 @@ if not BINANCE_SECRET_KEY:
     raise RuntimeError("Missing required environment variable: BINANCE_SECRET_KEY")
 if not WEBHOOK_SECRET:
     raise RuntimeError("Missing required environment variable: WEBHOOK_SECRET")
+if not PORT:
+    raise RuntimeError(
+        "Missing required environment variable: PORT.\n"
+        "The following ports are reserved by Render and cannot be used: 18012, 18013 and 19099.\n"
+        "Choose a port such that: 1024 < PORT <= 49000, excluding the reserved ones."
+    )
 
 
 # Allowed trading pairs
