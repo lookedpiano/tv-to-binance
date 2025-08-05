@@ -318,10 +318,12 @@ def get_timestamp():
 
 
 if __name__ == '__main__':
+    print(f"1:: PORT is set to: {PORT}")
     if PORT:
-        print(f"port:{PORT}")
+        print(f"2:: PORT is set to: {PORT}")
         try:
             PORT = int(PORT)
+            print(f"3:: PORT is set to: {PORT}")
         except ValueError:
             raise RuntimeError("Environment variable PORT must be an integer.")
     else:
