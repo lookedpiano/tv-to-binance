@@ -2,14 +2,12 @@ from flask import Flask, request, jsonify
 import hmac, hashlib
 import requests
 import os
-import logging
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime, timezone
 
+
 app = Flask(__name__)
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Load from environment variables
 BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY")
@@ -322,21 +320,12 @@ def get_timestamp():
 
 
 if __name__ == '__main__':
-    print(f"1:: PORT is set to: {PORT}")
-    print(f"11:: PORT is set to: {PORT}", flush=True)
-    logger.info("in main::")
-    logger.info(PORT)
-
     if PORT:
-        print(f"2:: PORT is set to: {PORT}")
-        print(f"22:: PORT is set to: {PORT}", flush=True)
         try:
             PORT = int(PORT)
-            print(f"3:: PORT is set to: {PORT}")
-            print(f"33:: PORT is set to: {PORT}", flush=True)
         except ValueError:
             raise RuntimeError("Environment variable PORT must be an integer.")
     else:
-        PORT = 5000  # Default for local dev
+        PORT = 5050  # Default for local dev
 
     app.run(host='0.0.0.0', port=PORT)
