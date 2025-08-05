@@ -319,6 +319,7 @@ def get_timestamp():
 
 if __name__ == '__main__':
     if PORT:
+        print(f"port:{PORT}")
         try:
             PORT = int(PORT)
         except ValueError:
