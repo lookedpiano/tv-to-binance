@@ -189,7 +189,7 @@ def webhook():
     except Exception as e:
         raw = request.data.decode("utf-8", errors="ignore")
         print(f"[FATAL ERROR] Could not process webhook: {e}")
-        print(f"[RAW DATA]:\n{raw}")
+        print(f"[RAW DATA]\n{raw}")
         return jsonify({"error": "Malformed request"}), 400
 
     
