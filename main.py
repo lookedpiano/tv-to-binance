@@ -6,6 +6,9 @@ import logging
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime, timezone
 
+# -------------------------
+# Logging configuration
+# -------------------------
 logging.basicConfig(
     level=logging.INFO,
     format='[%(levelname)s] %(message)s'
@@ -13,7 +16,9 @@ logging.basicConfig(
 
 app = Flask(__name__)
 
-# Load from environment variables
+# -------------------------
+# Environment variables
+# -------------------------
 BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
@@ -33,28 +38,236 @@ if not PORT:
     )
 
 
-# Allowed trading pairs
-ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT"}
-
-# Default Buy Percentage: 0.1 %
-DEFAULT_BUY_PCT = Decimal("0.001")
-
-# Authenticates the alert request
+# -------------------------
+# Configuration
+# -------------------------
+ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRPUSDT"}
+DEFAULT_BUY_PCT = Decimal("0.001") # 0.1 %
 SECRET_FIELD = "client_secret"
 
 
+# -------------------------
+# Utilities
+# -------------------------
+def should_log_request():
+    return request.path not in ('/health-check', '/healthz', '/ping', '/')
 
+def get_timestamp_ms():
+    """Return Binance serverTime in milliseconds (int)."""
+    return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"])
+
+def sign_query(params: dict):
+    """
+    Build query string and signature for Binance signed endpoints.
+    Uses timestamp in ms if caller didn't pass it.
+    """
+    if "timestamp" not in params:
+        params["timestamp"] = get_timestamp_ms()
+    # Build query in insertion order (consistent)
+    qs = '&'.join([f"{k}={params[k]}" for k in params])
+    signature = hmac.new(BINANCE_SECRET_KEY.encode(), qs.encode(), hashlib.sha256).hexdigest()
+    return qs + "&signature=" + signature
+
+def quantize_quantity(quantity: Decimal, step_size_str: str) -> Decimal:
+    """Round down quantity to conform to stepSize."""
+    step = Decimal(step_size_str)
+    # floor to step multiple
+    quant = (Decimal(quantity) // step) * step
+    # quantize to the same scale as step
+    return quant.quantize(step, rounding=ROUND_DOWN)
+
+def get_filter_value(filters, filter_type, key):
+    for f in filters:
+        if f.get("filterType") == filter_type:
+            return f.get(key)
+    raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
+
+# -------------------------
+# Binance helper functions
+# -------------------------
+def signed_get(path: str, params: dict = None):
+    if params is None:
+        params = {}
+    qs_sig = sign_query(params)
+    url = f"https://api.binance.com{path}?{qs_sig}"
+    headers = {"X-MBX-APIKEY": BINANCE_API_KEY}
+    r = requests.get(url, headers=headers)
+    try:
+        res = r.json()
+    except Exception:
+        r.raise_for_status()
+    if isinstance(res, dict) and res.get("code", 0) < 0:
+        raise Exception(f"Binance API error: {res.get('msg')}")
+    return res
+
+def signed_post(path: str, params: dict = None):
+    if params is None:
+        params = {}
+    qs_sig = sign_query(params)
+    url = f"https://api.binance.com{path}?{qs_sig}"
+    headers = {"X-MBX-APIKEY": BINANCE_API_KEY}
+    r = requests.post(url, headers=headers)
+    try:
+        res = r.json()
+    except Exception:
+        r.raise_for_status()
+    if isinstance(res, dict) and res.get("code", 0) < 0:
+        raise Exception(f"Binance API error: {res.get('msg')}")
+    return res
+
+def public_get(path: str, params: dict = None):
+    url = f"https://api.binance.com{path}"
+    r = requests.get(url, params=params)
+    r.raise_for_status()
+    return r.json()
+
+# -------------------------
+# Exchange helpers
+# -------------------------
+def get_symbol_filters(symbol):
+    try:
+        data = public_get("/api/v3/exchangeInfo", {"symbol": symbol})
+        symbols = data.get("symbols", [])
+        if not symbols:
+            return []
+        filters = symbols[0].get("filters", [])
+        # log_filters(symbol, filters)
+        return filters
+    except Exception as e:
+        logging.exception(f"Failed to fetch exchangeInfo for {symbol}: {e}")
+        return []
+    
+def get_current_price(symbol):
+    try:
+        data = public_get("/api/v3/ticker/price", {"symbol": symbol})
+        price = Decimal(str(data["price"]))
+        logging.info(f"[PRICE] {symbol}: {price}")
+        return price
+    except Exception as e:
+        logging.exception(f"Failed to fetch current price for {symbol}: {e}")
+        raise
+
+# -------------------------
+# Spot functions (unchanged)
+# -------------------------
+def get_spot_asset_free(asset: str) -> Decimal:
+    """
+    Return free balance for asset from spot account as Decimal.
+    """
+    try:
+        params = {"timestamp": get_timestamp_ms()}
+        qs_sig = sign_query(params)
+        url = f"https://api.binance.com/api/v3/account?{qs_sig}"
+        headers = {"X-MBX-APIKEY": BINANCE_API_KEY}
+        r = requests.get(url, headers=headers)
+        res = r.json()
+        if isinstance(res, dict) and res.get("code", 0) < 0:
+            raise Exception(f"Binance API error: {res.get('msg')}")
+        balances = res.get("balances", [])
+        for b in balances:
+            if b.get("asset") == asset:
+                free = Decimal(str(b.get("free", "0")))
+                logging.info(f"[SPOT BAL] {asset} free={free}")
+                return free
+        return Decimal("0")
+    except Exception as e:
+        logging.exception("Failed to fetch spot asset balance")
+        raise
+
+def place_spot_market_order(symbol: str, side: str, quantity: Decimal):
+    """
+    Place a spot market order (signed). quantity passed as Decimal or string.
+    """
+    try:
+        params = {
+            "symbol": symbol,
+            "side": side,
+            "type": "MARKET",
+            "quantity": str(quantity),
+            "timestamp": get_timestamp_ms()
+        }
+        qs_sig = sign_query(params)
+        url = f"https://api.binance.com/api/v3/order?{qs_sig}"
+        headers = {"X-MBX-APIKEY": BINANCE_API_KEY}
+        logging.info(f"[SPOT] Sending {side} order for {symbol}, qty={quantity}")
+        r = requests.post(url, headers=headers)
+        res = r.json()
+        logging.info(f"[SPOT RESPONSE] {res}")
+        if isinstance(res, dict) and res.get("code", 0) < 0:
+            raise Exception(f"Binance API error: {res.get('msg')}")
+        return res
+    except Exception:
+        logging.exception("Spot order failed")
+        raise
+
+# -------------------------
+# Cross-margin functions
+# -------------------------
+def get_margin_account():
+    """Return cross-margin account details."""
+    return signed_get("/sapi/v1/margin/account", {})
+
+def get_margin_asset(asset: str):
+    """
+    Returns dict with keys 'asset','free','locked','borrowed','interest' for cross-margin asset.
+    """
+    acct = get_margin_account()
+    user_assets = acct.get("userAssets", [])
+    for a in user_assets:
+        if a.get("asset") == asset:
+            # convert fields to Decimal
+            return {
+                "asset": a.get("asset"),
+                "free": Decimal(str(a.get("free", "0"))),
+                "locked": Decimal(str(a.get("locked", "0"))),
+                "borrowed": Decimal(str(a.get("borrowed", "0"))),
+                "interest": Decimal(str(a.get("interest", "0")))
+            }
+    return {"asset": asset, "free": Decimal("0"), "locked": Decimal("0"), "borrowed": Decimal("0"), "interest": Decimal("0")}
+
+def margin_loan(asset: str, amount: Decimal):
+    """
+    Borrow asset for cross-margin account.
+    POST /sapi/v1/margin/loan
+    """
+    params = {"asset": asset, "amount": str(amount)}
+    return signed_post("/sapi/v1/margin/loan", params)
+
+def margin_repay(asset: str, amount: Decimal):
+    """
+    Repay borrowed asset for cross-margin account.
+    POST /sapi/v1/margin/repay
+    """
+    params = {"asset": asset, "amount": str(amount)}
+    return signed_post("/sapi/v1/margin/repay", params)
+
+def place_margin_market_order(symbol: str, side: str, quantity: Decimal):
+    """
+    Place cross-margin market order.
+    POST /sapi/v1/margin/order
+    """
+    params = {
+        "symbol": symbol,
+        "side": side,
+        "type": "MARKET",
+        "quantity": str(quantity),
+    }
+    return signed_post("/sapi/v1/margin/order", params)
+
+# -------------------------
+# Flask hooks and health endpoints
+# -------------------------
 @app.before_request
-def log_request_info():
+def before_req():
     if should_log_request():
-        logging.info(f"[REQUEST] Method: '{request.method}', Path: '{request.path}'")
+        logging.info(f"[REQUEST] Method:'{request.method}', Path:'{request.path}'")
 
 @app.after_request
-def log_response_info(response):
+def after_req(response):
     if should_log_request():
-        logging.info(f"[RESPONSE] Method: '{request.method}', Path: '{request.path}' -> Status Code: '{response.status_code}'")
+        logging.info(f"[RESPONSE] Method:'{request.method}', Path:'{request.path}' -> Status Code:'{response.status_code}'")
     return response
-
+    
 @app.route('/', methods=['GET', 'HEAD'])
 def root():
     # logging.info(f"[ROOT] Call to root endpoint received.")
@@ -76,6 +289,10 @@ def healthz():
     # logging.info("[HEALTHZ CHECK] Call to healthz endpoint received.")
     return jsonify({"status": "healthzy"}), 200
 
+# -------------------------
+# Webhook endpoint
+# -------------------------
+# TODO: adjust webhook methode
 @app.route('/to-the-moon', methods=['POST'])
 def webhook():
     logging.info("=====================start=====================")
@@ -220,7 +437,7 @@ def place_binance_order(symbol, side, quantity):
         "side": side,
         "type": "MARKET",
         "quantity": str(quantity),
-        "timestamp": get_timestamp()
+        "timestamp": get_timestamp_ms()
     }
     headers = {
         "X-MBX-APIKEY": BINANCE_API_KEY
@@ -240,7 +457,7 @@ def place_binance_order(symbol, side, quantity):
 def get_asset_balance(asset):
     try:
         url = "https://api.binance.com/api/v3/account"
-        timestamp = get_timestamp()
+        timestamp = get_timestamp_ms()
         query_string = f"timestamp={timestamp}"
         signature = hmac.new(BINANCE_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
         headers = {
@@ -268,45 +485,10 @@ def get_asset_balance(asset):
         logging.exception(f"Failed to fetch asset balance: {e}")
         return 0.0
 
-def get_symbol_filters(symbol):
-    """
-    Fetches and logs Binance trading rules (filters) for the given symbol.
 
-    Args:
-        symbol (str): Trading pair symbol, e.g., 'BTCUSDT'.
-    """
-    url = "https://api.binance.com/api/v3/exchangeInfo"
-    try:
-        response = requests.get(url, params={"symbol": symbol})
-        response.raise_for_status()
-        data = response.json()
-
-        symbol_info = data.get("symbols", [])[0]
-        filters = symbol_info.get("filters", [])
-        # log_filters(symbol, filters)
-        return filters
-
-    except requests.RequestException as e:
-        logging.exception(f"Failed to fetch exchange info for {symbol}: {e}")
-        return []
-
-def get_current_price(symbol):
-    url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
-    response = requests.get(url).json()
-    price = float(response["price"])
-    logging.info(f"[PRICE] Current price for {symbol}: {price}")
-    return price
-
-def quantize_quantity(quantity, step_size):
-    step = Decimal(step_size)
-    return (Decimal(quantity) // step * step).quantize(step, rounding=ROUND_DOWN)
-
-def get_filter_value(filters, filter_type, key):
-    for f in filters:
-        if f["filterType"] == filter_type:
-            return f.get(key)
-    raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
-
+# -------------------------
+# maybe useful in future
+# -------------------------
 def log_filters(symbol, filters):
     logging.info(f"Filters for {symbol}:")
     for f in filters:
@@ -322,13 +504,9 @@ def log_balances(balances):
         if total > 0:
             logging.info(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
 
-def should_log_request():
-    return request.path not in ('/health-check', '/healthz', '/ping', '/')
-
-def get_timestamp():
-    return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"])
-
-
+# -------------------------
+# Run app
+# -------------------------
 if __name__ == '__main__':
     if PORT:
         try:
@@ -336,6 +514,5 @@ if __name__ == '__main__':
         except ValueError:
             raise RuntimeError("Environment variable PORT must be an integer.")
     else:
-        PORT = 5050  # Default for local dev
-
+        PORT = 5050 # Default for local dev
     app.run(host='0.0.0.0', port=PORT)
