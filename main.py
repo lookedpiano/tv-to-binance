@@ -340,6 +340,15 @@ def webhook():
     is_buy = action in {"BUY", "BUY_BTC_SMALL"}
     is_sell = action == "SELL"
 
+    # Compute price and filters and extract stepSize
+    try:
+        price = get_current_price(symbol)
+        filters = get_symbol_filters(symbol)
+        step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
+    except Exception as e:
+        logging.exception("Failed to fetch price/filters")
+        return jsonify({"error": "Price/filters fetch failed"}), 500
+
     # -------------------------
     # BUY flow
     # -------------------------
@@ -352,15 +361,6 @@ def webhook():
         except Exception:
             buy_pct = DEFAULT_BUY_PCT
             logging.warning(f"Invalid buy_pct provided ({buy_pct_raw}); defaulting to {DEFAULT_BUY_PCT}")
-
-        # Compute price and filters and extract stepSize
-        try:
-            price = get_current_price(symbol)
-            filters = get_symbol_filters(symbol)
-            step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
-        except Exception as e:
-            logging.exception("Failed to fetch price/filters")
-            return jsonify({"error": "Price/filters fetch failed"}), 500
         
         if trade_type == "SPOT":
             # SPOT buy -> use spot USDT balance
@@ -453,8 +453,6 @@ def webhook():
                     logging.info("=====================end=====================")
                     return response
 
-                filters = get_symbol_filters(symbol)
-                step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
                 sell_qty = quantize_quantity(base_free, step_size)
                 logging.info(f"[SPOT SELL] symbol={symbol}, base_free={base_free}, sell_qty={sell_qty}, step_size={step_size}")
 
@@ -466,7 +464,7 @@ def webhook():
                     return response
 
                 resp = place_spot_market_order(symbol, "SELL", sell_qty)
-                logging.info(f"[ORDER] SELL executed: {sell_qty} {symbol} on {datetime.now(timezone.utc).isoformat()}")
+                logging.info(f"[ORDER] SELL executed: {sell_qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
                 # logging.info(f"Sell order completed successfully, returning response: {resp}")
                 logging.info("=====================end=====================")
                 return jsonify({"status": "spot_sell_executed", "order": resp}), 200
@@ -484,9 +482,11 @@ def webhook():
                 if base_free <= Decimal("0"):
                     return jsonify({"warning": "No margin asset balance to sell"}), 200
 
-                filters = get_symbol_filters(symbol)
-                step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
+                # filters = get_symbol_filters(symbol) # should be taken from above
+                # step_size = get_filter_value(filters, "LOT_SIZE", "stepSize") # should be taken from above
                 sell_qty = quantize_quantity(base_free, step_size)
+                logging.info(f"[MARGIN SELL] symbol={symbol}, base_free={base_free}, sell_qty={sell_qty}, step_size={step_size}")
+
                 if sell_qty <= Decimal("0"):
                     return jsonify({"warning": "Sell amount too small after rounding"}), 200
 
