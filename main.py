@@ -369,7 +369,7 @@ def webhook():
                 invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
                 raw_qty = invest_usdt / price
                 qty = quantize_quantity(raw_qty, step_size)
-                logging.info(f"[SPOT BUY] usdt_free={usdt_free}, invest={invest_usdt}, raw_qty={raw_qty}, qty={qty}")
+                logging.info(f"[SPOT BUY] usdt_free={usdt_free}, invest={invest_usdt}, raw_qty={raw_qty}, qty={qty}, step_size={step_size}")
 
                 if qty <= Decimal("0"):
                     return jsonify({"warning": "Calculated trade size too small after rounding"}), 200
@@ -456,7 +456,7 @@ def webhook():
                 filters = get_symbol_filters(symbol)
                 step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
                 sell_qty = quantize_quantity(base_free, step_size)
-                logging.info(f"[SPOT SELL] symbol={symbol}, base_free={base_free}, sell_qty={sell_qty}")
+                logging.info(f"[SPOT SELL] symbol={symbol}, base_free={base_free}, sell_qty={sell_qty}, step_size={step_size}")
 
                 if sell_qty <= Decimal("0"):
                     logging.warning("Rounded sell quantity is zero or below minimum tradable size. Aborting.")
