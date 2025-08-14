@@ -339,7 +339,8 @@ def healthz():
 def webhook():
     logging.info("=====================start=====================")
     # --- Step 1: IP check ---
-    client_ip = request.remote_addr
+    #client_ip = request.remote_addr #doesn't work
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     logging.info(f"abc ip: {client_ip}")
     if client_ip in TRADINGVIEW_IPS:
         return jsonify({"error": f"IP {client_ip} not allowed"}), 403
