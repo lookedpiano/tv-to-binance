@@ -291,7 +291,7 @@ def place_margin_market_order(symbol: str, side: str, quantity: Decimal):
 # -------------------------
 # Flask hooks and health endpoints
 # -------------------------
-@app.before_request
+# @app.before_request
 def check_ip_whitelist():
     if request.method == "POST" and request.path == WEBHOOK_REQUEST_PATH:
         client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -338,6 +338,12 @@ def healthz():
 @app.route(WEBHOOK_REQUEST_PATH, methods=['POST'])
 def webhook():
     logging.info("=====================start=====================")
+    # --- Step 1: IP check ---
+    client_ip = request.remote_addr
+    logging.info(f"abc ip: {client_ip}")
+    if client_ip in TRADINGVIEW_IPS:
+        return jsonify({"error": f"IP {client_ip} not allowed"}), 403
+    
     try:
         data = request.get_json(force=False, silent=False)
         if not isinstance(data, dict):
