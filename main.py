@@ -164,10 +164,11 @@ def get_spot_asset_free(asset: str) -> Decimal:
         if isinstance(res, dict) and res.get("code", 0) < 0:
             raise Exception(f"Binance API error: {res.get('msg')}")
         balances = res.get("balances", [])
+        # log_balances(balances)
         for b in balances:
             if b.get("asset") == asset:
                 free = Decimal(str(b.get("free", "0")))
-                logging.info(f"[SPOT BAL] {asset} free={free}")
+                logging.info(f"[SPOT BALANCE] {asset} free={free}")
                 return free
         return Decimal("0")
     except Exception as e:
@@ -343,44 +344,102 @@ def webhook():
     # BUY flow
     # -------------------------
     if is_buy:
+        # Normalize buy_pct
         try:
             buy_pct = Decimal(str(buy_pct_raw))
             if not (Decimal("0") < buy_pct <= Decimal("1")):
-                raise ValueError("Out of range")
+                raise ValueError("buy_pct out of range")
         except Exception:
             buy_pct = DEFAULT_BUY_PCT
-            logging.warning(f"Invalid 'buy_pct' provided ({buy_pct_raw}). Defaulting to {DEFAULT_BUY_PCT} (= 0.1 %)")
+            logging.warning(f"Invalid buy_pct provided ({buy_pct_raw}); defaulting to {DEFAULT_BUY_PCT}")
 
+        # Compute price and filters and extract stepSize
         try:
-            usdt_balance = get_asset_balance("USDT")
-            invest_usdt = Decimal(str(usdt_balance)) * buy_pct
-            price = Decimal(str(get_current_price(symbol)))
-            raw_quantity = (invest_usdt / price).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
-            logging.info(f"USDT Balance: {usdt_balance:.4f}, Invest {buy_pct*100:.2f}%: {invest_usdt:.4f}")
-            logging.info(f"{symbol} Price: {price}, Raw quantity before step size rounding: {raw_quantity}")
-
-            # Fetch filters and extract stepSize
+            price = get_current_price(symbol)
             filters = get_symbol_filters(symbol)
             step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
-            logging.info(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
-
-            step_sized_quantity = quantize_quantity(invest_usdt / price, step_size)
-            logging.info(f"[ORDER] Rounded quantity to conform to LOT_SIZE: {step_sized_quantity}")
         except Exception as e:
-            logging.exception(f"Pre-order calculation failed: {str(e)}")
-            return jsonify({"error": f"Buy calculation failed: {str(e)}"}), 500
-
-        try:
-            place_binance_order(symbol, "BUY", step_sized_quantity)
-            logging.info(f"[ORDER] BUY executed: {step_sized_quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-            response = jsonify({"status": f"Bought {step_sized_quantity} {symbol}"}), 200
-            logging.info(f"Buy order completed successfully, returning response: {response}")
-            logging.info("=====================end=====================")
-            return response
-        except Exception as e:
-            logging.exception(f"Failed to place buy order: {str(e)}")
-            return jsonify({"error": f"Order failed: {str(e)}"}), 500
+            logging.exception("Failed to fetch price/filters")
+            return jsonify({"error": "Price/filters fetch failed"}), 500
         
+        if trade_type == "SPOT":
+            # SPOT buy -> use spot USDT balance
+            try:
+                usdt_free = get_spot_asset_free("USDT")
+                invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                raw_qty = invest_usdt / price
+                qty = quantize_quantity(raw_qty, step_size)
+                logging.info(f"[SPOT BUY] usdt_free={usdt_free}, invest={invest_usdt}, raw_qty={raw_qty}, qty={qty}")
+
+                if qty <= Decimal("0"):
+                    return jsonify({"warning": "Calculated trade size too small after rounding"}), 200
+
+                resp = place_spot_market_order(symbol, "BUY", qty)
+                logging.info(f"[ORDER] BUY executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                logging.info(f"Buy order completed successfully, returning response: {resp}")
+                logging.info("=====================end=====================")
+                return jsonify({"status": "spot_buy_executed", "order": resp}), 200
+            
+            except Exception as e:
+                logging.exception("Spot buy failed")
+                return jsonify({"error": f"Spot buy failed: {str(e)}"}), 500
+
+        elif trade_type == "MARGIN":
+            # MARGIN buy -> operate only on margin account (no spot fallback)
+
+            logging.info("todo: in margin trades...")
+            '''
+            try:
+                # leverage parsing
+                leverage = Decimal(str(leverage_raw)) if leverage_raw is not None else Decimal("1")
+                if leverage < 1:
+                    logging.warning("Leverage < 1; defaulting to 1")
+                    leverage = Decimal("1")
+                MAX_LEV = Decimal("10")
+                if leverage > MAX_LEV:
+                    logging.warning(f"Cap leverage to {MAX_LEV}")
+                    leverage = MAX_LEV
+
+                # margin USDT free
+                margin_usdt = get_margin_asset("USDT")
+                usdt_free = margin_usdt["free"]
+                invest_base = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                target_exposure = (invest_base * leverage).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                raw_qty = target_exposure / price
+                qty = quantize_quantity(raw_qty, step_size)
+                logging.info(f"[MARGIN BUY] usdt_free={usdt_free}, invest_base={invest_base}, leverage={leverage}, target_exposure={target_exposure}, raw_qty={raw_qty}, qty={qty}")
+
+                if qty <= Decimal("0"):
+                    return jsonify({"warning": "Calculated quantity too small after rounding"}), 200
+
+                # required USDT for this qty
+                required_usdt = (qty * price).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+
+                borrow_amt = Decimal("0")
+                loan_resp = None
+                if usdt_free < required_usdt:
+                    borrow_amt = (required_usdt - usdt_free).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                    logging.info(f"[MARGIN BUY] Borrow required: {borrow_amt}")
+                    loan_resp = margin_loan("USDT", borrow_amt)
+                    logging.info(f"[MARGIN BUY] Loan response: {loan_resp}")
+                else:
+                    logging.info("[MARGIN BUY] No borrow required")
+
+                order_resp = place_margin_market_order(symbol, "BUY", qty)
+                logging.info(f"[MARGIN BUY] order_resp: {order_resp}")
+
+                # Return order + loan info (no local storage)
+                return jsonify({"status": "margin_buy_executed", "order": order_resp, "loan": loan_resp}), 200
+            except Exception as e:
+                logging.exception("Margin buy failed")
+                return jsonify({"error": f"Margin buy failed: {str(e)}"}), 500
+            '''
+        else:
+            return jsonify({"error": "Unknown trade type"}), 400
+    
+    # -------------------------
+    # SELL flow
+    # -------------------------
     if is_sell:
         base_asset = symbol.replace("USDT", "")
         try:
@@ -423,64 +482,6 @@ def webhook():
             logging.exception(f"Sell pre-check failed: {str(e)}")
             return jsonify({"error": f"Sell preparation failed: {str(e)}"}), 500
 
-    
-
-    
-
-def place_binance_order(symbol, side, quantity):
-    url = "https://api.binance.com/api/v3/order"
-    params = {
-        "symbol": symbol,
-        "side": side,
-        "type": "MARKET",
-        "quantity": str(quantity),
-        "timestamp": get_timestamp_ms()
-    }
-    headers = {
-        "X-MBX-APIKEY": BINANCE_API_KEY
-    }
-    query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
-    signature = hmac.new(BINANCE_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
-    params["signature"] = signature
-    logging.info(f"[REQUEST] Sending {side} order to Binance for {symbol}, Quantity: {quantity}")
-    response = requests.post(url, headers=headers, params=params)
-    result = response.json()
-    logging.info(f"[BINANCE RESPONSE] {result}")
-
-    # Handle Binance API error (in place_binance_order)
-    if "code" in result and result["code"] < 0:
-        raise Exception(f"[ERROR] Binance API error: {result.get('msg', 'Unknown error')}")
-
-def get_asset_balance(asset):
-    try:
-        url = "https://api.binance.com/api/v3/account"
-        timestamp = get_timestamp_ms()
-        query_string = f"timestamp={timestamp}"
-        signature = hmac.new(BINANCE_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
-        headers = {
-            "X-MBX-APIKEY": BINANCE_API_KEY
-        }
-        full_url = f"{url}?{query_string}&signature={signature}"
-        response = requests.get(full_url, headers=headers)
-        result = response.json()
-
-        # Handle Binance API error (in get_asset_balace)
-        if "code" in result and result["code"] < 0:
-            raise Exception(f"[ERROR] Binance API error: {result.get('msg', 'Unknown error')}")
-
-        balances = result.get("balances", [])
-        # log_balances(balances)
-        for b in balances:
-            if b["asset"] == asset:
-                logging.info(f"[BALANCE] {asset} free balance: {b['free']}")
-                return float(b["free"])
-            
-        logging.warning(f"{asset} balance not found.")
-        return 0.0
-    
-    except Exception as e:
-        logging.exception(f"Failed to fetch asset balance: {e}")
-        return 0.0
 
 
 # -------------------------
