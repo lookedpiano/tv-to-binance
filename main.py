@@ -352,6 +352,9 @@ def webhook():
     
     # Validate timestamp
     timestamp = data.get("timestamp")
+    timestamp2 = data.get("timestamp2")
+    logging.info("timestamp :{timestamp}")
+    logging.info("timestamp2:{timestamp2}")
     try:
         if timestamp:
             ts = int(datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp())
