@@ -164,6 +164,7 @@ def validate_secret(data):
         return False, jsonify({"error": "Unauthorized"}), 401
     return True, None
 
+
 # -------------------------
 # Binance helper functions
 # -------------------------
