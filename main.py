@@ -364,7 +364,7 @@ def webhook():
         return jsonify({"error": "Invalid timestamp"}), 400
 
     # Check request age
-    if abs(time.time() - ts) < MAX_REQUEST_AGE:
+    if abs(time.time() - ts) > MAX_REQUEST_AGE:
         logging.warning("[TIMESTAMP] Request expired")
         return jsonify({"error": "Request expired"}), 401
 
