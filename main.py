@@ -352,16 +352,15 @@ def webhook():
     
     # Validate timestamp
     timestamp = data.get("timestamp")
-    timestamp2 = data.get("timestamp2")
-    logging.info(f"timestamp :{timestamp}")
-    logging.info(f"timestamp2:{timestamp2}")
+    if not timestamp:
+        logging.warning("[TIMESTAMP] Missing timestamp")
+        return jsonify({"error": "Missing timestamp"}), 400
+
     try:
-        if timestamp:
-            ts = int(datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp())
-        else:
-            ts = 0
+        # Parse ISO 8601 string to datetime and convert to Unix timestamp
+        ts = int(datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp())
     except ValueError:
-        logging.warning("[TIMESTAMP] Invalid timestamp")
+        logging.warning("[TIMESTAMP] Invalid timestamp format")
         return jsonify({"error": "Invalid timestamp"}), 400
 
     # Check request age
