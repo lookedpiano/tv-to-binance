@@ -193,7 +193,7 @@ def place_spot_market_order(symbol: str, side: str, quantity: Decimal):
         logging.info(f"[SPOT] Sending {side} order for {symbol}, qty={quantity}")
         r = requests.post(url, headers=headers)
         res = r.json()
-        logging.info(f"[SPOT RESPONSE] {res}")
+        # logging.info(f"[SPOT RESPONSE] {res}")
         if isinstance(res, dict) and res.get("code", 0) < 0:
             raise Exception(f"Binance API error: {res.get('msg')}")
         return res
@@ -376,7 +376,7 @@ def webhook():
 
                 resp = place_spot_market_order(symbol, "BUY", qty)
                 logging.info(f"[ORDER] BUY executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-                logging.info(f"Buy order completed successfully, returning response: {resp}")
+                # logging.info(f"Buy order completed successfully, returning response: {resp}")
                 logging.info("=====================end=====================")
                 return jsonify({"status": "spot_buy_executed", "order": resp}), 200
             
@@ -467,7 +467,7 @@ def webhook():
 
                 resp = place_spot_market_order(symbol, "SELL", sell_qty)
                 logging.info(f"[ORDER] SELL executed: {sell_qty} {symbol} on {datetime.now(timezone.utc).isoformat()}")
-                logging.info(f"Sell order completed successfully, returning response: {resp}")
+                # logging.info(f"Sell order completed successfully, returning response: {resp}")
                 logging.info("=====================end=====================")
                 return jsonify({"status": "spot_sell_executed", "order": resp}), 200
             except Exception as e:
