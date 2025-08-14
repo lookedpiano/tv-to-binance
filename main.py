@@ -291,14 +291,14 @@ def place_margin_market_order(symbol: str, side: str, quantity: Decimal):
 # -------------------------
 # Flask hooks and health endpoints
 # -------------------------
-# @app.before_request
+@app.before_request
 def check_ip_whitelist():
     if request.method == "POST" and request.path == WEBHOOK_REQUEST_PATH:
-        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-        logging.info(f"xyz ip: {client_ip}")
+        raw_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        client_ip = raw_ip.split(",")[0].strip() # Take only the first IP in case there are multiple
         if client_ip in TRADINGVIEW_IPS:
             logging.warning(f"Blocked request from unauthorized IP: {client_ip}")
-            return jsonify({"error": "IP not allowed"}), 403
+            return jsonify({"error": f"IP {client_ip} not allowed"}), 403
         
 @app.before_request
 def before_req():
@@ -338,15 +338,6 @@ def healthz():
 @app.route(WEBHOOK_REQUEST_PATH, methods=['POST'])
 def webhook():
     logging.info("=====================start=====================")
-    # --- Step 1: IP check ---
-    #client_ip = request.remote_addr #doesn't work
-    #client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-    raw_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-    client_ip = raw_ip.split(",")[0].strip() # Take only the first IP in case there are multiple
-    logging.info(f"abc ip: {client_ip}")
-    if client_ip in TRADINGVIEW_IPS:
-        return jsonify({"error": f"IP {client_ip} not allowed"}), 403
-    
     try:
         data = request.get_json(force=False, silent=False)
         if not isinstance(data, dict):
