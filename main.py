@@ -356,7 +356,7 @@ def webhook():
     except ValueError:
         return jsonify({"error": "Invalid timestamp"}), 400
     now = int(time.time())
-    if abs(now - timestamp) < MAX_REQUEST_AGE:
+    if abs(now - timestamp) > MAX_REQUEST_AGE:
         return jsonify({"error": "Request expired"}), 401
 
     # Validate secret
