@@ -351,6 +351,8 @@ def webhook():
         return jsonify({"error": "Invalid JSON payload"}), 400
     
     # Validate timestamp
+    ts = int(data.get("timestamp", 0))
+    logging.info(f"time...: {ts}")
     try:
         timestamp = int(data.get("timestamp", 0))
     except ValueError:
