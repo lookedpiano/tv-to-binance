@@ -46,7 +46,15 @@ ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRP
 DEFAULT_BUY_PCT = Decimal("0.001") # 0.1 %
 SECRET_FIELD = "client_secret"
 WEBHOOK_REQUEST_PATH = "/to-the-moon"
-TRADINGVIEW_IPS = set()
+
+# Allowlist of known TradingView alert IPs (must keep updated)
+# See: https://www.tradingview.com/support/solutions/43000529348
+TRADINGVIEW_IPS = {
+    "52.89.214.238",
+    "34.212.75.30",
+    "54.218.53.128",
+    "52.32.178.7",
+}
 
 # -------------------------
 # Utilities
@@ -105,7 +113,7 @@ def load_tradingview_ips():
         sys.exit("CRITICAL: Could not load TradingView IP whitelist. Server shutting down.")
 
 # Load once at startup
-TRADINGVIEW_IPS = load_tradingview_ips()
+# TRADINGVIEW_IPS = load_tradingview_ips()
 
 # -------------------------
 # Binance helper functions
@@ -287,6 +295,7 @@ def place_margin_market_order(symbol: str, side: str, quantity: Decimal):
 def check_ip_whitelist():
     if request.method == "POST" and request.path == WEBHOOK_REQUEST_PATH:
         client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        logging.info(f"xyz ip: {client_ip}")
         if client_ip in TRADINGVIEW_IPS:
             logging.warning(f"Blocked request from unauthorized IP: {client_ip}")
             return jsonify({"error": "IP not allowed"}), 403
