@@ -518,7 +518,6 @@ def webhook():
     return jsonify({"error": "No action performed"}), 400
 
 
-
 # -------------------------
 # maybe useful in future
 # -------------------------
