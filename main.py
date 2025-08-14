@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import hmac, hashlib
 import requests
+import time
 import sys
 import os
 import logging
@@ -46,7 +47,7 @@ ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRP
 DEFAULT_BUY_PCT = Decimal("0.001") # 0.1 %
 SECRET_FIELD = "client_secret"
 WEBHOOK_REQUEST_PATH = "/to-the-moon"
-
+MAX_REQUEST_AGE = 30  # seconds
 # Allowlist of known TradingView alert IPs (must keep updated)
 # See: https://www.tradingview.com/support/solutions/43000529348
 TRADINGVIEW_IPS = {
@@ -348,16 +349,25 @@ def webhook():
         logging.exception(f"[FATAL ERROR] Failed to parse JSON payload: {e}")
         logging.info(f"[RAW DATA]\n{raw}")
         return jsonify({"error": "Invalid JSON payload"}), 400
-
-    # Log without secret
-    data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
-    logging.info(f"[WEBHOOK] Received payload (no {SECRET_FIELD}): {data_for_log}")
+    
+    # Validate timestamp
+    try:
+        timestamp = int(data.get("timestamp", 0))
+    except ValueError:
+        return jsonify({"error": "Invalid timestamp"}), 400
+    now = int(time.time())
+    if abs(now - timestamp) < MAX_REQUEST_AGE:
+        return jsonify({"error": "Request expired"}), 401
 
     # Validate secret
     secret_from_request = data.get(SECRET_FIELD)
     if not secret_from_request or not hmac.compare_digest(str(secret_from_request), str(WEBHOOK_SECRET)):
         logging.warning("[SECURITY] Unauthorized attempt (invalid or missing secret)")
         return jsonify({"error": "Unauthorized"}), 401
+    
+    # Log without secret
+    data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
+    logging.info(f"[WEBHOOK] Received payload (no {SECRET_FIELD}): {data_for_log}")
     
     # Parse fields
     try:
