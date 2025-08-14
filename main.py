@@ -19,6 +19,7 @@ logging.basicConfig(
 
 app = Flask(__name__)
 
+
 # -------------------------
 # Environment variables
 # -------------------------
