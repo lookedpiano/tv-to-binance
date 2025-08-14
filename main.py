@@ -96,29 +96,6 @@ def get_filter_value(filters, filter_type, key):
             return f.get(key)
     raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
 
-def load_tradingview_ips():
-    try:
-        logging.info("Fetching TradingView IP list...")
-        resp = requests.get("https://www.tradingview.com/ip-whitelist/")
-        resp.raise_for_status()
-        ip_list = resp.text.strip().splitlines()
-
-        # Basic validation: filter only lines that look like IPv4 or IPv6
-        valid_ips = {ip.strip() for ip in ip_list if ip and ('.' in ip or ':' in ip)}
-
-        if not valid_ips:
-            raise ValueError("Fetched IP list is empty or invalid.")
-
-        logging.info(f"Loaded {len(valid_ips)} TradingView IP addresses.")
-        return valid_ips
-
-    except Exception as e:
-        logging.error(f"Failed to fetch TradingView IPs: {e}")
-        sys.exit("CRITICAL: Could not load TradingView IP whitelist. Server shutting down.")
-
-# Load once at startup
-# TRADINGVIEW_IPS = load_tradingview_ips()
-
 
 # -----------------------
 # Validation functions
@@ -204,6 +181,7 @@ def public_get(path: str, params: dict = None):
     r.raise_for_status()
     return r.json()
 
+
 # -------------------------
 # Exchange helpers
 # -------------------------
@@ -229,6 +207,7 @@ def get_current_price(symbol):
     except Exception as e:
         logging.exception(f"Failed to fetch current price for {symbol}: {e}")
         raise
+
 
 # -------------------------
 # Spot functions (unchanged)
@@ -284,6 +263,7 @@ def place_spot_market_order(symbol: str, side: str, quantity: Decimal):
         logging.exception("Spot order failed")
         raise
 
+
 # -------------------------
 # Cross-margin functions
 # -------------------------
@@ -338,6 +318,7 @@ def place_margin_market_order(symbol: str, side: str, quantity: Decimal):
     }
     return signed_post("/sapi/v1/margin/order", params)
 
+
 # -------------------------
 # Flask hooks and health endpoints
 # -------------------------
@@ -382,6 +363,7 @@ def health_check():
 def healthz():
     # logging.info("[HEALTHZ CHECK] Call to healthz endpoint received.")
     return jsonify({"status": "healthzy"}), 200
+
 
 # -------------------------
 # Webhook endpoint
@@ -628,6 +610,7 @@ def log_balances(balances):
         total = free + locked
         if total > 0:
             logging.info(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
+
 
 # -------------------------
 # Run app
