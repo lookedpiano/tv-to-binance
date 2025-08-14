@@ -351,17 +351,18 @@ def webhook():
         return jsonify({"error": "Invalid JSON payload"}), 400
     
     # Validate timestamp
-    ts = int(data.get("timestamp", 0))
-    logging.info(f"time...: {ts}")
-    ts2 = int(data.get("timestamp2", 0))
-    logging.info(f"time...: {ts2}")
+    timestamp = data.get("timestamp")
     try:
-        timestamp = int(data.get("timestamp", 0))
+        if timestamp:
+            ts = int(datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp())
+        else:
+            ts = 0
     except ValueError:
         logging.warning("[TIMESTAMP] Invalid timestamp")
         return jsonify({"error": "Invalid timestamp"}), 400
-    now = int(time.time())
-    if abs(now - timestamp) > MAX_REQUEST_AGE:
+
+    # Check request age
+    if abs(time.time() - ts) > MAX_REQUEST_AGE:
         logging.warning("[TIMESTAMP] Request expired")
         return jsonify({"error": "Request expired"}), 401
 
