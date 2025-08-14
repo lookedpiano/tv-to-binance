@@ -296,8 +296,9 @@ def check_ip_whitelist():
     if request.method == "POST" and request.path == WEBHOOK_REQUEST_PATH:
         raw_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
         client_ip = raw_ip.split(",")[0].strip() # Take only the first IP in case there are multiple
-        if client_ip not in TRADINGVIEW_IPS:
+        if client_ip in TRADINGVIEW_IPS:
             logging.warning(f"Blocked request from unauthorized IP: {client_ip}")
+            logging.warning(f"IP address owned by: https://ipapi.co/{client_ip}/json/")
             return jsonify({"error": f"IP {client_ip} not allowed"}), 403
         
 @app.before_request
