@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import hmac, hashlib
 import requests
+import sys
 import os
 import logging
 from decimal import Decimal, ROUND_DOWN
@@ -44,7 +45,8 @@ if not PORT:
 ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRPUSDT"}
 DEFAULT_BUY_PCT = Decimal("0.001") # 0.1 %
 SECRET_FIELD = "client_secret"
-
+WEBHOOK_REQUEST_PATH = "/to-the-moon"
+TRADINGVIEW_IPS = set()
 
 # -------------------------
 # Utilities
@@ -81,6 +83,29 @@ def get_filter_value(filters, filter_type, key):
         if f.get("filterType") == filter_type:
             return f.get(key)
     raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
+
+def load_tradingview_ips():
+    try:
+        logging.info("Fetching TradingView IP list...")
+        resp = requests.get("https://www.tradingview.com/ip-whitelist/")
+        resp.raise_for_status()
+        ip_list = resp.text.strip().splitlines()
+
+        # Basic validation: filter only lines that look like IPv4 or IPv6
+        valid_ips = {ip.strip() for ip in ip_list if ip and ('.' in ip or ':' in ip)}
+
+        if not valid_ips:
+            raise ValueError("Fetched IP list is empty or invalid.")
+
+        logging.info(f"Loaded {len(valid_ips)} TradingView IP addresses.")
+        return valid_ips
+
+    except Exception as e:
+        logging.error(f"Failed to fetch TradingView IPs: {e}")
+        sys.exit("CRITICAL: Could not load TradingView IP whitelist. Server shutting down.")
+
+# Load once at startup
+TRADINGVIEW_IPS = load_tradingview_ips()
 
 # -------------------------
 # Binance helper functions
@@ -259,6 +284,14 @@ def place_margin_market_order(symbol: str, side: str, quantity: Decimal):
 # Flask hooks and health endpoints
 # -------------------------
 @app.before_request
+def check_ip_whitelist():
+    if request.method == "POST" and request.path == WEBHOOK_REQUEST_PATH:
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if client_ip in TRADINGVIEW_IPS:
+            logging.warning(f"Blocked request from unauthorized IP: {client_ip}")
+            return jsonify({"error": "IP not allowed"}), 403
+        
+@app.before_request
 def before_req():
     if should_log_request():
         logging.info(f"[REQUEST] Method:'{request.method}', Path:'{request.path}'")
@@ -293,7 +326,7 @@ def healthz():
 # -------------------------
 # Webhook endpoint
 # -------------------------
-@app.route('/to-the-moon', methods=['POST'])
+@app.route(WEBHOOK_REQUEST_PATH, methods=['POST'])
 def webhook():
     logging.info("=====================start=====================")
     try:
