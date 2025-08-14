@@ -386,8 +386,7 @@ def webhook():
 
         elif trade_type == "MARGIN":
             # MARGIN buy -> operate only on margin account (no spot fallback)
-
-            logging.info("todo: in margin trades...")
+            logging.info("TODO : in buy margin trades...")
             '''
             try:
                 # leverage parsing
@@ -441,46 +440,82 @@ def webhook():
     # SELL flow
     # -------------------------
     if is_sell:
+        # We'll use base asset name
         base_asset = symbol.replace("USDT", "")
-        try:
-            asset_balance = Decimal(str(get_asset_balance(base_asset)))
-            if asset_balance > 0:
-                # Fetch filters and extract stepSize
+        if trade_type == "SPOT":
+            # Sell on spot account only
+            try:
+                base_free = get_spot_asset_free(base_asset)
+                if base_free <= Decimal("0"):
+                    logging.warning("No asset balance to sell.")
+                    response = jsonify({"warning": "No spot asset balance to sell"}), 200
+                    logging.info(f"Sell attempt aborted due to empty balance, returning response: {response}")
+                    logging.info("=====================end=====================")
+                    return response
+
                 filters = get_symbol_filters(symbol)
                 step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
-                logging.info(f"[FILTER] Step size from LOT_SIZE for symbol {symbol}: {step_size}")
+                sell_qty = quantize_quantity(base_free, step_size)
+                logging.info(f"[SPOT SELL] symbol={symbol}, base_free={base_free}, sell_qty={sell_qty}")
 
-                # Round down to conform to Binance stepSize rules
-                quantity = quantize_quantity(asset_balance, step_size)
-                logging.info(f"[ORDER] Rounded sell quantity to conform to LOT_SIZE: {quantity}")
-
-                if quantity <= Decimal("0"):
+                if sell_qty <= Decimal("0"):
                     logging.warning("Rounded sell quantity is zero or below minimum tradable size. Aborting.")
                     response = jsonify({"warning": "Sell amount too small after rounding."}), 200
                     logging.info(f"Sell attempt aborted due to to a balance below the minimum size, returning response: {response}")
                     logging.info("=====================end=====================")
                     return response
 
-                try:
-                    place_binance_order(symbol, "SELL", quantity)
-                    price = Decimal(str(get_current_price(symbol)))
-                    logging.info(f"[ORDER] SELL executed: {quantity} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-                    response = jsonify({"status": f"Sold {quantity} {symbol}"}), 200
-                    logging.info(f"Sell order completed successfully, returning response: {response}")
-                    logging.info("=====================end=====================")
-                    return response
-                except Exception as e:
-                    logging.exception(f"Failed to place sell order: {str(e)}")
-                    return jsonify({"error": f"Order failed: {str(e)}"}), 500
-            else:
-                logging.warning("No asset balance to sell.")
-                response = jsonify({"warning": "No asset to sell"}), 200
-                logging.info(f"Sell attempt aborted due to empty balance, returning response: {response}")
+                resp = place_spot_market_order(symbol, "SELL", sell_qty)
+                logging.info(f"[ORDER] SELL executed: {sell_qty} {symbol} on {datetime.now(timezone.utc).isoformat()}")
+                logging.info(f"Sell order completed successfully, returning response: {resp}")
                 logging.info("=====================end=====================")
-                return response
-        except Exception as e:
-            logging.exception(f"Sell pre-check failed: {str(e)}")
-            return jsonify({"error": f"Sell preparation failed: {str(e)}"}), 500
+                return jsonify({"status": "spot_sell_executed", "order": resp}), 200
+            except Exception as e:
+                logging.exception("Spot sell failed")
+                return jsonify({"error": f"Spot sell failed: {str(e)}"}), 500
+        elif trade_type == "MARGIN":
+            # Sell on margin account only. After sell, attempt to repay any borrowed USDT.
+            logging.info(" TODO : in sell margin trades... ")
+            '''
+            # Sell on margin account only. After sell, attempt to repay any borrowed USDT.
+            try:
+                margin_asset = get_margin_asset(base_asset)
+                base_free = margin_asset["free"]
+                if base_free <= Decimal("0"):
+                    return jsonify({"warning": "No margin asset balance to sell"}), 200
+
+                filters = get_symbol_filters(symbol)
+                step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
+                sell_qty = quantize_quantity(base_free, step_size)
+                if sell_qty <= Decimal("0"):
+                    return jsonify({"warning": "Sell amount too small after rounding"}), 200
+
+                order_resp = place_margin_market_order(symbol, "SELL", sell_qty)
+                logging.info(f"[MARGIN SELL] order_resp: {order_resp}")
+
+                # After selling, attempt to repay USDT debt if any
+                margin_usdt_info = get_margin_asset("USDT")
+                borrowed = margin_usdt_info["borrowed"]
+                if borrowed > 0:
+                    # Try to repay borrowed amount fully (use repay call)
+                    try:
+                        repay_resp = margin_repay("USDT", borrowed)
+                        logging.info(f"[MARGIN] Repay response: {repay_resp}")
+                    except Exception as repay_e:
+                        logging.exception("Auto-repay failed after margin sell")
+                        return jsonify({"status": "margin_sell_executed", "order": order_resp, "repay_error": str(repay_e)}), 500
+
+                return jsonify({"status": "margin_sell_executed", "order": order_resp}), 200
+            except Exception as e:
+                logging.exception("Margin sell failed")
+                return jsonify({"error": f"Margin sell failed: {str(e)}"}), 500
+            
+            '''
+        else:
+            return jsonify({"error": "Unknown trade type"}), 400
+    
+    # If nothing matched (shouldn't happen)
+    return jsonify({"error": "No action performed"}), 400
 
 
 
