@@ -304,52 +304,45 @@ def webhook():
         logging.exception(f"[FATAL ERROR] Failed to parse JSON payload: {e}")
         logging.info(f"[RAW DATA]\n{raw}")
         return jsonify({"error": "Invalid JSON payload"}), 400
-    
-    # Validate and parse JSON payload
-    data = request.get_json(force=False, silent=False)
-    if not isinstance(data, dict):
-        raise ValueError("Payload is not a valid JSON object.")
 
     # Log without secret
     data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
     logging.info(f"[WEBHOOK] Received payload (no {SECRET_FIELD}): {data_for_log}")
 
-    # Secret validation
+    # Validate secret
     secret_from_request = data.get(SECRET_FIELD)
-    if not secret_from_request or not hmac.compare_digest(secret_from_request, WEBHOOK_SECRET):
-        logging.info(f"[SECURITY] Unauthorized access attempt. Invalid or missing {SECRET_FIELD}.")
+    if not secret_from_request or not hmac.compare_digest(str(secret_from_request), str(WEBHOOK_SECRET)):
+        logging.warning("[SECURITY] Unauthorized attempt (invalid or missing secret)")
         return jsonify({"error": "Unauthorized"}), 401
-
-    # Field Extraction
+    
+    # Parse fields
     try:
         action = data.get("action", "").strip().upper()
-        symbol = data.get("symbol", "BTCUSDT").strip().upper()
+        symbol = data.get("symbol", "").strip().upper()
         buy_pct_raw = data.get("buy_pct", DEFAULT_BUY_PCT)
+        trade_type = data.get("type", "SPOT").strip().upper()  # MARGIN or SPOT
+        leverage_raw = data.get("leverage", None)
+    except Exception as e:
+        logging.exception("Failed to extract fields")
+        return jsonify({"error": "Invalid fields"}), 400
 
-        is_buy = action == "BUY"
-        is_buy_small_btc = action == "BUY_BTC_SMALL"
-        is_sell = action == "SELL"
-    except Exception as parse_err:
-        logging.exception(f"Failed to parse required fields: {parse_err}")
-        return jsonify({"error": "Invalid field formatting"}), 400
+    logging.info(f"[PARSE] action={action}, symbol={symbol}, type={trade_type}, leverage={leverage_raw}, buy_pct={buy_pct_raw}")
 
-    # Info log
-    info = f"Action: {action}, Symbol: {symbol}"
-    if is_buy or is_buy_small_btc:
-        info += f", Buy %: {buy_pct_raw}"
-    logging.info(info)
-
-    # Validate action
+    # Validate action and symbol
     if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
-        logging.error(f"Invalid action received: {action}")
+        logging.error(f"Invalid action: {action}")
         return jsonify({"error": "Invalid action"}), 400
-
-    # Validate symbol
     if symbol not in ALLOWED_SYMBOLS:
-        logging.error(f"Symbol '{symbol}' is not in allowed list.")
-        return jsonify({"error": f"Symbol '{symbol}' is not allowed"}), 400
+        logging.error(f"Symbol not allowed: {symbol}")
+        return jsonify({"error": "Symbol not allowed"}), 400
 
-    if is_buy or is_buy_small_btc:
+    is_buy = action in {"BUY", "BUY_BTC_SMALL"}
+    is_sell = action == "SELL"
+
+    # -------------------------
+    # BUY flow
+    # -------------------------
+    if is_buy:
         try:
             buy_pct = Decimal(str(buy_pct_raw))
             if not (Decimal("0") < buy_pct <= Decimal("1")):
@@ -518,5 +511,5 @@ if __name__ == '__main__':
         except ValueError:
             raise RuntimeError("Environment variable PORT must be an integer.")
     else:
-        PORT = 5050 # Default for local dev
+        PORT = 5050  # Default for local dev
     app.run(host='0.0.0.0', port=PORT)
