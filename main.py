@@ -116,6 +116,50 @@ def load_tradingview_ips():
 # Load once at startup
 # TRADINGVIEW_IPS = load_tradingview_ips()
 
+# -----------------------
+# Validation functions
+# -----------------------
+def validate_json():
+    """Validate that the incoming request contains valid JSON."""
+    try:
+        data = request.get_json(force=False, silent=False)
+        if not isinstance(data, dict):
+            raise ValueError("Payload is not a valid JSON object.")
+        return data, None
+    except Exception as e:
+        raw = request.data.decode("utf-8", errors="ignore")
+        logging.exception(f"[FATAL ERROR] Failed to parse JSON payload: {e}")
+        logging.info(f"[RAW DATA]\n{raw}")
+        return None, jsonify({"error": "Invalid JSON payload"}), 400
+
+def validate_timestamp(data):
+    """Validate that the timestamp exists, is a proper ISO 8601 string, and is recent."""
+    timestamp = data.get("timestamp")
+    if not timestamp:
+        logging.warning("[TIMESTAMP] Missing timestamp")
+        return False, jsonify({"error": "Missing timestamp"}), 400
+
+    try:
+        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))  # Z = UTC
+        ts = int(dt.timestamp())
+    except ValueError:
+        logging.warning("[TIMESTAMP] Invalid timestamp format")
+        return False, jsonify({"error": "Invalid timestamp"}), 400
+
+    now = int(time.time())
+    if abs(now - ts) > MAX_REQUEST_AGE:
+        logging.warning("[TIMESTAMP] Request expired")
+        return False, jsonify({"error": "Request expired"}), 401
+    return True, ts, None
+
+def validate_secret(data):
+    """Validate that the webhook secret is correct."""
+    secret_from_request = data.get(SECRET_FIELD)
+    if not secret_from_request or not hmac.compare_digest(str(secret_from_request), str(WEBHOOK_SECRET)):
+        logging.warning("[SECURITY] Unauthorized attempt (invalid or missing secret)")
+        return False, jsonify({"error": "Unauthorized"}), 401
+    return True, None
+
 # -------------------------
 # Binance helper functions
 # -------------------------
@@ -340,41 +384,23 @@ def healthz():
 @app.route(WEBHOOK_REQUEST_PATH, methods=['POST'])
 def webhook():
     logging.info("=====================start=====================")
-    try:
-        data = request.get_json(force=False, silent=False)
-        if not isinstance(data, dict):
-            raise ValueError("Payload is not a valid JSON object.")
-    except Exception as e:
-        raw = request.data.decode("utf-8", errors="ignore")
-        logging.exception(f"[FATAL ERROR] Failed to parse JSON payload: {e}")
-        logging.info(f"[RAW DATA]\n{raw}")
-        return jsonify({"error": "Invalid JSON payload"}), 400
     
-    # Validate timestamp
-    timestamp = data.get("timestamp")
-    if not timestamp:
-        logging.warning("[TIMESTAMP] Missing timestamp")
-        return jsonify({"error": "Missing timestamp"}), 400
-
-    try:
-        # Parse ISO 8601 string to datetime and convert to Unix timestamp
-        ts = int(datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp())
-    except ValueError:
-        logging.warning("[TIMESTAMP] Invalid timestamp format")
-        return jsonify({"error": "Invalid timestamp"}), 400
-
-    # Check request age
-    if abs(time.time() - ts) > MAX_REQUEST_AGE:
-        logging.warning("[TIMESTAMP] Request expired")
-        return jsonify({"error": "Request expired"}), 401
-
-    # Validate secret
-    secret_from_request = data.get(SECRET_FIELD)
-    if not secret_from_request or not hmac.compare_digest(str(secret_from_request), str(WEBHOOK_SECRET)):
-        logging.warning("[SECURITY] Unauthorized attempt (invalid or missing secret)")
-        return jsonify({"error": "Unauthorized"}), 401
+    # JSON validation
+    data, error_response = validate_json()
+    if not data:
+        return error_response
     
-    # Log without secret
+    # Timestamp validation
+    valid_ts, ts, error_response = validate_timestamp(data)
+    if not valid_ts:
+        return error_response
+    
+    # Secret validation
+    valid_secret, error_response = validate_secret(data)
+    if not valid_secret:
+        return error_response
+
+    # Log payload without secret
     data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
     logging.info(f"[WEBHOOK] Received payload (no {SECRET_FIELD}): {data_for_log}")
     
