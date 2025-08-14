@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 import hmac, hashlib
 import requests
 import time
-import sys
 import os
 import logging
 from decimal import Decimal, ROUND_DOWN
