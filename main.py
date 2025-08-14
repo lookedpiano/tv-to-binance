@@ -8,6 +8,7 @@ import logging
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime, timezone
 
+
 # -------------------------
 # Logging configuration
 # -------------------------
