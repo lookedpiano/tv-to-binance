@@ -353,6 +353,8 @@ def webhook():
     # Validate timestamp
     ts = int(data.get("timestamp", 0))
     logging.info(f"time...: {ts}")
+    ts2 = int(data.get("timestamp2", 0))
+    logging.info(f"time...: {ts2}")
     try:
         timestamp = int(data.get("timestamp", 0))
     except ValueError:
