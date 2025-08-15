@@ -244,7 +244,7 @@ def get_current_price(symbol):
 
     except HTTPError as e:
         if e.response.status_code == 418:
-            logging.warning(f"Rate limit hit or temp block for {symbol}.")
+            logging.warning(f"Rate limit hit or temp block for {symbol}:{e}")
             #logging.warning(f"Rate limit hit or temp block for {symbol}. Retrying in 5s...")
             #time.sleep(5)
             # retry once
