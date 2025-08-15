@@ -268,9 +268,23 @@ def get_current_price_old(symbol):
         logging.exception(f"Failed to fetch current price for {symbol}: {e}")
         raise
 
-def get_current_price(symbol):
+def get_current_price_new_failed(symbol):
     ticker = client.get_symbol_ticker(symbol=symbol)
     return Decimal(ticker["price"])
+
+PRICE_CACHE = {}
+
+def get_current_price(symbol):
+    now = time.time()
+    # cache for 2–3 seconds
+    if symbol in PRICE_CACHE and now - PRICE_CACHE[symbol]['ts'] < 3:
+        return PRICE_CACHE[symbol]['price']
+
+    ticker = client.get_symbol_ticker(symbol=symbol)
+    price = Decimal(ticker["price"])
+    PRICE_CACHE[symbol] = {"price": price, "ts": now}
+    return price
+
 
 
 # -------------------------
