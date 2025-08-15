@@ -196,7 +196,29 @@ def get_symbol_filters(symbol):
     except Exception as e:
         logging.exception(f"Failed to fetch exchangeInfo for {symbol}: {e}")
         return []
+
+def get_min_notional(filters):
+    # Attempt to retrieve the MIN_NOTIONAL filter
+    min_notional = next((f['minNotional'] for f in filters if f['filterType'] == 'MIN_NOTIONAL'), None)
+    if min_notional:
+        return Decimal(min_notional)
     
+    # If MIN_NOTIONAL is not found, check for the NOTIONAL filter
+    notional_filter = next((f for f in filters if f['filterType'] == 'NOTIONAL'), None)
+    if notional_filter:
+        return Decimal(notional_filter['minNotional'])
+    
+    # If neither filter is found, return a default value
+    return Decimal('0.0')
+
+def get_trade_filters(symbol):
+    """Fetch filters and return step_size, min_qty, min_notional as Decimals."""
+    filters = get_symbol_filters(symbol)
+    step_size = Decimal(get_filter_value(filters, "LOT_SIZE", "stepSize"))
+    min_qty = Decimal(get_filter_value(filters, "LOT_SIZE", "minQty"))
+    min_notional = get_min_notional(filters)
+    return step_size, min_qty, min_notional
+
 def get_current_price(symbol):
     try:
         data = public_get("/api/v3/ticker/price", {"symbol": symbol})
@@ -206,14 +228,6 @@ def get_current_price(symbol):
     except Exception as e:
         logging.exception(f"Failed to fetch current price for {symbol}: {e}")
         raise
-
-def get_trade_filters(symbol):
-    """Fetch filters and return step_size, min_qty, min_notional as Decimals."""
-    filters = get_symbol_filters(symbol)
-    step_size = Decimal(get_filter_value(filters, "LOT_SIZE", "stepSize"))
-    min_qty = Decimal(get_filter_value(filters, "LOT_SIZE", "minQty"))
-    min_notional = Decimal(get_filter_value(filters, "NOTIONAL", "minNotional"))
-    return step_size, min_qty, min_notional
 
 
 # -------------------------
