@@ -384,11 +384,11 @@ def execute_spot_trade(symbol, side, qty, price, min_qty, min_notional, step_siz
         logging.info("=====================end=====================")
         return {"warning": "Calculated trade size too small after rounding"}, 200
     if qty < min_qty:
-        logging.warning(f"Trade qty {qty} is below min_qty {min_qty}")
+        logging.warning(f"Trade qty {qty} is below min_qty {min_qty}. Aborting.")
         logging.info("=====================end=====================")
         return {"warning": f"Trade qty {qty} is below min_qty {min_qty}"}, 200
     if (qty * price) < min_notional:
-        logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}")
+        logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}. Aborting.")
         logging.info("=====================end=====================")
         return {"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}, 200
 
