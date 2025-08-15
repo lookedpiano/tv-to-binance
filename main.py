@@ -191,7 +191,7 @@ def get_symbol_filters(symbol):
         if not symbols:
             return []
         filters = symbols[0].get("filters", [])
-        log_filters(symbol, filters)
+        # log_filters(symbol, filters)
         return filters
     except Exception as e:
         logging.exception(f"Failed to fetch exchangeInfo for {symbol}: {e}")
@@ -217,7 +217,7 @@ def get_trade_filters(symbol):
     step_size = Decimal(get_filter_value(filters, "LOT_SIZE", "stepSize"))
     min_qty = Decimal(get_filter_value(filters, "LOT_SIZE", "minQty"))
     min_notional = get_min_notional(filters)
-    logging.info(f"min_notional:{min_notional}")
+    logging.info(f"[FILTERS] step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
     return step_size, min_qty, min_notional
 
 def get_current_price(symbol):
