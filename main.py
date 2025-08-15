@@ -473,6 +473,7 @@ def webhook():
                 if qty < min_qty:
                     return jsonify({"warning": f"Trade qty {qty} is below min_qty {min_qty}"}), 200
                 if (qty * price) < min_notional:
+                    logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}")
                     return jsonify({"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}), 200
                 
                 try:
