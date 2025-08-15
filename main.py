@@ -244,20 +244,20 @@ def get_current_price(symbol):
 
     except HTTPError as e:
         if e.response.status_code == 418:
-            logging.warning(f"Rate limit hit or temp block for {symbol}:{e}")
+            logging.warning(f"Rate limit hit or temp block for {symbol}:<{e}>")
             #logging.warning(f"Rate limit hit or temp block for {symbol}. Retrying in 5s...")
             #time.sleep(5)
             # retry once
             #return get_current_price(symbol)
             return None
         if e.response.status_code == 429:
-            logging.warning(f"Request limit hit or temp block for {symbol}.")
+            logging.warning(f"Request limit hit or temp block for {symbol}:<{e}>")
             return None
         else:
-            logging.exception(f"HTTP error for {symbol}: {e}")
+            logging.exception(f"HTTP error for {symbol}:<{e}>")
             return None  # or raise again if you want it to bubble up
     except Exception as e:
-        logging.exception(f"Unexpected error fetching price for {symbol}: {e}")
+        logging.exception(f"Unexpected error fetching price for {symbol}:<{e}>")
         return None
 
 
@@ -512,9 +512,11 @@ def webhook():
 
     # Compute price and filters
     price = get_current_price(symbol)
+    '''
     if price is None:
         logging.info(f"Retrying once for {symbol} price...")
         price = get_current_price(symbol)
+    '''
     if price is None:
         logging.warning(f"No price available for {symbol}. Cannot proceed.")
         logging.info("=====================end=====================")
