@@ -4,10 +4,8 @@ import requests
 import time
 import os
 import logging
-from decimal import Decimal, ROUND_DOWN, ROUND_UP
+from decimal import Decimal, ROUND_DOWN
 from datetime import datetime, timezone
-from binance.client import Client
-from binance.exceptions import BinanceAPIException
 
 
 # -------------------------
@@ -41,11 +39,6 @@ if not PORT:
         "The following ports are reserved by Render and cannot be used: 18012, 18013 and 19099.\n"
         "Choose a port such that: 1024 < PORT <= 49000, excluding the reserved ones."
     )
-
-# -----------------------------
-# CLIENT INIT
-# -----------------------------
-client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 
 
 # -------------------------
@@ -88,17 +81,13 @@ def sign_query(params: dict):
     signature = hmac.new(BINANCE_SECRET_KEY.encode(), qs.encode(), hashlib.sha256).hexdigest()
     return qs + "&signature=" + signature
 
-def quantize_quantity_old(quantity: Decimal, step_size_str: str) -> Decimal:
+def quantize_quantity(quantity: Decimal, step_size_str: str) -> Decimal:
     """Round down quantity to conform to stepSize."""
     step = Decimal(step_size_str)
     # floor to step multiple
     quant = (Decimal(quantity) // step) * step
     # quantize to the same scale as step
     return quant.quantize(step, rounding=ROUND_DOWN)
-
-def quantize_quantity(qty, step_size):
-    precision = abs(step_size.as_tuple().exponent)
-    return qty.quantize(Decimal(f"1e-{precision}"), rounding=ROUND_DOWN)
 
 def get_filter_value(filters, filter_type, key):
     for f in filters:
@@ -222,7 +211,7 @@ def get_min_notional(filters):
     # If neither filter is found, return a default value
     return Decimal('0.0')
 
-def get_trade_filters_old(symbol):
+def get_trade_filters(symbol):
     """Fetch filters and return step_size, min_qty, min_notional as Decimals."""
     filters = get_symbol_filters(symbol)
     step_size = Decimal(get_filter_value(filters, "LOT_SIZE", "stepSize"))
@@ -231,34 +220,7 @@ def get_trade_filters_old(symbol):
     logging.info(f"[FILTERS] step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
     return step_size, min_qty, min_notional
 
-def get_trade_filters_new_failed(symbol):
-    info = client.get_symbol_info(symbol)
-    step_size = Decimal(next(f["stepSize"] for f in info["filters"] if f["filterType"] == "LOT_SIZE"))
-    min_qty = Decimal(next(f["minQty"] for f in info["filters"] if f["filterType"] == "LOT_SIZE"))
-    min_notional = Decimal(next(f["minNotional"] for f in info["filters"] if f["filterType"] == "MIN_NOTIONAL"))
-    return step_size, min_qty, min_notional
-def get_trade_filters(symbol):
-    info = client.get_symbol_info(symbol)  # or your HTTP request version
-    step_size = min_qty = min_notional = None
-
-    for f in info["filters"]:
-        if f["filterType"] == "LOT_SIZE":
-            step_size = Decimal(f["stepSize"])
-            min_qty = Decimal(f["minQty"])
-        elif f["filterType"] == "MIN_NOTIONAL":
-            min_notional = Decimal(f["minNotional"])
-
-    # fallback if MIN_NOTIONAL is missing
-    if min_notional is None:
-        min_notional = Decimal("0.0")
-
-    if min_notional == 0:
-        logging.warning(f"No MIN_NOTIONAL filter for {symbol}, proceeding with 0")
-
-    return step_size, min_qty, min_notional
-
-
-def get_current_price_old(symbol):
+def get_current_price(symbol):
     try:
         data = public_get("/api/v3/ticker/price", {"symbol": symbol})
         price = Decimal(str(data["price"]))
@@ -268,29 +230,11 @@ def get_current_price_old(symbol):
         logging.exception(f"Failed to fetch current price for {symbol}: {e}")
         raise
 
-def get_current_price_new_failed(symbol):
-    ticker = client.get_symbol_ticker(symbol=symbol)
-    return Decimal(ticker["price"])
-
-PRICE_CACHE = {}
-
-def get_current_price(symbol):
-    now = time.time()
-    # cache for 2–3 seconds
-    if symbol in PRICE_CACHE and now - PRICE_CACHE[symbol]['ts'] < 3:
-        return PRICE_CACHE[symbol]['price']
-
-    ticker = client.get_symbol_ticker(symbol=symbol)
-    price = Decimal(ticker["price"])
-    PRICE_CACHE[symbol] = {"price": price, "ts": now}
-    return price
-
-
 
 # -------------------------
 # Spot functions
 # -------------------------
-def get_spot_asset_free_old(asset: str) -> Decimal:
+def get_spot_asset_free(asset: str) -> Decimal:
     """
     Return free balance for asset from spot account as Decimal.
     """
@@ -315,14 +259,7 @@ def get_spot_asset_free_old(asset: str) -> Decimal:
         logging.exception("Failed to fetch spot asset balance")
         raise
 
-def get_spot_asset_free(asset):
-    balances = client.get_account()["balances"]
-    for b in balances:
-        if b["asset"] == asset:
-            return Decimal(b["free"])
-    return Decimal("0")
-
-def place_spot_market_order_old(symbol: str, side: str, quantity: Decimal):
+def place_spot_market_order(symbol: str, side: str, quantity: Decimal):
     """
     Place a spot market order (signed). quantity passed as Decimal or string.
     """
@@ -347,22 +284,6 @@ def place_spot_market_order_old(symbol: str, side: str, quantity: Decimal):
     except Exception:
         logging.exception("Spot order failed")
         raise
-
-# -----------------------------
-# ORDER HELPERS
-# -----------------------------
-def place_spot_market_order(symbol, side, quantity):
-    return client.order_market(symbol=symbol, side=side, quantity=float(quantity))
-
-def place_margin_market_order(symbol, side, quantity=None, quote_order_qty=None, side_effect_type=None):
-    return client.create_margin_order(
-        symbol=symbol,
-        side=side,
-        type="MARKET",
-        quantity=float(quantity) if quantity else None,
-        quoteOrderQty=float(quote_order_qty) if quote_order_qty else None,
-        sideEffectType=side_effect_type
-    )
 
 
 # -------------------------
@@ -390,7 +311,7 @@ def get_margin_asset(asset: str):
             }
     return {"asset": asset, "free": Decimal("0"), "locked": Decimal("0"), "borrowed": Decimal("0"), "interest": Decimal("0")}
 
-def margin_loan_old(asset: str, amount: Decimal):
+def margin_loan(asset: str, amount: Decimal):
     """
     Borrow asset for cross-margin account.
     POST /sapi/v1/margin/loan
@@ -398,7 +319,7 @@ def margin_loan_old(asset: str, amount: Decimal):
     params = {"asset": asset, "amount": str(amount)}
     return signed_post("/sapi/v1/margin/loan", params)
 
-def margin_repay_old(asset: str, amount: Decimal):
+def margin_repay(asset: str, amount: Decimal):
     """
     Repay borrowed asset for cross-margin account.
     POST /sapi/v1/margin/repay
@@ -406,7 +327,7 @@ def margin_repay_old(asset: str, amount: Decimal):
     params = {"asset": asset, "amount": str(amount)}
     return signed_post("/sapi/v1/margin/repay", params)
 
-def place_margin_market_order_old(symbol: str, side: str, quantity: Decimal):
+def place_margin_market_order(symbol: str, side: str, quantity: Decimal):
     """
     Place cross-margin market order.
     POST /sapi/v1/margin/order
@@ -418,119 +339,6 @@ def place_margin_market_order_old(symbol: str, side: str, quantity: Decimal):
         "quantity": str(quantity),
     }
     return signed_post("/sapi/v1/margin/order", params)
-
-BINANCE_API_BASE = "https://api.binance.com"
-
-def _sign_params(params: dict) -> dict:
-    query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
-    signature = hmac.new(BINANCE_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
-    params["signature"] = signature
-    return params
-
-def get_cross_margin_account():
-    """
-    Returns full cross-margin account payload (balances, etc.).
-    """
-    url = f"{BINANCE_API_BASE}/sapi/v1/margin/account"
-    ts = get_timestamp_ms()
-    params = {"timestamp": ts}
-    headers = {"X-MBX-APIKEY": BINANCE_API_KEY}
-    signed = _sign_params(params)
-    r = requests.get(url, headers=headers, params=signed)
-    r.raise_for_status()
-    return r.json()
-
-def get_margin_asset_free_old(asset: str) -> Decimal:
-    """
-    Free balance of an asset in CROSS margin (no spot fallback).
-    """
-    try:
-        data = get_cross_margin_account()
-        for b in data.get("userAssets", []):
-            if b.get("asset") == asset:
-                free = Decimal(b.get("free", "0"))
-                logging.info(f"[MARGIN BALANCE] {asset} free={free}")
-                return free
-        logging.warning(f"[MARGIN BALANCE] {asset} not found; treating free=0")
-        return Decimal("0")
-    except Exception as e:
-        logging.exception(f"Failed to fetch margin balance for {asset}: {e}")
-        return Decimal("0")
-    
-def get_margin_asset_free(asset):
-    balances = client.get_margin_account()["userAssets"]
-    for b in balances:
-        if b["asset"] == asset:
-            return Decimal(b["free"])
-    return Decimal("0")
-
-def place_margin_market_order(symbol: str, side: str, *, quantity: Decimal | None = None,
-                              quote_order_qty: Decimal | None = None,
-                              side_effect_type: str = "NO_SIDE_EFFECT") -> dict:
-    """
-    Places a CROSS-MARGIN MARKET order.
-    For BUY with auto-borrow: side_effect_type='MARGIN_BUY'
-    For SELL with auto-repay: side_effect_type='AUTO_REPAY'
-    Provide either quantity (base amount) OR quote_order_qty (USDT amount).
-    """
-    url = f"{BINANCE_API_BASE}/sapi/v1/margin/order"
-    ts = get_timestamp_ms()
-    params = {
-        "symbol": symbol,
-        "side": side,
-        "type": "MARKET",
-        "isIsolated": "FALSE",
-        "sideEffectType": side_effect_type,
-        "timestamp": ts,
-    }
-
-    if quantity is not None:
-        params["quantity"] = str(quantity)
-    elif quote_order_qty is not None:
-        params["quoteOrderQty"] = str(quote_order_qty)
-    else:
-        raise ValueError("Either quantity or quote_order_qty must be provided for margin market order.")
-
-    headers = {"X-MBX-APIKEY": BINANCE_API_KEY}
-    signed = _sign_params(params)
-    r = requests.post(url, headers=headers, params=signed)
-    # Let caller handle HTTPError to map 418/429/etc consistently
-    r.raise_for_status()
-    out = r.json()
-
-    # Binance business error (negative code) handling
-    if isinstance(out, dict) and "code" in out and isinstance(out["code"], int) and out["code"] < 0:
-        raise Exception(f"Binance API error: {out.get('msg', 'Unknown error')}")
-
-    logging.info(f"[BINANCE MARGIN RESPONSE] {out}")
-    return out
-
-
-# -------------------------
-# Borrow helper
-# -------------------------
-def margin_borrow_old(asset, amount):
-    """Borrow asset in cross margin before placing an order."""
-    logging.info(f"[MARGIN BORROW] {amount} {asset}")
-    resp = client.margin_loan(asset=asset, amount=str(amount))
-    logging.info(f"[MARGIN BORROW] Response: {resp}")
-    return resp
-# -----------------------------
-# MARGIN HELPERS
-# -----------------------------
-def margin_borrow(asset, amount):
-    try:
-        return client.create_margin_loan(asset=asset, amount=str(amount))
-    except BinanceAPIException as e:
-        logging.error(f"Margin borrow failed: {e}")
-        raise
-
-def margin_repay(asset, amount):
-    try:
-        return client.repay_margin_loan(asset=asset, amount=str(amount))
-    except BinanceAPIException as e:
-        logging.error(f"Margin repay failed: {e}")
-        raise
 
 
 # -------------------------
@@ -579,207 +387,6 @@ def healthz():
     return jsonify({"status": "healthzy"}), 200
 
 
-def calc_valid_qty(invest_usdt, price, step_size, min_qty, min_notional):
-    qty = invest_usdt / price
-    # Round down to the nearest step size
-    precision = abs(step_size.as_tuple().exponent)
-    qty = qty.quantize(Decimal(f"1e-{precision}"), rounding=ROUND_DOWN)
-    
-    # Make sure qty >= min_qty
-    if qty < min_qty:
-        qty = min_qty
-
-    # Make sure qty * price >= min_notional
-    if qty * price < min_notional:
-        qty = (min_notional / price).quantize(Decimal(f"1e-{precision}"), rounding=ROUND_UP)
-
-    return qty
-
-
-# ---------------------------------
-# Unified trade execution (SPOT + MARGIN)
-# ---------------------------------
-# -----------------------------
-# UNIFIED TRADE EXECUTION
-# -----------------------------
-def execute_trade(symbol, side, trade_type, buy_pct=None, leverage=None):
-    """
-    Executes BUY/SELL for SPOT or MARGIN.
-    MARGIN BUY can auto-borrow with optional leverage.
-    """
-    """
-    Executes BUY or SELL for SPOT or MARGIN.
-    - SPOT uses spot balances + place_spot_market_order
-    - MARGIN uses cross-margin balances + place_margin_market_order with sideEffectType
-      (MARGIN_BUY on BUY, AUTO_REPAY on SELL)
-    """
-    # Price & filters
-    try:
-        price = get_current_price(symbol)
-        step_size, min_qty, min_notional = get_trade_filters(symbol)
-    except Exception as e:
-        logging.exception("Failed to fetch price/filters")
-        return {"error": "Price/filters fetch failed"}, 500
-
-    qty = None
-    quote_order_qty = None
-
-    if side == "BUY":
-        if buy_pct is None:
-            raise ValueError("buy_pct required for BUY")
-        buy_pct = Decimal(str(buy_pct))
-        if not (Decimal("0") < buy_pct <= Decimal("1")):
-            buy_pct = DEFAULT_BUY_PCT
-
-        if trade_type == "SPOT":
-            usdt_free = get_spot_asset_free("USDT")
-            invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
-            qty = quantize_quantity(invest_usdt / price, step_size)
-        if trade_type == "SPOT":
-            usdt_free = get_spot_asset_free("USDT")
-            invest_usdt = usdt_free * buy_pct
-            qty = calc_valid_qty(invest_usdt, price, step_size, min_qty, min_notional)
-            #resp = place_spot_market_order(symbol, side, qty)
-
-        elif trade_type == "MARGIN":
-            m_usdt_free = get_margin_asset_free("USDT")
-            invest_usdt = (m_usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
-
-            # Apply leverage if requested
-            if leverage and leverage > 1:
-                borrow_amount = invest_usdt * (leverage - 1)
-                margin_borrow("USDT", borrow_amount)
-                invest_usdt += borrow_amount
-
-            quote_order_qty = invest_usdt
-
-        else:
-            raise ValueError(f"Unknown trade_type: {trade_type}")
-
-    elif side == "SELL":
-        base_asset = symbol.replace("USDT", "")
-        if trade_type == "SPOT":
-            qty = quantize_quantity(get_spot_asset_free(base_asset), step_size)
-        elif trade_type == "MARGIN":
-            qty = quantize_quantity(get_margin_asset_free(base_asset), step_size)
-        else:
-            raise ValueError(f"Unknown trade_type: {trade_type}")
-
-    else:
-        raise ValueError(f"Invalid side: {side}")
-
-    # Safeguards
-    if quote_order_qty:
-        implied_qty = quantize_quantity(quote_order_qty / price, step_size)
-        if implied_qty < min_qty or quote_order_qty < min_notional:
-            return {"warning": "Trade below min requirements"}, 200
-    else:
-        if qty < min_qty or (qty * price) < min_notional:
-            return {"warning": "Trade below min requirements"}, 200
-
-    # Execute order
-    try:
-        if trade_type == "SPOT":
-            resp = place_spot_market_order(symbol, side, qty)
-        else:
-            if side == "BUY":
-                resp = place_margin_market_order(symbol, side, quote_order_qty=quote_order_qty, side_effect_type="MARGIN_BUY")
-            else:
-                resp = place_margin_market_order(symbol, side, quantity=qty, side_effect_type="AUTO_REPAY")
-    except requests.exceptions.HTTPError as e:
-        return {"error": str(e)}, 500
-
-    logging.info(f"Executed {trade_type} {side} {symbol} ~{price}")
-    return {"status": f"{trade_type.lower()}_{side.lower()}_executed", "order": resp}, 200
-
-def execute_trade_old(symbol, side, trade_type, buy_pct=None, leverage=1):
-    """
-    Executes BUY or SELL for SPOT or MARGIN.
-    - SPOT uses spot balances + place_spot_market_order
-    - MARGIN uses cross-margin balances + place_margin_market_order with sideEffectType
-      (MARGIN_BUY on BUY, AUTO_REPAY on SELL)
-    """
-    # Price & filters
-    try:
-        price = get_current_price(symbol)
-        step_size, min_qty, min_notional = get_trade_filters(symbol)
-    except Exception as e:
-        logging.exception("Failed to fetch price/filters")
-        return jsonify({"error": "Price/filters fetch failed"}), 500
-
-    qty = None
-    quote_order_qty = None
-
-    if side == "BUY":
-        if buy_pct is None:
-            raise ValueError("buy_pct required for BUY")
-
-        if trade_type == "SPOT":
-            usdt_free = get_spot_asset_free("USDT")
-            invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
-            qty = quantize_quantity(invest_usdt / price, step_size)
-
-        elif trade_type == "MARGIN":
-            m_usdt_free = get_margin_asset_free("USDT")
-            target_invest = (m_usdt_free * leverage * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
-            borrow_needed = target_invest - m_usdt_free
-
-            if borrow_needed > 0:
-                margin_borrow("USDT", borrow_needed)
-
-            quote_order_qty = target_invest
-
-        else:
-            raise ValueError(f"Unknown trade_type: {trade_type}")
-
-    elif side == "SELL":
-        base_asset = symbol.replace("USDT", "")
-        if trade_type == "SPOT":
-            base_free = get_spot_asset_free(base_asset)
-            qty = quantize_quantity(base_free, step_size)
-
-        elif trade_type == "MARGIN":
-            m_base_free = get_margin_asset_free(base_asset)
-            qty = quantize_quantity(m_base_free, step_size)
-
-        else:
-            raise ValueError(f"Unknown trade_type: {trade_type}")
-
-    # Safeguards
-    if quote_order_qty is not None:
-        implied_qty = quantize_quantity((quote_order_qty / price) if price > 0 else Decimal("0"), step_size)
-        if implied_qty < min_qty or quote_order_qty < min_notional:
-            return {"warning": "Trade size below Binance minimums"}, 200
-    else:
-        if qty is None or qty < min_qty or (qty * price) < min_notional:
-            return {"warning": "Trade size below Binance minimums"}, 200
-
-    # Execute
-    try:
-        if trade_type == "SPOT":
-            resp = place_spot_market_order(symbol, side, qty)
-        else:
-            if side == "BUY":
-                resp = place_margin_market_order(
-                    symbol, side, quantity=None, quote_order_qty=quote_order_qty, side_effect_type="MARGIN_BUY"
-                )
-            else:
-                resp = place_margin_market_order(
-                    symbol, side, quantity=qty, quote_order_qty=None, side_effect_type="AUTO_REPAY"
-                )
-    except requests.exceptions.HTTPError as e:
-        err_str = str(e).lower()
-        if "418" in err_str or "teapot" in err_str:
-            return {"error": "Binance rate limit hit (418)"}, 429
-        if "429" in err_str:
-            return {"error": "Binance request limit hit (429)"}, 429
-        if "notional" in err_str:
-            return {"error": "Trade rejected: below Binance min_notional"}, 400
-        raise
-
-    return {"status": f"{trade_type.lower()}_{side.lower()}_executed", "order": resp}, 200
-
-
 # -------------------------
 # Webhook endpoint
 # -------------------------
@@ -787,13 +394,17 @@ def execute_trade_old(symbol, side, trade_type, buy_pct=None, leverage=1):
 def webhook():
     logging.info("=====================start=====================")
     
-    # Validate JSON & timestamp & secret
+    # JSON validation
     data, error_response = validate_json()
     if not data:
         return error_response
+    
+    # Timestamp validation
     valid_ts, ts, error_response = validate_timestamp(data)
     if not valid_ts:
         return error_response
+    
+    # Secret validation
     valid_secret, error_response = validate_secret(data)
     if not valid_secret:
         return error_response
@@ -801,19 +412,21 @@ def webhook():
     # Log payload without secret
     data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
     logging.info(f"[WEBHOOK] Received payload (no {SECRET_FIELD}): {data_for_log}")
-
+    
+    # Parse fields
     try:
         action = data.get("action", "").strip().upper()
         symbol = data.get("symbol", "").strip().upper()
-        trade_type = data.get("type", "SPOT").strip().upper()
-        buy_pct = Decimal(str(data.get("buy_pct", DEFAULT_BUY_PCT)))
-        leverage = Decimal(str(data.get("leverage", 1)))  # Default 1x if not provided
+        buy_pct_raw = data.get("buy_pct", DEFAULT_BUY_PCT)
+        trade_type = data.get("type", "SPOT").strip().upper()  # MARGIN or SPOT
+        leverage_raw = data.get("leverage", None)
     except Exception as e:
-        logging.exception("Failed to parse fields")
+        logging.exception("Failed to extract fields")
         return jsonify({"error": "Invalid fields"}), 400
 
-    logging.info(f"[PARSE] action={action}, symbol={symbol}, trade_type={trade_type}, buy_pct={buy_pct}, leverage={leverage}")
+    logging.info(f"[PARSE] action={action}, symbol={symbol}, type={trade_type}, leverage={leverage_raw}, buy_pct={buy_pct_raw}")
 
+    # Validate action and symbol
     if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
         logging.error(f"Invalid action: {action}")
         return jsonify({"error": "Invalid action"}), 400
@@ -821,14 +434,221 @@ def webhook():
         logging.error(f"Symbol not allowed: {symbol}")
         return jsonify({"error": "Symbol not allowed"}), 400
 
-    side = "BUY" if action in {"BUY", "BUY_BTC_SMALL"} else "SELL"
+    is_buy = action in {"BUY", "BUY_BTC_SMALL"}
+    is_sell = action == "SELL"
 
+    # Compute price and filters
     try:
-        result, status_code = execute_trade(symbol, side, trade_type, buy_pct if side == "BUY" else None, leverage)
-        return jsonify(result), status_code
+        price = get_current_price(symbol)
+        step_size, min_qty, min_notional = get_trade_filters(symbol)
     except Exception as e:
-        logging.exception("Trade execution failed")
-        return jsonify({"error": f"Trade execution failed: {str(e)}"}), 500
+        logging.exception("Failed to fetch price/filters")
+        return jsonify({"error": "Price/filters fetch failed"}), 500
+
+    # -------------------------
+    # BUY flow
+    # -------------------------
+    if is_buy:
+        # Normalize buy_pct
+        try:
+            buy_pct = Decimal(str(buy_pct_raw))
+            if not (Decimal("0") < buy_pct <= Decimal("1")):
+                raise ValueError("buy_pct out of range")
+        except Exception:
+            buy_pct = DEFAULT_BUY_PCT
+            logging.warning(f"Invalid buy_pct provided ({buy_pct_raw}); defaulting to {DEFAULT_BUY_PCT}")
+        
+        if trade_type == "SPOT":
+            # SPOT buy -> use spot USDT balance
+            try:
+                usdt_free = get_spot_asset_free("USDT")
+                invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                raw_qty = invest_usdt / price
+                qty = quantize_quantity(raw_qty, step_size)
+                logging.info(f"[SPOT BUY] usdt_free={usdt_free}, invest={invest_usdt}, raw_qty={raw_qty}, qty={qty}, step_size={step_size}")
+
+                # Safeguards
+                if qty <= Decimal("0"):
+                    return jsonify({"warning": "Calculated trade size too small after rounding"}), 200
+                if qty < min_qty:
+                    return jsonify({"warning": f"Trade qty {qty} is below min_qty {min_qty}"}), 200
+                if (qty * price) < min_notional:
+                    logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}")
+                    return jsonify({"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}), 200
+                
+                try:
+                    resp = place_spot_market_order(symbol, "BUY", qty)
+                except requests.exceptions.HTTPError as e:
+                    err_str = str(e).lower()
+                    if "418" in err_str or "teapot" in err_str:
+                        return jsonify({"error": "Binance rate limit hit (418 I'm a teapot)"}), 429
+                    elif "429" in err_str or "too many requests" in err_str:
+                        logging.warning(f"Binance request limit hit (429): {e}")
+                        return jsonify({"error": "Binance request limit hit (429)"}), 429
+                    elif "notional" in err_str:
+                        return jsonify({"error": "Trade rejected: below Binance min_notional"}), 400
+                    else:
+                        raise
+
+                logging.info(f"[ORDER] BUY executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                # logging.info(f"Buy order completed successfully, returning response: {resp}")
+                logging.info("=====================end=====================")
+                return jsonify({"status": "spot_buy_executed", "order": resp}), 200
+            
+            except Exception as e:
+                logging.exception("Spot buy failed")
+                return jsonify({"error": f"Spot buy failed: {str(e)}"}), 500
+
+        elif trade_type == "MARGIN":
+            # MARGIN buy -> operate only on margin account (no spot fallback)
+            logging.info("TODO : in buy margin trades...")
+            '''
+            try:
+                # leverage parsing
+                leverage = Decimal(str(leverage_raw)) if leverage_raw is not None else Decimal("1")
+                if leverage < 1:
+                    logging.warning("Leverage < 1; defaulting to 1")
+                    leverage = Decimal("1")
+                MAX_LEV = Decimal("10")
+                if leverage > MAX_LEV:
+                    logging.warning(f"Cap leverage to {MAX_LEV}")
+                    leverage = MAX_LEV
+
+                # margin USDT free
+                margin_usdt = get_margin_asset("USDT")
+                usdt_free = margin_usdt["free"]
+                invest_base = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                target_exposure = (invest_base * leverage).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                raw_qty = target_exposure / price
+                qty = quantize_quantity(raw_qty, step_size)
+                logging.info(f"[MARGIN BUY] usdt_free={usdt_free}, invest_base={invest_base}, leverage={leverage}, target_exposure={target_exposure}, raw_qty={raw_qty}, qty={qty}")
+
+                if qty <= Decimal("0"):
+                    return jsonify({"warning": "Calculated quantity too small after rounding"}), 200
+
+                # required USDT for this qty
+                required_usdt = (qty * price).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+
+                borrow_amt = Decimal("0")
+                loan_resp = None
+                if usdt_free < required_usdt:
+                    borrow_amt = (required_usdt - usdt_free).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                    logging.info(f"[MARGIN BUY] Borrow required: {borrow_amt}")
+                    loan_resp = margin_loan("USDT", borrow_amt)
+                    logging.info(f"[MARGIN BUY] Loan response: {loan_resp}")
+                else:
+                    logging.info("[MARGIN BUY] No borrow required")
+
+                order_resp = place_margin_market_order(symbol, "BUY", qty)
+                logging.info(f"[MARGIN BUY] order_resp: {order_resp}")
+
+                # Return order + loan info (no local storage)
+                return jsonify({"status": "margin_buy_executed", "order": order_resp, "loan": loan_resp}), 200
+            except Exception as e:
+                logging.exception("Margin buy failed")
+                return jsonify({"error": f"Margin buy failed: {str(e)}"}), 500
+            '''
+        else:
+            return jsonify({"error": "Unknown trade type"}), 400
+    
+    # -------------------------
+    # SELL flow
+    # -------------------------
+    if is_sell:
+        # We'll use base asset name
+        base_asset = symbol.replace("USDT", "")
+        if trade_type == "SPOT":
+            # Sell on spot account only
+            try:
+                base_free = get_spot_asset_free(base_asset)
+                if base_free <= Decimal("0"):
+                    logging.warning("No asset balance to sell.")
+                    response = jsonify({"warning": "No spot asset balance to sell"}), 200
+                    logging.info(f"Sell attempt aborted due to empty balance, returning response: {response}")
+                    logging.info("=====================end=====================")
+                    return response
+
+                sell_qty = quantize_quantity(base_free, step_size)
+                logging.info(f"[SPOT SELL] symbol={symbol}, base_free={base_free}, sell_qty={sell_qty}, step_size={step_size}")
+
+                # Safeguards
+                if sell_qty <= Decimal("0"):
+                    logging.warning("Rounded sell quantity is zero or below minimum tradable size. Aborting.")
+                    response = jsonify({"warning": "Sell amount too small after rounding."}), 200
+                    logging.info(f"Sell attempt aborted due to to a balance below the minimum size, returning response: {response}")
+                    logging.info("=====================end=====================")
+                    return response
+                if sell_qty < min_qty:
+                    return jsonify({"warning": f"sell_qty {sell_qty} is below min_qty {min_qty}"}), 200
+                if (sell_qty * price) < min_notional:
+                    return jsonify({"warning": f"Sell notional {sell_qty*price} is below min_notional {min_notional}"}), 200
+
+                try:
+                    resp = place_spot_market_order(symbol, "SELL", sell_qty)
+                except requests.exceptions.HTTPError as e:
+                    err_str = str(e).lower()
+                    if "418" in err_str or "teapot" in err_str:
+                        return jsonify({"error": "Binance rate limit hit (418 I'm a teapot)"}), 429
+                    elif "429" in err_str or "too many requests" in err_str:
+                        logging.warning(f"Binance request limit hit (429): {e}")
+                        return jsonify({"error": "Binance request limit hit (429)"}), 429
+                    elif "notional" in err_str:
+                        return jsonify({"error": "Trade rejected: below Binance min_notional"}), 400
+                    else:
+                        raise
+
+                logging.info(f"[ORDER] SELL executed: {sell_qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                # logging.info(f"Sell order completed successfully, returning response: {resp}")
+                logging.info("=====================end=====================")
+                return jsonify({"status": "spot_sell_executed", "order": resp}), 200
+            except Exception as e:
+                logging.exception("Spot sell failed")
+                return jsonify({"error": f"Spot sell failed: {str(e)}"}), 500
+        elif trade_type == "MARGIN":
+            # Sell on margin account only. After sell, attempt to repay any borrowed USDT.
+            logging.info(" TODO : in sell margin trades... ")
+            '''
+            # Sell on margin account only. After sell, attempt to repay any borrowed USDT.
+            try:
+                margin_asset = get_margin_asset(base_asset)
+                base_free = margin_asset["free"]
+                if base_free <= Decimal("0"):
+                    return jsonify({"warning": "No margin asset balance to sell"}), 200
+
+                # filters = get_symbol_filters(symbol) # should be taken from above
+                # step_size = get_filter_value(filters, "LOT_SIZE", "stepSize") # should be taken from above
+                sell_qty = quantize_quantity(base_free, step_size)
+                logging.info(f"[MARGIN SELL] symbol={symbol}, base_free={base_free}, sell_qty={sell_qty}, step_size={step_size}")
+
+                if sell_qty <= Decimal("0"):
+                    return jsonify({"warning": "Sell amount too small after rounding"}), 200
+
+                order_resp = place_margin_market_order(symbol, "SELL", sell_qty)
+                logging.info(f"[MARGIN SELL] order_resp: {order_resp}")
+
+                # After selling, attempt to repay USDT debt if any
+                margin_usdt_info = get_margin_asset("USDT")
+                borrowed = margin_usdt_info["borrowed"]
+                if borrowed > 0:
+                    # Try to repay borrowed amount fully (use repay call)
+                    try:
+                        repay_resp = margin_repay("USDT", borrowed)
+                        logging.info(f"[MARGIN] Repay response: {repay_resp}")
+                    except Exception as repay_e:
+                        logging.exception("Auto-repay failed after margin sell")
+                        return jsonify({"status": "margin_sell_executed", "order": order_resp, "repay_error": str(repay_e)}), 500
+
+                return jsonify({"status": "margin_sell_executed", "order": order_resp}), 200
+            except Exception as e:
+                logging.exception("Margin sell failed")
+                return jsonify({"error": f"Margin sell failed: {str(e)}"}), 500
+            
+            '''
+        else:
+            return jsonify({"error": "Unknown trade type"}), 400
+    
+    # If nothing matched (shouldn't happen)
+    return jsonify({"error": "No action performed"}), 400
 
 
 # -------------------------
