@@ -481,6 +481,9 @@ def webhook():
                     err_str = str(e).lower()
                     if "418" in err_str or "teapot" in err_str:
                         return jsonify({"error": "Binance rate limit hit (418 I'm a teapot)"}), 429
+                    elif "429" in err_str or "too many requests" in err_str:
+                        logging.warning(f"Binance request limit hit (429): {e}")
+                        return jsonify({"error": "Binance request limit hit (429)"}), 429
                     elif "notional" in err_str:
                         return jsonify({"error": "Trade rejected: below Binance min_notional"}), 400
                     else:
@@ -585,6 +588,9 @@ def webhook():
                     err_str = str(e).lower()
                     if "418" in err_str or "teapot" in err_str:
                         return jsonify({"error": "Binance rate limit hit (418 I'm a teapot)"}), 429
+                    elif "429" in err_str or "too many requests" in err_str:
+                        logging.warning(f"Binance request limit hit (429): {e}")
+                        return jsonify({"error": "Binance request limit hit (429)"}), 429
                     elif "notional" in err_str:
                         return jsonify({"error": "Trade rejected: below Binance min_notional"}), 400
                     else:
