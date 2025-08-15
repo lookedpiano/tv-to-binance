@@ -4,7 +4,7 @@ import requests
 import time
 import os
 import logging
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, ROUND_UP
 from datetime import datetime, timezone
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
@@ -579,6 +579,23 @@ def healthz():
     return jsonify({"status": "healthzy"}), 200
 
 
+def calc_valid_qty(invest_usdt, price, step_size, min_qty, min_notional):
+    qty = invest_usdt / price
+    # Round down to the nearest step size
+    precision = abs(step_size.as_tuple().exponent)
+    qty = qty.quantize(Decimal(f"1e-{precision}"), rounding=ROUND_DOWN)
+    
+    # Make sure qty >= min_qty
+    if qty < min_qty:
+        qty = min_qty
+
+    # Make sure qty * price >= min_notional
+    if qty * price < min_notional:
+        qty = (min_notional / price).quantize(Decimal(f"1e-{precision}"), rounding=ROUND_UP)
+
+    return qty
+
+
 # ---------------------------------
 # Unified trade execution (SPOT + MARGIN)
 # ---------------------------------
@@ -618,6 +635,11 @@ def execute_trade(symbol, side, trade_type, buy_pct=None, leverage=None):
             usdt_free = get_spot_asset_free("USDT")
             invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
             qty = quantize_quantity(invest_usdt / price, step_size)
+        if trade_type == "SPOT":
+            usdt_free = get_spot_asset_free("USDT")
+            invest_usdt = usdt_free * buy_pct
+            qty = calc_valid_qty(invest_usdt, price, step_size, min_qty, min_notional)
+            #resp = place_spot_market_order(symbol, side, qty)
 
         elif trade_type == "MARGIN":
             m_usdt_free = get_margin_asset_free("USDT")
