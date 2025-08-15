@@ -512,11 +512,10 @@ def webhook():
 
     # Compute price and filters
     price = get_current_price(symbol)
-    '''
     if price is None:
-        logging.info(f"Retrying once for {symbol} price...")
+        logging.info(f"Retrying once for {symbol}. Retrying in 21s...")
+        time.sleep(21)
         price = get_current_price(symbol)
-    '''
     if price is None:
         logging.warning(f"No price available for {symbol}. Cannot proceed.")
         logging.info("=====================end=====================")
