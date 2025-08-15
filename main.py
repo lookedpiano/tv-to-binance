@@ -6,6 +6,7 @@ import os
 import logging
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime, timezone
+from requests.exceptions import HTTPError
 
 
 # -------------------------
@@ -212,13 +213,27 @@ def get_min_notional(filters):
     return Decimal('0.0')
 
 def get_trade_filters(symbol):
-    """Fetch filters and return step_size, min_qty, min_notional as Decimals."""
+    """Fetch filters and return step_size, min_qty, min_notional as Decimals or (None, None, None) on failure."""
     filters = get_symbol_filters(symbol)
-    step_size = Decimal(get_filter_value(filters, "LOT_SIZE", "stepSize"))
-    min_qty = Decimal(get_filter_value(filters, "LOT_SIZE", "minQty"))
-    min_notional = get_min_notional(filters)
-    logging.info(f"[FILTERS] step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-    return step_size, min_qty, min_notional
+    if not filters:  # no filters available
+        logging.warning(f"No filters found for {symbol}")
+        return None, None, None
+
+    try:
+        step_size_val = get_filter_value(filters, "LOT_SIZE", "stepSize")
+        min_qty_val = get_filter_value(filters, "LOT_SIZE", "minQty")
+        
+        min_notional = get_min_notional(filters)
+
+        step_size = Decimal(step_size_val)
+        min_qty = Decimal(min_qty_val)
+
+        logging.info(f"[FILTERS] step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
+        return step_size, min_qty, min_notional
+
+    except Exception as e:
+        logging.exception(f"Error parsing filters for {symbol}: {e}")
+        return None, None, None
 
 def get_current_price(symbol):
     try:
@@ -226,9 +241,24 @@ def get_current_price(symbol):
         price = Decimal(str(data["price"]))
         logging.info(f"[PRICE] {symbol}: {price}")
         return price
+
+    except HTTPError as e:
+        if e.response.status_code == 418:
+            logging.warning(f"Rate limit hit or temp block for {symbol}.")
+            #logging.warning(f"Rate limit hit or temp block for {symbol}. Retrying in 5s...")
+            #time.sleep(5)
+            # retry once
+            #return get_current_price(symbol)
+            return None
+        if e.response.status_code == 429:
+            logging.warning(f"Request limit hit or temp block for {symbol}.")
+            return None
+        else:
+            logging.exception(f"HTTP error for {symbol}: {e}")
+            return None  # or raise again if you want it to bubble up
     except Exception as e:
-        logging.exception(f"Failed to fetch current price for {symbol}: {e}")
-        raise
+        logging.exception(f"Unexpected error fetching price for {symbol}: {e}")
+        return None
 
 
 # -------------------------
@@ -481,12 +511,19 @@ def webhook():
     is_sell = action == "SELL"
 
     # Compute price and filters
-    try:
+    price = get_current_price(symbol)
+    if price is None:
+        logging.info(f"Retrying once for {symbol} price...")
         price = get_current_price(symbol)
-        step_size, min_qty, min_notional = get_trade_filters(symbol)
-    except Exception as e:
-        logging.exception("Failed to fetch price/filters")
-        return jsonify({"error": "Price/filters fetch failed"}), 500
+    if price is None:
+        logging.warning(f"No price available for {symbol}. Cannot proceed.")
+        logging.info("=====================end=====================")
+        return jsonify({"error": f"Price not available for {symbol}"}), 200
+
+    step_size, min_qty, min_notional = get_trade_filters(symbol)
+    if None in (step_size, min_qty, min_notional):
+        logging.warning(f"Incomplete trade filters for {symbol}: step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
+        return jsonify({"error": f"Filters not available for {symbol}"}), 200
 
     # -------------------------
     # BUY flow
