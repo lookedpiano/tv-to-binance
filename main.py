@@ -231,12 +231,32 @@ def get_trade_filters_old(symbol):
     logging.info(f"[FILTERS] step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
     return step_size, min_qty, min_notional
 
-def get_trade_filters(symbol):
+def get_trade_filters_new_failed(symbol):
     info = client.get_symbol_info(symbol)
     step_size = Decimal(next(f["stepSize"] for f in info["filters"] if f["filterType"] == "LOT_SIZE"))
     min_qty = Decimal(next(f["minQty"] for f in info["filters"] if f["filterType"] == "LOT_SIZE"))
     min_notional = Decimal(next(f["minNotional"] for f in info["filters"] if f["filterType"] == "MIN_NOTIONAL"))
     return step_size, min_qty, min_notional
+def get_trade_filters(symbol):
+    info = client.get_symbol_info(symbol)  # or your HTTP request version
+    step_size = min_qty = min_notional = None
+
+    for f in info["filters"]:
+        if f["filterType"] == "LOT_SIZE":
+            step_size = Decimal(f["stepSize"])
+            min_qty = Decimal(f["minQty"])
+        elif f["filterType"] == "MIN_NOTIONAL":
+            min_notional = Decimal(f["minNotional"])
+
+    # fallback if MIN_NOTIONAL is missing
+    if min_notional is None:
+        min_notional = Decimal("0.0")
+
+    if min_notional == 0:
+        logging.warning(f"No MIN_NOTIONAL filter for {symbol}, proceeding with 0")
+
+    return step_size, min_qty, min_notional
+
 
 def get_current_price_old(symbol):
     try:
