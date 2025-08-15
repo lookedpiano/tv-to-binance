@@ -207,9 +207,17 @@ def get_current_price(symbol):
         logging.exception(f"Failed to fetch current price for {symbol}: {e}")
         raise
 
+def get_trade_filters(symbol):
+    """Fetch filters and return step_size, min_qty, min_notional as Decimals."""
+    filters = get_symbol_filters(symbol)
+    step_size = Decimal(get_filter_value(filters, "LOT_SIZE", "stepSize"))
+    min_qty = Decimal(get_filter_value(filters, "LOT_SIZE", "minQty"))
+    min_notional = Decimal(get_filter_value(filters, "MIN_NOTIONAL", "minNotional"))
+    return step_size, min_qty, min_notional
+
 
 # -------------------------
-# Spot functions (unchanged)
+# Spot functions
 # -------------------------
 def get_spot_asset_free(asset: str) -> Decimal:
     """
@@ -414,11 +422,10 @@ def webhook():
     is_buy = action in {"BUY", "BUY_BTC_SMALL"}
     is_sell = action == "SELL"
 
-    # Compute price and filters and extract stepSize
+    # Compute price and filters
     try:
         price = get_current_price(symbol)
-        filters = get_symbol_filters(symbol)
-        step_size = get_filter_value(filters, "LOT_SIZE", "stepSize")
+        step_size, min_qty, min_notional = get_trade_filters(symbol)
     except Exception as e:
         logging.exception("Failed to fetch price/filters")
         return jsonify({"error": "Price/filters fetch failed"}), 500
@@ -445,10 +452,25 @@ def webhook():
                 qty = quantize_quantity(raw_qty, step_size)
                 logging.info(f"[SPOT BUY] usdt_free={usdt_free}, invest={invest_usdt}, raw_qty={raw_qty}, qty={qty}, step_size={step_size}")
 
+                # Safeguards
                 if qty <= Decimal("0"):
                     return jsonify({"warning": "Calculated trade size too small after rounding"}), 200
+                if qty < min_qty:
+                    return jsonify({"warning": f"Trade qty {qty} is below min_qty {min_qty}"}), 200
+                if (qty * price) < min_notional:
+                    return jsonify({"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}), 200
+                
+                try:
+                    resp = place_spot_market_order(symbol, "BUY", qty)
+                except requests.exceptions.HTTPError as e:
+                    err_str = str(e).lower()
+                    if "418" in err_str or "teapot" in err_str:
+                        return jsonify({"error": "Binance rate limit hit (418 I'm a teapot)"}), 429
+                    elif "notional" in err_str:
+                        return jsonify({"error": "Trade rejected: below Binance min_notional"}), 400
+                    else:
+                        raise
 
-                resp = place_spot_market_order(symbol, "BUY", qty)
                 logging.info(f"[ORDER] BUY executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
                 # logging.info(f"Buy order completed successfully, returning response: {resp}")
                 logging.info("=====================end=====================")
@@ -530,14 +552,29 @@ def webhook():
                 sell_qty = quantize_quantity(base_free, step_size)
                 logging.info(f"[SPOT SELL] symbol={symbol}, base_free={base_free}, sell_qty={sell_qty}, step_size={step_size}")
 
+                # Safeguards
                 if sell_qty <= Decimal("0"):
                     logging.warning("Rounded sell quantity is zero or below minimum tradable size. Aborting.")
                     response = jsonify({"warning": "Sell amount too small after rounding."}), 200
                     logging.info(f"Sell attempt aborted due to to a balance below the minimum size, returning response: {response}")
                     logging.info("=====================end=====================")
                     return response
+                if sell_qty < min_qty:
+                    return jsonify({"warning": f"sell_qty {sell_qty} is below min_qty {min_qty}"}), 200
+                if (sell_qty * price) < min_notional:
+                    return jsonify({"warning": f"Sell notional {sell_qty*price} is below min_notional {min_notional}"}), 200
 
-                resp = place_spot_market_order(symbol, "SELL", sell_qty)
+                try:
+                    resp = place_spot_market_order(symbol, "SELL", sell_qty)
+                except requests.exceptions.HTTPError as e:
+                    err_str = str(e).lower()
+                    if "418" in err_str or "teapot" in err_str:
+                        return jsonify({"error": "Binance rate limit hit (418 I'm a teapot)"}), 429
+                    elif "notional" in err_str:
+                        return jsonify({"error": "Trade rejected: below Binance min_notional"}), 400
+                    else:
+                        raise
+
                 logging.info(f"[ORDER] SELL executed: {sell_qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
                 # logging.info(f"Sell order completed successfully, returning response: {resp}")
                 logging.info("=====================end=====================")
