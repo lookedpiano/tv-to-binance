@@ -191,7 +191,7 @@ def get_symbol_filters(symbol):
         if not symbols:
             return []
         filters = symbols[0].get("filters", [])
-        # log_filters(symbol, filters)
+        log_filters(symbol, filters)
         return filters
     except Exception as e:
         logging.exception(f"Failed to fetch exchangeInfo for {symbol}: {e}")
