@@ -128,6 +128,7 @@ def validate_timestamp(data):
         return False, jsonify({"error": "Invalid timestamp"}), 400
 
     now = int(time.time())
+    logging.info(f"now-ts={now}-{ts}={now-ts} -> abs:{now-ts}")
     if abs(now - ts) > MAX_REQUEST_AGE:
         logging.warning("[TIMESTAMP] Request expired")
         return False, jsonify({"error": "Request expired"}), 401
@@ -315,6 +316,41 @@ def place_spot_market_order(symbol: str, side: str, quantity: Decimal):
         logging.exception("Spot order failed")
         raise
 
+def resolve_invest_usdt(usdt_free, amt_raw, buy_pct):
+    """
+    Determine the USDT amount to invest based on payload parameters.
+
+    Args:
+        usdt_free (Decimal): Free USDT balance.
+        amt_raw (Any): Raw 'amt' value from payload (can be None).
+        buy_pct (Decimal): Buy percentage (0 < buy_pct <= 1), only used if amt_raw is None.
+
+    Returns:
+        (Decimal | None, (Response | None)):
+            invest_usdt if valid, otherwise None.
+            If invalid or insufficient, returns a Flask (jsonify, status_code) response.
+    """
+    if amt_raw is not None:
+        try:
+            amt = Decimal(str(amt_raw))
+            if amt <= 0:
+                raise ValueError("amt must be positive")
+
+            if amt > usdt_free:
+                logging.warning(f"[INVEST:AMT] Balance insufficient: requested amt={amt}, available={usdt_free}")
+                return None, (jsonify({"error": "Balance is insufficient for the desired amount."}), 200)
+
+            logging.info(f"[INVEST:AMT] Using explicit amt={amt}, usdt_free={usdt_free}")
+            return amt, None
+        except Exception as e:
+            logging.warning(f"[INVEST:AMT] Invalid amt provided ({amt_raw}). Aborting. Error: {e}")
+            return None, (jsonify({"error": f"Invalid amt provided: {amt_raw}"}), 200)
+
+    # If amt_raw is missing, compute invest_usdt from buy_pct
+    invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+    logging.info(f"[INVEST:PCT] Using buy_pct={buy_pct}, usdt_free={usdt_free}, invest_usdt={invest_usdt}")
+    return invest_usdt, None
+
 
 # -------------------------
 # Cross-margin functions
@@ -493,11 +529,12 @@ def webhook():
         buy_pct_raw = data.get("buy_pct", DEFAULT_BUY_PCT)
         trade_type = data.get("type", "SPOT").strip().upper()  # MARGIN or SPOT
         leverage_raw = data.get("leverage", None)
+        amt_raw = data.get("amt", None)
     except Exception as e:
         logging.exception("Failed to extract fields")
         return jsonify({"error": "Invalid fields"}), 400
 
-    logging.info(f"[PARSE] action={action}, symbol={symbol}, type={trade_type}, leverage={leverage_raw}, buy_pct={buy_pct_raw}")
+    logging.info(f"[PARSE] action={action}, symbol={symbol}, type={trade_type}, leverage={leverage_raw}, buy_pct={buy_pct_raw}, amt={amt_raw}")
 
     # Validate action and symbol
     if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
@@ -543,7 +580,9 @@ def webhook():
             # SPOT buy -> use spot USDT balance
             try:
                 usdt_free = get_spot_asset_free("USDT")
-                invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                invest_usdt, error_response = resolve_invest_usdt(usdt_free, amt_raw, buy_pct)
+                if error_response:
+                    return error_response
                 raw_qty = invest_usdt / price
                 qty = quantize_quantity(raw_qty, step_size)
                 logging.info(f"[SPOT BUY] usdt_free={usdt_free}, invest={invest_usdt}, raw_qty={raw_qty}, qty={qty}, step_size={step_size}")
