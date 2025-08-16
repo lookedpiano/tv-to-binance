@@ -49,7 +49,7 @@ ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRP
 DEFAULT_BUY_PCT = Decimal("0.001") # 0.1 %
 SECRET_FIELD = "client_secret"
 WEBHOOK_REQUEST_PATH = "/to-the-moon"
-MAX_REQUEST_AGE = 30  # seconds
+MAX_REQUEST_AGE = 10  # seconds
 # Allowlist of known TradingView alert IPs (must keep updated)
 # See: https://www.tradingview.com/support/solutions/43000529348
 TRADINGVIEW_IPS = {
@@ -128,7 +128,6 @@ def validate_timestamp(data):
         return False, jsonify({"error": "Invalid timestamp"}), 400
 
     now = int(time.time())
-    logging.info(f"now-ts={now}-{ts}={now-ts} -> abs:{now-ts}")
     if abs(now - ts) > MAX_REQUEST_AGE:
         logging.warning("[TIMESTAMP] Request expired")
         return False, jsonify({"error": "Request expired"}), 401
