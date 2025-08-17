@@ -53,7 +53,7 @@ client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 # -------------------------
 # Configuration
 # -------------------------
-ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRPUSDT", "WIFUSDT"}
+ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT"}
 DEFAULT_BUY_PCT = Decimal("0.001") # 0.1 %
 SECRET_FIELD = "client_secret"
 WEBHOOK_REQUEST_PATH = "/to-the-moon"
