@@ -7,6 +7,8 @@ import logging
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime, timezone
 from requests.exceptions import HTTPError
+from binance.client import Client
+from binance.exceptions import BinanceAPIException
 
 
 # -------------------------
@@ -40,6 +42,12 @@ if not PORT:
         "The following ports are reserved by Render and cannot be used: 18012, 18013 and 19099.\n"
         "Choose a port such that: 1024 < PORT <= 49000, excluding the reserved ones."
     )
+
+
+# -----------------------------
+# CLIENT INIT
+# -----------------------------
+client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 
 
 # -------------------------
@@ -149,17 +157,14 @@ def validate_order_qty(qty: Decimal, price: Decimal, min_qty: Decimal, min_notio
     """
     if qty <= Decimal("0"):
         logging.warning("Trade qty is zero or negative after rounding. Aborting.")
-        logging.info("=====================end=====================")
         return False, {"warning": "Calculated trade size too small after rounding"}, 200
 
     if qty < min_qty:
         logging.warning(f"Trade qty {qty} is below min_qty {min_qty}. Aborting.")
-        logging.info("=====================end=====================")
         return False, {"warning": f"Trade qty {qty} is below min_qty {min_qty}"}, 200
 
     if (qty * price) < min_notional:
         logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}. Aborting.")
-        logging.info("=====================end=====================")
         return False, {"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}, 200
 
     return True, {}, 200
@@ -338,6 +343,9 @@ def place_spot_market_order(symbol: str, side: str, quantity: Decimal):
         logging.exception("Spot order failed")
         raise
 
+def place_spot_market_order_new(symbol, side, quantity):
+    return client.order_market(symbol=symbol, side=side, quantity=float(quantity))
+
 def resolve_invest_usdt(usdt_free, amt_raw, buy_pct) -> tuple[Decimal | None, str | None]:
     """
     Decide how much USDT to invest.
@@ -390,7 +398,6 @@ def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decim
             raise
 
     logging.info(f"[ORDER] {side} executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-    logging.info("=====================end=====================")
     return {"status": f"spot_{side.lower()}_executed", "order": resp}, 200
 
 
@@ -497,14 +504,13 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
                     logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, final_qty={qty}, raw_qty={raw_qty}")
-                    logging.info(f"[EXECUTE SPOT BUY] {symbol} Trade Filters: step_size={step_size}, min_notional={min_notional}, min_qty={min_qty}")
-                    # Safeguards
+                    logging.info(f"[FILTERS] step_size={step_size}, min_notional={min_notional}, min_qty={min_qty}")
+                    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty}@{price}={qty*price}.")
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
                     
                     # Place the order after safeguards pass
-                    logging.info(f"[EXECUTE SPOT BUY] Trying to place order for {symbol} with qty={qty}@{price}={qty*price}.")
                     return place_order_with_handling(symbol, side, qty, price, place_order_fn)
                                 
                 except Exception as e:
