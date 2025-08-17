@@ -667,7 +667,7 @@ def webhook():
         symbol=symbol,
         side="BUY" if is_buy else "SELL",
         trade_type=trade_type,
-        buy_pct=buy_pct_raw if is_buy else None,
+        buy_pct_raw=buy_pct_raw if is_buy else None,
         amt_raw=amt_raw,
         leverage=leverage_raw,
         place_order_fn=place_spot_market_order
