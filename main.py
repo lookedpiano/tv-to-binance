@@ -655,6 +655,11 @@ def webhook():
 
     logging.info(f"[PARSE] action={action}, symbol={symbol}, type={trade_type}, leverage={leverage_raw}, buy_pct={buy_pct_raw}, amt={amt_raw}")
 
+    # Easter egg check
+    resp = detect_tradingview_placeholder(action)
+    if resp:
+        return resp
+    
     # Validate action and symbol
     if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
         logging.error(f"Invalid action: {action}")
@@ -695,6 +700,21 @@ def log_balances(balances):
         total = free + locked
         if total > 0:
             logging.info(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
+
+
+# -------------------------
+# easter egg
+# -------------------------
+def detect_tradingview_placeholder(action: str):
+    """
+    Detect if the action is still the raw TradingView placeholder.
+    Returns a Flask response if placeholder is found, otherwise None.
+    """
+    if action == "{{STRATEGY.ORDER.ACTION}}":
+        logging.warning("TradingView placeholder received instead of expanded action.")
+        logging.info("Did you accidentally paste {{strategy.order.action}} instead of letting TradingView expand it? Use BUY or SELL instead...")
+        return jsonify({"error": "Did you accidentally paste {{strategy.order.action}} instead of letting TradingView expand it?"}), 400
+    return None
 
 
 # -------------------------
