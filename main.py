@@ -141,6 +141,29 @@ def validate_secret(data):
         return False, jsonify({"error": "Unauthorized"}), 401
     return True, None
 
+def validate_order_qty(qty: Decimal, price: Decimal, min_qty: Decimal, min_notional: Decimal) -> tuple[bool, dict, int]:
+    """
+    Validate order quantity and notional against exchange filters.
+    Returns (is_valid, response_dict, http_status).
+    If invalid, response_dict contains a warning.
+    """
+    if qty <= Decimal("0"):
+        logging.warning("Trade qty is zero or negative after rounding. Aborting.")
+        logging.info("=====================end=====================")
+        return False, {"warning": "Calculated trade size too small after rounding"}, 200
+
+    if qty < min_qty:
+        logging.warning(f"Trade qty {qty} is below min_qty {min_qty}. Aborting.")
+        logging.info("=====================end=====================")
+        return False, {"warning": f"Trade qty {qty} is below min_qty {min_qty}"}, 200
+
+    if (qty * price) < min_notional:
+        logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}. Aborting.")
+        logging.info("=====================end=====================")
+        return False, {"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}, 200
+
+    return True, {}, 200
+
 
 # -------------------------
 # Binance helper functions
@@ -350,6 +373,31 @@ def resolve_invest_usdt(usdt_free, amt_raw, buy_pct):
     logging.info(f"[INVEST:PCT] Using buy_pct={buy_pct}, usdt_free={usdt_free}, invest_usdt={invest_usdt}")
     return invest_usdt, None
 
+def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decimal, place_order_fn):
+    """
+    Place an order safely with unified exception handling and logging.
+    Returns (response_dict, status_code).
+    """
+    try:
+        resp = place_order_fn(symbol, side, qty)
+    except requests.exceptions.HTTPError as e:
+        err_str = str(e).lower()
+        if "418" in err_str or "teapot" in err_str:
+            logging.error(f"Binance rate limit hit (418): {e}")
+            return {"error": "Binance rate limit hit (418 I'm a teapot)"}, 429
+        elif "429" in err_str or "too many requests" in err_str:
+            logging.error(f"Binance request limit hit (429): {e}")
+            return {"error": "Binance request limit hit (429)"}, 429
+        elif "notional" in err_str:
+            logging.error("Trade rejected: below Binance min_notional")
+            return {"error": "Trade rejected: below Binance min_notional"}, 400
+        else:
+            raise
+
+    logging.info(f"[ORDER] {side} executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+    logging.info("=====================end=====================")
+    return {"status": f"spot_{side.lower()}_executed", "order": resp}, 200
+
 
 # -------------------------
 # Cross-margin functions
@@ -405,48 +453,118 @@ def place_margin_market_order(symbol: str, side: str, quantity: Decimal):
     }
     return signed_post("/sapi/v1/margin/order", params)
 
-# ---------------------------------
-# Shared spot-trade execution logic
-# ---------------------------------
-def execute_spot_trade(symbol, side, qty, price, min_qty, min_notional, step_size, place_order_fn):
-    """
-    Executes a spot market trade after safeguards and handles Binance API errors.
-    Returns (dict, http_status) -> meant to be passed to jsonify(*...)
-    """
-    # Safeguards
-    if qty <= Decimal("0"):
-        logging.warning("Trade qty is zero or negative after rounding. Aborting.")
-        logging.info("=====================end=====================")
-        return {"warning": "Calculated trade size too small after rounding"}, 200
-    if qty < min_qty:
-        logging.warning(f"Trade qty {qty} is below min_qty {min_qty}. Aborting.")
-        logging.info("=====================end=====================")
-        return {"warning": f"Trade qty {qty} is below min_qty {min_qty}"}, 200
-    if (qty * price) < min_notional:
-        logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}. Aborting.")
-        logging.info("=====================end=====================")
-        return {"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}, 200
 
-    # Place the order
+# ---------------------------------
+# Unified trade execution
+# ---------------------------------
+def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=None, amt_raw=None, leverage=None, place_order_fn=None):
+    """
+    Unified trade executor for SPOT and (future) MARGIN.
+    Handles buy/sell, quantity math, filter validation, and order placement.
+    Returns (response_dict, http_status).
+    """
     try:
-        resp = place_order_fn(symbol, side, qty)
-    except requests.exceptions.HTTPError as e:
-        err_str = str(e).lower()
-        if "418" in err_str or "teapot" in err_str:
-            logging.error(f"Binance rate limit hit (418): {e}")
-            return {"error": "Binance rate limit hit (418 I'm a teapot)"}, 429
-        elif "429" in err_str or "too many requests" in err_str:
-            logging.error(f"Binance request limit hit (429): {e}")
-            return {"error": "Binance request limit hit (429)"}, 429
-        elif "notional" in err_str:
-            logging.error("Trade rejected: below Binance min_notional")
-            return {"error": "Trade rejected: below Binance min_notional"}, 400
-        else:
-            raise
+        # Fetch price and filters
+        price = get_current_price(symbol)
+        if price is None:
+            logging.info(f"Retrying once for {symbol}. Retrying in 21s...")
+            time.sleep(21)
+            price = get_current_price(symbol)
+        if price is None:
+            logging.warning(f"No price available for {symbol}. Cannot proceed.")
+            logging.info("=====================end=====================")
+            return jsonify({"error": f"Price not available for {symbol}"}), 200
 
-    logging.info(f"[ORDER] {side} executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-    logging.info("=====================end=====================")
-    return {"status": f"spot_{side.lower()}_executed", "order": resp}, 200
+        step_size, min_qty, min_notional = get_trade_filters(symbol)
+        if None in (step_size, min_qty, min_notional):
+            logging.warning(f"Incomplete trade filters for {symbol}: step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
+            return jsonify({"error": f"Filters not available for {symbol}"}), 200
+
+        # BUY flow
+        if side == "BUY":
+            # Normalize buy_pct
+            try:
+                buy_pct = Decimal(str(buy_pct_raw))
+                if not (Decimal("0") < buy_pct <= Decimal("1")):
+                    raise ValueError("buy_pct out of range")
+            except Exception:
+                buy_pct = DEFAULT_BUY_PCT
+                logging.warning(f"Invalid buy_pct provided ({buy_pct_raw}); defaulting to {DEFAULT_BUY_PCT}")
+
+            if trade_type == "SPOT":
+                # SPOT buy -> use spot USDT balance
+                try:
+                    usdt_free = get_spot_asset_free("USDT")
+                    invest_usdt, error_response = resolve_invest_usdt(usdt_free, amt_raw, buy_pct)
+                    if error_response:
+                        return error_response
+                    raw_qty = invest_usdt / price
+                    qty = quantize_quantity(raw_qty, step_size)
+                    logging.info(f"[EXECUTE SPOT BUY] {symbol}: usdt_free={usdt_free}, invest={invest_usdt}, raw_qty={raw_qty}, final_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
+
+                    # Safeguards
+                    is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
+                    if not is_valid:
+                        return resp_dict, status
+                    
+                    # Place the order after safeguards pass
+                    return place_order_with_handling(symbol, side, qty, price, place_order_fn)
+                                
+                except Exception as e:
+                    logging.exception("Spot buy failed")
+                    return jsonify({"error": f"Spot buy failed: {str(e)}"}), 500
+            elif trade_type == "MARGIN":
+                # MARGIN buy -> operate only on margin account (no spot fallback)
+                logging.info("TODO : handle margin buys")
+                logging.warning("Margin buy not implemented")
+                return jsonify({"error": "Margin buy not implemented"}), 501
+            else:
+                return {"error": f"Unknown trade type {trade_type}"}, 400
+
+        # SELL flow
+        elif side == "SELL":
+            # We'll use base asset name
+            base_asset = symbol.replace("USDT", "")
+            if trade_type == "SPOT":
+                # Sell on spot account only
+                try:
+                    base_free = get_spot_asset_free(base_asset)
+                    if base_free <= Decimal("0"):
+                        logging.warning(f"No spot {base_asset} balance to sell. Aborting.")
+                        response = jsonify({"warning": f"No spot {base_asset} balance to sell. Aborting."}), 200
+                        #logging.info(f"Sell attempt aborted due to empty balance, returning response: {response}")
+                        logging.info("=====================end=====================")
+                        return response
+                    qty = quantize_quantity(base_free, step_size)
+                    logging.info(f"[EXECUTE SPOT SELL] {symbol}: base_free={base_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
+
+                    # Safeguards
+                    is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
+                    if not is_valid:
+                        return resp_dict, status
+                    
+                    # Place the order after safeguards pass
+                    return place_order_with_handling(symbol, side, qty, price, place_order_fn)
+                
+                except Exception as e:
+                    logging.exception("Spot sell failed")
+                    return jsonify({"error": f"Spot sell failed: {str(e)}"}), 500
+
+            elif trade_type == "MARGIN":
+                # Sell on margin account only. After sell, attempt to repay any borrowed USDT.
+                logging.info("TODO : handle margin sells")
+                logging.warning("Margin sell not implemented")
+                return jsonify({"error": "Margin sell not implemented"}), 501
+            else:
+                return {"error": f"Unknown trade type {trade_type}"}, 400
+
+        # Unknown side (shouldn't happen)
+        else:
+            return {"error": f"Unknown side {side}. No action performed."}, 400
+
+    except Exception as e:
+        logging.exception("Trade execution failed")
+        return {"error": f"Trade execution failed: {str(e)}"}, 500
 
 
 # -------------------------
@@ -544,111 +662,18 @@ def webhook():
         return jsonify({"error": "Symbol not allowed"}), 400
 
     is_buy = action in {"BUY", "BUY_BTC_SMALL"}
-    is_sell = action == "SELL"
 
-    # Compute price and filters
-    price = get_current_price(symbol)
-    if price is None:
-        logging.info(f"Retrying once for {symbol}. Retrying in 21s...")
-        time.sleep(21)
-        price = get_current_price(symbol)
-    if price is None:
-        logging.warning(f"No price available for {symbol}. Cannot proceed.")
-        logging.info("=====================end=====================")
-        return jsonify({"error": f"Price not available for {symbol}"}), 200
-
-    step_size, min_qty, min_notional = get_trade_filters(symbol)
-    if None in (step_size, min_qty, min_notional):
-        logging.warning(f"Incomplete trade filters for {symbol}: step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-        return jsonify({"error": f"Filters not available for {symbol}"}), 200
-
-    # -------------------------
-    # BUY flow
-    # -------------------------
-    if is_buy:
-        # Normalize buy_pct
-        try:
-            buy_pct = Decimal(str(buy_pct_raw))
-            if not (Decimal("0") < buy_pct <= Decimal("1")):
-                raise ValueError("buy_pct out of range")
-        except Exception:
-            buy_pct = DEFAULT_BUY_PCT
-            logging.warning(f"Invalid buy_pct provided ({buy_pct_raw}); defaulting to {DEFAULT_BUY_PCT}")
-        
-        if trade_type == "SPOT":
-            # SPOT buy -> use spot USDT balance
-            try:
-                usdt_free = get_spot_asset_free("USDT")
-                invest_usdt, error_response = resolve_invest_usdt(usdt_free, amt_raw, buy_pct)
-                if error_response:
-                    return error_response
-                raw_qty = invest_usdt / price
-                qty = quantize_quantity(raw_qty, step_size)
-                logging.info(f"[SPOT BUY] usdt_free={usdt_free}, invest={invest_usdt}, raw_qty={raw_qty}, qty={qty}, step_size={step_size}")
-
-                return jsonify(*execute_spot_trade(
-                    symbol=symbol,
-                    side="BUY",
-                    qty=qty,
-                    price=price,
-                    min_qty=min_qty,
-                    min_notional=min_notional,
-                    step_size=step_size,
-                    place_order_fn=place_spot_market_order
-                ))
-            except Exception as e:
-                logging.exception("Spot buy failed")
-                return jsonify({"error": f"Spot buy failed: {str(e)}"}), 500
-        elif trade_type == "MARGIN":
-            # MARGIN buy -> operate only on margin account (no spot fallback)
-            logging.info("TODO : handle margin buys")
-            logging.warning("Margin buy not implemented")
-            return jsonify({"error": "Margin buy not implemented"}), 501
-        else:
-            return jsonify({"error": "Unknown trade type"}), 400
-
-    # -------------------------
-    # SELL flow
-    # -------------------------
-    if is_sell:
-        # We'll use base asset name
-        base_asset = symbol.replace("USDT", "")
-        if trade_type == "SPOT":
-            # Sell on spot account only
-            try:
-                base_free = get_spot_asset_free(base_asset)
-                if base_free <= Decimal("0"):
-                    logging.warning("No asset balance to sell.")
-                    response = jsonify({"warning": "No spot asset balance to sell"}), 200
-                    #logging.info(f"Sell attempt aborted due to empty balance, returning response: {response}")
-                    logging.info("=====================end=====================")
-                    return response
-                sell_qty = quantize_quantity(base_free, step_size)
-                logging.info(f"[SPOT SELL] symbol={symbol}, base_free={base_free}, sell_qty={sell_qty}")
-
-                return jsonify(*execute_spot_trade(
-                    symbol=symbol,
-                    side="SELL",
-                    qty=sell_qty,
-                    price=price,
-                    min_qty=min_qty,
-                    min_notional=min_notional,
-                    step_size=step_size,
-                    place_order_fn=place_spot_market_order
-                ))
-
-            except Exception as e:
-                logging.exception("Spot sell failed")
-                return jsonify({"error": f"Spot sell failed: {str(e)}"}), 500
-        elif trade_type == "MARGIN":
-            # Sell on margin account only. After sell, attempt to repay any borrowed USDT.
-            logging.info("TODO : handle margin sells")
-            return jsonify({"error": "Margin sell not implemented"}), 501
-        else:
-            return jsonify({"error": "Unknown trade type"}), 400
-    
-    # If nothing matched (shouldn't happen)
-    return jsonify({"error": "No action performed"}), 400
+    result, status_code = execute_trade(
+        symbol=symbol,
+        side="BUY" if is_buy else "SELL",
+        trade_type=trade_type,
+        buy_pct=buy_pct_raw if is_buy else None,
+        amt_raw=amt_raw,
+        leverage=leverage_raw,
+        place_order_fn=place_spot_market_order
+    )
+    logging.info("=====================end=====================")
+    return jsonify(result), status_code
 
 
 # -------------------------
