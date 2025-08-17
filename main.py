@@ -173,36 +173,6 @@ def validate_order_qty(qty: Decimal, price: Decimal, min_qty: Decimal, min_notio
 # -------------------------
 # Binance helper functions
 # -------------------------
-def signed_get(path: str, params: dict = None):
-    if params is None:
-        params = {}
-    qs_sig = sign_query(params)
-    url = f"https://api.binance.com{path}?{qs_sig}"
-    headers = {"X-MBX-APIKEY": BINANCE_API_KEY}
-    r = requests.get(url, headers=headers)
-    try:
-        res = r.json()
-    except Exception:
-        r.raise_for_status()
-    if isinstance(res, dict) and res.get("code", 0) < 0:
-        raise Exception(f"Binance API error: {res.get('msg')}")
-    return res
-
-def signed_post(path: str, params: dict = None):
-    if params is None:
-        params = {}
-    qs_sig = sign_query(params)
-    url = f"https://api.binance.com{path}?{qs_sig}"
-    headers = {"X-MBX-APIKEY": BINANCE_API_KEY}
-    r = requests.post(url, headers=headers)
-    try:
-        res = r.json()
-    except Exception:
-        r.raise_for_status()
-    if isinstance(res, dict) and res.get("code", 0) < 0:
-        raise Exception(f"Binance API error: {res.get('msg')}")
-    return res
-
 def public_get(path: str, params: dict = None):
     url = f"https://api.binance.com{path}"
     r = requests.get(url, params=params)
@@ -292,31 +262,6 @@ def get_current_price(symbol):
 # -------------------------
 # Spot functions
 # -------------------------
-def get_spot_asset_free_old(asset: str) -> Decimal:
-    """
-    Return free balance for asset from spot account as Decimal.
-    """
-    try:
-        params = {"timestamp": get_timestamp_ms()}
-        qs_sig = sign_query(params)
-        url = f"https://api.binance.com/api/v3/account?{qs_sig}"
-        headers = {"X-MBX-APIKEY": BINANCE_API_KEY}
-        r = requests.get(url, headers=headers)
-        res = r.json()
-        if isinstance(res, dict) and res.get("code", 0) < 0:
-            raise Exception(f"Binance API error: {res.get('msg')}")
-        balances = res.get("balances", [])
-        # log_balances(balances)
-        for b in balances:
-            if b.get("asset") == asset:
-                free = Decimal(str(b.get("free", "0")))
-                logging.info(f"[SPOT BALANCE] {asset} free={free}")
-                return free
-        return Decimal("0")
-    except Exception as e:
-        logging.exception("Failed to fetch spot asset balance")
-        raise
-
 def get_spot_asset_free(asset: str) -> Decimal:
     """
     Return free balance for asset from spot account as Decimal.
@@ -336,32 +281,6 @@ def get_spot_asset_free(asset: str) -> Decimal:
         raise
     except Exception:
         logging.exception("Failed to fetch spot asset balance")
-        raise
-
-def place_spot_market_order_old(symbol: str, side: str, quantity: Decimal):
-    """
-    Place a spot market order (signed). quantity passed as Decimal or string.
-    """
-    try:
-        params = {
-            "symbol": symbol,
-            "side": side,
-            "type": "MARKET",
-            "quantity": str(quantity),
-            "timestamp": get_timestamp_ms()
-        }
-        qs_sig = sign_query(params)
-        url = f"https://api.binance.com/api/v3/order?{qs_sig}"
-        headers = {"X-MBX-APIKEY": BINANCE_API_KEY}
-        logging.info(f"[SPOT] Sending {side} order for {symbol}, qty={quantity}")
-        r = requests.post(url, headers=headers)
-        res = r.json()
-        # logging.info(f"[SPOT RESPONSE] {res}")
-        if isinstance(res, dict) and res.get("code", 0) < 0:
-            raise Exception(f"Binance API error: {res.get('msg')}")
-        return res
-    except Exception:
-        logging.exception("Spot order failed")
         raise
 
 def place_spot_market_order(symbol, side, quantity):
@@ -420,61 +339,6 @@ def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decim
 
     logging.info(f"[ORDER] {side} executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
     return {"status": f"spot_{side.lower()}_executed", "order": resp}, 200
-
-
-# -------------------------
-# Cross-margin functions
-# -------------------------
-def get_margin_account():
-    """Return cross-margin account details."""
-    return signed_get("/sapi/v1/margin/account", {})
-
-def get_margin_asset(asset: str):
-    """
-    Returns dict with keys 'asset','free','locked','borrowed','interest' for cross-margin asset.
-    """
-    acct = get_margin_account()
-    user_assets = acct.get("userAssets", [])
-    for a in user_assets:
-        if a.get("asset") == asset:
-            # convert fields to Decimal
-            return {
-                "asset": a.get("asset"),
-                "free": Decimal(str(a.get("free", "0"))),
-                "locked": Decimal(str(a.get("locked", "0"))),
-                "borrowed": Decimal(str(a.get("borrowed", "0"))),
-                "interest": Decimal(str(a.get("interest", "0")))
-            }
-    return {"asset": asset, "free": Decimal("0"), "locked": Decimal("0"), "borrowed": Decimal("0"), "interest": Decimal("0")}
-
-def margin_loan(asset: str, amount: Decimal):
-    """
-    Borrow asset for cross-margin account.
-    POST /sapi/v1/margin/loan
-    """
-    params = {"asset": asset, "amount": str(amount)}
-    return signed_post("/sapi/v1/margin/loan", params)
-
-def margin_repay(asset: str, amount: Decimal):
-    """
-    Repay borrowed asset for cross-margin account.
-    POST /sapi/v1/margin/repay
-    """
-    params = {"asset": asset, "amount": str(amount)}
-    return signed_post("/sapi/v1/margin/repay", params)
-
-def place_margin_market_order(symbol: str, side: str, quantity: Decimal):
-    """
-    Place cross-margin market order.
-    POST /sapi/v1/margin/order
-    """
-    params = {
-        "symbol": symbol,
-        "side": side,
-        "type": "MARKET",
-        "quantity": str(quantity),
-    }
-    return signed_post("/sapi/v1/margin/order", params)
 
 
 # ---------------------------------
