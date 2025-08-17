@@ -74,22 +74,6 @@ TRADINGVIEW_IPS = {
 def should_log_request():
     return request.path not in ('/health-check', '/healthz', '/ping', '/')
 
-def get_timestamp_ms():
-    """Return Binance serverTime in milliseconds (int)."""
-    return int(requests.get("https://api.binance.com/api/v3/time").json()["serverTime"])
-
-def sign_query(params: dict):
-    """
-    Build query string and signature for Binance signed endpoints.
-    Uses timestamp in ms if caller didn't pass it.
-    """
-    if "timestamp" not in params:
-        params["timestamp"] = get_timestamp_ms()
-    # Build query in insertion order (consistent)
-    qs = '&'.join([f"{k}={params[k]}" for k in params])
-    signature = hmac.new(BINANCE_SECRET_KEY.encode(), qs.encode(), hashlib.sha256).hexdigest()
-    return qs + "&signature=" + signature
-
 def quantize_quantity(quantity: Decimal, step_size_str: str) -> Decimal:
     """Round down quantity to conform to stepSize."""
     step = Decimal(step_size_str)
