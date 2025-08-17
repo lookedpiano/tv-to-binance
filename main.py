@@ -496,7 +496,7 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                         return {"error": error_msg}, 200
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
-                    logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, raw_qty={raw_qty}, final_qty={qty}, investing: {invest_usdt*qty}")
+                    logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, final_qty={qty}, raw_qty={raw_qty}")
                     logging.info(f"[EXECUTE SPOT BUY] {symbol} Trade Filters: step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
                     # Safeguards
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
@@ -504,6 +504,7 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                         return resp_dict, status
                     
                     # Place the order after safeguards pass
+                    logging.info(f"[EXECUTE SPOT BUY] Trying to place order for {symbol} with qty={qty}@{price}={qty*price}.")
                     return place_order_with_handling(symbol, side, qty, price, place_order_fn)
                                 
                 except Exception as e:
