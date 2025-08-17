@@ -256,7 +256,7 @@ def get_trade_filters(symbol):
         step_size = Decimal(step_size_val)
         min_qty = Decimal(min_qty_val)
 
-        logging.info(f"[FILTERS] step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
+        logging.info(f"[FILTERS] step_size={step_size}, min_notional={min_notional}, min_qty={min_qty}")
         return step_size, min_qty, min_notional
 
     except Exception as e:
@@ -504,7 +504,6 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
                     logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, final_qty={qty}, raw_qty={raw_qty}")
-                    logging.info(f"[FILTERS] step_size={step_size}, min_notional={min_notional}, min_qty={min_qty}")
                     logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}={qty*price}.")
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
                     if not is_valid:
