@@ -317,7 +317,7 @@ def get_spot_asset_free(asset: str) -> Decimal:
         logging.exception("Failed to fetch spot asset balance")
         raise
 
-def place_spot_market_order(symbol: str, side: str, quantity: Decimal):
+def place_spot_market_order_old(symbol: str, side: str, quantity: Decimal):
     """
     Place a spot market order (signed). quantity passed as Decimal or string.
     """
@@ -343,7 +343,7 @@ def place_spot_market_order(symbol: str, side: str, quantity: Decimal):
         logging.exception("Spot order failed")
         raise
 
-def place_spot_market_order_new(symbol, side, quantity):
+def place_spot_market_order(symbol, side, quantity):
     return client.order_market(symbol=symbol, side=side, quantity=float(quantity))
 
 def resolve_invest_usdt(usdt_free, amt_raw, buy_pct) -> tuple[Decimal | None, str | None]:
