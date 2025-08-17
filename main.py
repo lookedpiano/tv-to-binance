@@ -8,7 +8,8 @@ from decimal import Decimal, ROUND_DOWN
 from datetime import datetime, timezone
 from requests.exceptions import HTTPError
 from binance.client import Client
-from binance.exceptions import BinanceAPIException
+from binance.exceptions import BinanceAPIException, BinanceRequestException
+
 
 
 # -------------------------
@@ -155,27 +156,22 @@ def validate_order_qty(qty: Decimal, price: Decimal, min_qty: Decimal, min_notio
 
 
 # -------------------------
-# Binance helper functions
-# -------------------------
-def public_get(path: str, params: dict = None):
-    url = f"https://api.binance.com{path}"
-    r = requests.get(url, params=params)
-    r.raise_for_status()
-    return r.json()
-
-
-# -------------------------
 # Exchange helpers
 # -------------------------
-def get_symbol_filters(symbol):
+def get_symbol_filters(symbol: str):
+    """
+    Fetch symbol filters (lot size, min notional, etc.) for a given symbol.
+    """
     try:
-        data = public_get("/api/v3/exchangeInfo", {"symbol": symbol})
-        symbols = data.get("symbols", [])
-        if not symbols:
+        info = client.get_symbol_info(symbol)
+        if not info:
             return []
-        filters = symbols[0].get("filters", [])
+        filters = info.get("filters", [])
         # log_filters(symbol, filters)
         return filters
+    except BinanceAPIException as e:
+        logging.error(f"Binance API error while fetching filters for {symbol}: {e.message}")
+        return []
     except Exception as e:
         logging.exception(f"Failed to fetch exchangeInfo for {symbol}: {e}")
         return []
@@ -217,29 +213,39 @@ def get_trade_filters(symbol):
         logging.exception(f"Error parsing filters for {symbol}: {e}")
         return None, None, None
 
-def get_current_price(symbol):
+def get_current_price(symbol: str):
+    """
+    Fetch current price for a symbol using Binance client.
+    """
     try:
-        data = public_get("/api/v3/ticker/price", {"symbol": symbol})
+        data = client.get_symbol_ticker(symbol=symbol)
         price = Decimal(str(data["price"]))
         logging.info(f"[PRICE] {symbol}: {price}")
         return price
-
-    except HTTPError as e:
-        if e.response.status_code == 418:
+    
+    except BinanceAPIException as e:
+        logging.error(f"Binance API error while fetching price for {symbol}: {e.message}")
+        if e.status_code == 418:
             logging.warning(f"Rate limit hit or temp block for {symbol}:<{e}>")
             #logging.warning(f"Rate limit hit or temp block for {symbol}. Retrying in 5s...")
             #time.sleep(5)
             # retry once
             #return get_current_price(symbol)
             return None
-        if e.response.status_code == 429:
+        if e.status_code == 429:
             logging.warning(f"Request limit hit or temp block for {symbol}:<{e}>")
             return None
         else:
             logging.exception(f"HTTP error for {symbol}:<{e}>")
             return None  # or raise again if you want it to bubble up
+    
+    except BinanceRequestException as e:
+        # Network or connection issues
+        logging.error(f"Binance request error for {symbol}: {e}")
+        return None
+    
     except Exception as e:
-        logging.exception(f"Unexpected error fetching price for {symbol}:<{e}>")
+        logging.exception(f"Unexpected error fetching price for {symbol}: {e}")
         return None
 
 
@@ -263,8 +269,8 @@ def get_spot_asset_free(asset: str) -> Decimal:
     except BinanceAPIException as e:
         logging.error(f"Binance API error while fetching {asset} balance: {e.message}")
         raise
-    except Exception:
-        logging.exception("Failed to fetch spot asset balance")
+    except Exception as e:
+        logging.exception(f"Failed to fetch spot asset balance for {asset}: {e}")
         raise
 
 def place_spot_market_order(symbol, side, quantity):
