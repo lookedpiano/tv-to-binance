@@ -365,7 +365,7 @@ def resolve_invest_usdt(usdt_free, amt_raw, buy_pct) -> tuple[Decimal | None, st
                 logging.warning(f"[INVEST:AMT] Balance insufficient: requested amt={amt}, available={usdt_free}")
                 return None, f"Balance insufficient: requested={amt}, available={usdt_free}"
 
-            logging.info(f"[INVEST:AMT] Using explicit amt={amt}, usdt_free={usdt_free}")
+            logging.info(f"[INVEST:AMT] Using explicit amt={amt}")
             return amt, None
         except Exception as e:
             logging.warning(f"[INVEST:AMT] Invalid amt provided ({amt_raw}). Aborting. Error: {e}")
@@ -373,7 +373,7 @@ def resolve_invest_usdt(usdt_free, amt_raw, buy_pct) -> tuple[Decimal | None, st
     
     # Use buy_pct if amt_raw is missing
     invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
-    logging.info(f"[INVEST:PCT] Using buy_pct={buy_pct}, usdt_free={usdt_free}, invest_usdt={invest_usdt}")
+    logging.info(f"[INVEST:PCT] Using buy_pct={buy_pct}, invest_usdt={invest_usdt}")
     return invest_usdt, None
 
 def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decimal, place_order_fn):
@@ -505,7 +505,7 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                     qty = quantize_quantity(raw_qty, step_size)
                     logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, final_qty={qty}, raw_qty={raw_qty}")
                     logging.info(f"[FILTERS] step_size={step_size}, min_notional={min_notional}, min_qty={min_qty}")
-                    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty}@{price}={qty*price}.")
+                    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}={qty*price}.")
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
