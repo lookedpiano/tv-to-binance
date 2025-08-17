@@ -493,7 +493,7 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                     invest_usdt, error_msg = resolve_invest_usdt(usdt_free, amt_raw, buy_pct)
                     if error_msg:
                         logging.warning(f"[INVEST ERROR] {error_msg}")
-                        return jsonify({"error": error_msg}), 200
+                        return {"error": error_msg}, 200
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
                     logging.info(f"[EXECUTE SPOT BUY] {symbol}: usdt_free={usdt_free}, invest={invest_usdt}, raw_qty={raw_qty}, final_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
