@@ -338,37 +338,32 @@ def place_spot_market_order(symbol: str, side: str, quantity: Decimal):
         logging.exception("Spot order failed")
         raise
 
-def resolve_invest_usdt(usdt_free, amt_raw, buy_pct):
+def resolve_invest_usdt(usdt_free, amt_raw, buy_pct) -> tuple[Decimal | None, str | None]:
     """
-    Determine the USDT amount to invest based on payload parameters.
-
-    Args:
-        usdt_free (Decimal): Free USDT balance.
-        amt_raw (Any): Raw 'amt' value from payload (can be None).
-        buy_pct (Decimal): Buy percentage (0 < buy_pct <= 1), only used if amt_raw is None.
-
+    Decide how much USDT to invest.
+    
     Returns:
-        (Decimal | None, (Response | None)):
-            invest_usdt if valid, otherwise None.
-            If invalid or insufficient, returns a Flask (jsonify, status_code) response.
+        (invest_usdt, error_message)
+        - invest_usdt (Decimal) if valid, else None
+        - error_message (str) if invalid, else None
     """
     if amt_raw is not None:
         try:
             amt = Decimal(str(amt_raw))
             if amt <= 0:
-                raise ValueError("amt must be positive")
+                return None, "Amount must be positive."
 
             if amt > usdt_free:
                 logging.warning(f"[INVEST:AMT] Balance insufficient: requested amt={amt}, available={usdt_free}")
-                return None, (jsonify({"error": "Balance is insufficient for the desired amount."}), 200)
+                return None, f"Balance insufficient: requested={amt}, available={usdt_free}"
 
             logging.info(f"[INVEST:AMT] Using explicit amt={amt}, usdt_free={usdt_free}")
             return amt, None
         except Exception as e:
             logging.warning(f"[INVEST:AMT] Invalid amt provided ({amt_raw}). Aborting. Error: {e}")
-            return None, (jsonify({"error": f"Invalid amt provided: {amt_raw}"}), 200)
-
-    # If amt_raw is missing, compute invest_usdt from buy_pct
+            return None, f"Invalid amt provided: {amt_raw}. Error: {e}"
+    
+    # Use buy_pct if amt_raw is missing
     invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
     logging.info(f"[INVEST:PCT] Using buy_pct={buy_pct}, usdt_free={usdt_free}, invest_usdt={invest_usdt}")
     return invest_usdt, None
@@ -473,12 +468,12 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
         if price is None:
             logging.warning(f"No price available for {symbol}. Cannot proceed.")
             logging.info("=====================end=====================")
-            return jsonify({"error": f"Price not available for {symbol}"}), 200
+            return {"error": f"Price not available for {symbol}"}, 200
 
         step_size, min_qty, min_notional = get_trade_filters(symbol)
         if None in (step_size, min_qty, min_notional):
             logging.warning(f"Incomplete trade filters for {symbol}: step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-            return jsonify({"error": f"Filters not available for {symbol}"}), 200
+            return {"error": f"Filters not available for {symbol}"}, 200
 
         # BUY flow
         if side == "BUY":
@@ -495,9 +490,10 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                 # SPOT buy -> use spot USDT balance
                 try:
                     usdt_free = get_spot_asset_free("USDT")
-                    invest_usdt, error_response = resolve_invest_usdt(usdt_free, amt_raw, buy_pct)
-                    if error_response:
-                        return error_response
+                    invest_usdt, error_msg = resolve_invest_usdt(usdt_free, amt_raw, buy_pct)
+                    if error_msg:
+                        logging.warning(f"[INVEST ERROR] {error_msg}")
+                        return jsonify({"error": error_msg}), 200
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
                     logging.info(f"[EXECUTE SPOT BUY] {symbol}: usdt_free={usdt_free}, invest={invest_usdt}, raw_qty={raw_qty}, final_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
@@ -512,12 +508,12 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                                 
                 except Exception as e:
                     logging.exception("Spot buy failed")
-                    return jsonify({"error": f"Spot buy failed: {str(e)}"}), 500
+                    return {"error": f"Spot buy failed: {str(e)}"}, 500
             elif trade_type == "MARGIN":
                 # MARGIN buy -> operate only on margin account (no spot fallback)
                 logging.info("TODO : handle margin buys")
                 logging.warning("Margin buy not implemented")
-                return jsonify({"error": "Margin buy not implemented"}), 501
+                return {"error": "Margin buy not implemented"}, 501
             else:
                 return {"error": f"Unknown trade type {trade_type}"}, 400
 
@@ -531,7 +527,7 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                     base_free = get_spot_asset_free(base_asset)
                     if base_free <= Decimal("0"):
                         logging.warning(f"No spot {base_asset} balance to sell. Aborting.")
-                        response = jsonify({"warning": f"No spot {base_asset} balance to sell. Aborting."}), 200
+                        response = {"warning": f"No spot {base_asset} balance to sell. Aborting."}, 200
                         #logging.info(f"Sell attempt aborted due to empty balance, returning response: {response}")
                         logging.info("=====================end=====================")
                         return response
@@ -548,13 +544,13 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                 
                 except Exception as e:
                     logging.exception("Spot sell failed")
-                    return jsonify({"error": f"Spot sell failed: {str(e)}"}), 500
+                    return {"error": f"Spot sell failed: {str(e)}"}, 500
 
             elif trade_type == "MARGIN":
                 # Sell on margin account only. After sell, attempt to repay any borrowed USDT.
                 logging.info("TODO : handle margin sells")
                 logging.warning("Margin sell not implemented")
-                return jsonify({"error": "Margin sell not implemented"}), 501
+                return {"error": "Margin sell not implemented"}, 501
             else:
                 return {"error": f"Unknown trade type {trade_type}"}, 400
 
