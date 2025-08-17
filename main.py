@@ -292,7 +292,7 @@ def get_current_price(symbol):
 # -------------------------
 # Spot functions
 # -------------------------
-def get_spot_asset_free(asset: str) -> Decimal:
+def get_spot_asset_free_old(asset: str) -> Decimal:
     """
     Return free balance for asset from spot account as Decimal.
     """
@@ -314,6 +314,27 @@ def get_spot_asset_free(asset: str) -> Decimal:
                 return free
         return Decimal("0")
     except Exception as e:
+        logging.exception("Failed to fetch spot asset balance")
+        raise
+
+def get_spot_asset_free(asset: str) -> Decimal:
+    """
+    Return free balance for asset from spot account as Decimal.
+    """
+    try:
+        account_info = client.get_account()
+        balances = account_info.get("balances", [])
+        # log_balances(balances)
+        for b in balances:
+            if b.get("asset") == asset:
+                free = Decimal(str(b.get("free", "0")))
+                logging.info(f"[SPOT BALANCE] {asset} free={free}")
+                return free
+        return Decimal("0")
+    except BinanceAPIException as e:
+        logging.error(f"Binance API error while fetching {asset} balance: {e.message}")
+        raise
+    except Exception:
         logging.exception("Failed to fetch spot asset balance")
         raise
 
