@@ -349,7 +349,6 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
             price = get_current_price(symbol)
         if price is None:
             logging.warning(f"No price available for {symbol}. Cannot proceed.")
-            logging.info("=====================end=====================")
             return {"error": f"Price not available for {symbol}"}, 200
 
         step_size, min_qty, min_notional = get_trade_filters(symbol)
@@ -410,7 +409,6 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                         logging.warning(f"No spot {base_asset} balance to sell. Aborting.")
                         response = {"warning": f"No spot {base_asset} balance to sell. Aborting."}, 200
                         #logging.info(f"Sell attempt aborted due to empty balance, returning response: {response}")
-                        logging.info("=====================end=====================")
                         return response
                     qty = quantize_quantity(base_free, step_size)
                     logging.info(f"[EXECUTE SPOT SELL] {symbol}: base_free={base_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
@@ -586,8 +584,8 @@ def detect_tradingview_placeholder(action: str):
     Returns a Flask response if placeholder is found, otherwise None.
     """
     if action == "{{STRATEGY.ORDER.ACTION}}":
-        logging.warning("TradingView placeholder received instead of expanded action.")
-        logging.info("Did you accidentally paste {{strategy.order.action}} instead of letting TradingView expand it? Use BUY or SELL instead...")
+        logging.warning("TradingView placeholder received instead of explicit action.")
+        logging.warning("Did you accidentally paste {{strategy.order.action}} instead of letting TradingView expand it? Use BUY or SELL instead...")
         return jsonify({"error": "Did you accidentally paste {{strategy.order.action}} instead of letting TradingView expand it?"}), 400
     return None
 
