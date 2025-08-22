@@ -488,7 +488,7 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                 # Cross-Margin BUY (long with optional borrowing)
                 try:
                     # TODO: find a way to secure two signals (spot and margin)
-                    logging.info(f"Waiting for spot buy to be over. Proceeding in 21 seconds...")
+                    logging.info(f"Waiting for possible spot buy to be over. Proceeding in 21 seconds...")
                     time.sleep(21)
 
                     before = snapshot_balances()
@@ -577,7 +577,7 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                 # IMPORTANT: Do NOT borrow the base asset to sell (no shorting).
                 try:
                     # TODO: find a way to secure two signals (spot and margin)
-                    logging.info(f"Waiting for spot buy to be over. Proceeding in 21 seconds...")
+                    logging.info(f"Waiting for possible spot buy to be over. Proceeding in 21 seconds...")
                     time.sleep(21)
 
                     before = snapshot_balances()
