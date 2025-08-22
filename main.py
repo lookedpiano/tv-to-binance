@@ -438,8 +438,8 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
         # Fetch price and filters
         price = get_current_price(symbol)
         if price is None:
-            logging.info(f"Retrying once for {symbol}. Retrying in 7 seconds...")
-            time.sleep(7)
+            logging.info(f"Retrying once for {symbol}. Retrying in 3 seconds...")
+            time.sleep(3)
             price = get_current_price(symbol)
         if price is None:
             logging.warning(f"No price available for {symbol}. Cannot proceed.")
@@ -488,8 +488,8 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                 # Cross-Margin BUY (long with optional borrowing)
                 try:
                     # TODO: find a way to secure two signals (spot and margin)
-                    logging.info(f"Waiting for possible spot buy to be over. Proceeding in 21 seconds...")
-                    time.sleep(21)
+                    logging.info(f"Waiting for possible spot buy to be over. Proceeding in 7 seconds...")
+                    time.sleep(7)
 
                     before = snapshot_balances()
 
@@ -577,8 +577,8 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                 # IMPORTANT: Do NOT borrow the base asset to sell (no shorting).
                 try:
                     # TODO: find a way to secure two signals (spot and margin)
-                    logging.info(f"Waiting for possible spot buy to be over. Proceeding in 21 seconds...")
-                    time.sleep(21)
+                    logging.info(f"Waiting for possible spot buy to be over. Proceeding in 7 seconds...")
+                    time.sleep(7)
 
                     before = snapshot_balances()
 
