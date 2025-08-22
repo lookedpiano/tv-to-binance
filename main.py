@@ -59,6 +59,7 @@ DEFAULT_BUY_PCT = Decimal("0.001") # 0.1 %
 SECRET_FIELD = "client_secret"
 WEBHOOK_REQUEST_PATH = "/to-the-moon"
 MAX_REQUEST_AGE = 10  # seconds
+MAX_CROSS_LEVERAGE = 3
 # Allowlist of known TradingView alert IPs (must keep updated)
 # See: https://www.tradingview.com/support/solutions/43000529348
 TRADINGVIEW_IPS = {
@@ -111,20 +112,21 @@ def validate_timestamp(data):
     timestamp = data.get("timestamp")
     if not timestamp:
         logging.warning("[TIMESTAMP] Missing timestamp")
-        return False, jsonify({"error": "Missing timestamp"}), 400
+        return False, (jsonify({"error": "Missing timestamp"}), 400)
 
     try:
         dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))  # Z = UTC
         ts = int(dt.timestamp())
     except ValueError:
         logging.warning("[TIMESTAMP] Invalid timestamp format")
-        return False, jsonify({"error": "Invalid timestamp"}), 400
+        return False, (jsonify({"error": "Invalid timestamp"}), 400)
 
     now = int(time.time())
     if abs(now - ts) > MAX_REQUEST_AGE:
         logging.warning("[TIMESTAMP] Request expired")
-        return False, jsonify({"error": "Request expired"}), 401
-    return True, ts, None
+        return False, (jsonify({"error": "Request expired"}), 401)
+
+    return True, None
 
 def validate_secret(data):
     """Validate that the webhook secret is correct."""
@@ -248,6 +250,40 @@ def get_current_price(symbol: str):
         logging.exception(f"Unexpected error fetching price for {symbol}: {e}")
         return None
 
+def snapshot_balances():
+    """Take snapshots of spot and margin balances > 0"""
+    spot_balances = {
+        b['asset']: Decimal(b['free']) + Decimal(b['locked'])
+        for b in client.get_account()['balances']
+        if Decimal(b['free']) + Decimal(b['locked']) > 0
+    }
+
+    '''
+    margin_balances = {
+        b['asset']: Decimal(b['free']) + Decimal(b['locked'])
+        for b in client.get_margin_account()['userAssets']
+        if Decimal(b['free']) + Decimal(b['locked']) > 0
+    }
+
+    return {"spot": spot_balances, "margin": margin_balances}
+    '''
+    return {"spot": spot_balances}
+
+def compare_spot_balances(spot_before, spot_after):
+    """Compare spot balances before vs. after and log/print differences"""
+    if spot_before == spot_after:
+        logging.info("[SANITY CHECK] Spot balances unchanged after margin trade.")
+    else:
+        logging.warning("[SANITY CHECK] Spot balances changed!")
+
+        # Find and report differences
+        all_assets = set(spot_before.keys()) | set(spot_after.keys())
+        for asset in all_assets:
+            before_amt = spot_before.get(asset, Decimal("0"))
+            after_amt = spot_after.get(asset, Decimal("0"))
+            if before_amt != after_amt:
+                diff = after_amt - before_amt
+                logging.warning(f"{asset}: {before_amt} → {after_amt} (diff: {diff})")
 
 # -------------------------
 # Spot functions
@@ -275,6 +311,17 @@ def get_spot_asset_free(asset: str) -> Decimal:
 
 def place_spot_market_order(symbol, side, quantity):
     return client.order_market(symbol=symbol, side=side, quantity=float(quantity))
+
+#prepared - not in use yet
+def place_margin_market_order(symbol, side, quantity):
+    return client.create_margin_order(
+                        symbol=symbol,
+                        side=side,
+                        type="MARKET",
+                        quantity=float(quantity),
+                        sideEffectType="MARGIN_BUY" if side == "BUY" else "NO_SIDE_EFFECT",
+                        isIsolated=False
+                    )
 
 def resolve_invest_usdt(usdt_free, amt_raw, buy_pct) -> tuple[Decimal | None, str | None]:
     """
@@ -331,21 +378,68 @@ def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decim
     return {"status": f"spot_{side.lower()}_executed", "order": resp}, 200
 
 
+# -------------------------
+# Margin functions
+# -------------------------
+def _normalize_leverage(leverage_raw) -> tuple[int | None, str | None]:
+    try:
+        #TODO: check leverage_raw=0
+        if isinstance(leverage_raw, bool):
+            raise ValueError
+
+        L = int(leverage_raw)
+
+        if str(leverage_raw) != str(L):
+            raise ValueError
+        
+        if 1 <= L <= MAX_CROSS_LEVERAGE:
+            return L, None
+        else:
+            raise ValueError
+
+    except Exception:
+        return None, f"Leverage not valid. leverage must be an integer from 1 to {MAX_CROSS_LEVERAGE}"
+
+def _get_margin_free(asset: str) -> Decimal:
+    acc = client.get_margin_account()
+    for a in acc.get("userAssets", []):
+        if a.get("asset") == asset:
+            free = Decimal(str(a.get("free", "0")))
+            logging.info(f"[MARGIN BALANCE] {asset} free={free}")
+            return free
+    return Decimal("0")
+
+def _get_margin_debt(asset: str) -> Decimal:
+    acc = client.get_margin_account()
+    for a in acc.get("userAssets", []):
+        if a.get("asset") == asset:
+            borrowed = Decimal(str(a.get("borrowed", "0")))
+            interest = Decimal(str(a.get("interest", "0")))
+            total_debt = borrowed + interest
+            logging.info(f"[MARGIN DEBT] {asset}: borrowed={borrowed}, interest={interest} => total debt: {total_debt}")
+            return total_debt
+    return Decimal("0")
+
+
 # ---------------------------------
 # Unified trade execution
 # ---------------------------------
-def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=None, amt_raw=None, leverage=None, place_order_fn=None):
+def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=None, amt_raw=None, leverage_raw=None, place_order_fn=None):
     """
-    Unified trade executor for SPOT and (future) MARGIN.
-    Handles buy/sell, quantity math, filter validation, and order placement.
+    Unified trade executor for SPOT and Cross-Margin.
+    - Handles buy/sell, quantity math, filter validation, and order placement.
+    - No auto-transfer from Spot to Margin (you handle transfers manually).
+    - Margin BUY uses sideEffectType="MARGIN_BUY" (auto-borrow).
+    - Margin SELL uses sideEffectType="AUTO_REPAY" (auto-repay of the asset being sold)
+    and we additionally repay any USDT debt using the sale proceeds.
     Returns (response_dict, http_status).
     """
     try:
         # Fetch price and filters
         price = get_current_price(symbol)
         if price is None:
-            logging.info(f"Retrying once for {symbol}. Retrying in 21s...")
-            time.sleep(21)
+            logging.info(f"Retrying once for {symbol}. Retrying in 7 seconds...")
+            time.sleep(7)
             price = get_current_price(symbol)
         if price is None:
             logging.warning(f"No price available for {symbol}. Cannot proceed.")
@@ -390,10 +484,63 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                     logging.exception("Spot buy failed")
                     return {"error": f"Spot buy failed: {str(e)}"}, 500
             elif trade_type == "MARGIN":
-                # MARGIN buy -> operate only on margin account (no spot fallback)
-                logging.info("TODO : handle margin buys")
-                logging.warning("Margin buy not implemented")
-                return {"error": "Margin buy not implemented"}, 501
+                # MARGIN buy -> operate only on margin account (no spot fallback) : TODO: check if thats so
+                # Cross-Margin BUY (long with optional borrowing)
+                try:
+                    # TODO: find a way to secure two signals (spot and margin)
+                    logging.info(f"Waiting for spot buy to be over. Proceeding in 21 seconds...")
+                    time.sleep(21)
+
+                    before = snapshot_balances()
+
+                    usdt_free = _get_margin_free("USDT")
+                    invest_usdt, error_msg = resolve_invest_usdt(usdt_free, amt_raw, buy_pct)
+                    if error_msg:
+                        logging.warning(f"[MARGIN INVEST ERROR] {error_msg}")
+                        return {"error": error_msg}, 200
+
+                    leverage, error_msg = _normalize_leverage(leverage_raw)
+                    if error_msg:
+                        logging.warning(f"[MARGIN LEVERAGE ERROR] {error_msg}")
+                        return {"error": error_msg}, 200
+
+                    max_borrow = (usdt_free * (leverage - Decimal("1"))).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                    needed_borrow = invest_usdt - usdt_free if invest_usdt > usdt_free else Decimal("0")
+                    if needed_borrow > max_borrow:
+                        logging.warning(f"Requested borrow {needed_borrow} exceeds leverage cap {max_borrow} (leverage={leverage}). Clamping invest amount.")
+                        invest_usdt = usdt_free + max_borrow
+
+                    raw_qty = invest_usdt / price
+                    qty = quantize_quantity(raw_qty, step_size)
+                    logging.info(f"[EXECUTE MARGIN BUY] {symbol}: invest={invest_usdt}, qty={qty}, usdt_free={usdt_free}, leverage={leverage}")
+                    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}={qty*price}.")
+                    is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
+                    if not is_valid:
+                        return resp_dict, status
+
+                    # Place market margin order with auto-borrow
+                    resp = client.create_margin_order(
+                        symbol=symbol,
+                        side="BUY",
+                        type="MARKET",
+                        quantity=float(qty),
+                        sideEffectType="MARGIN_BUY",
+                        isIsolated=False
+                    )
+                    logging.info(f"[MARGIN ORDER] {side} executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                    
+                    after = snapshot_balances()
+                    # Compare spot balances only
+                    compare_spot_balances(before["spot"], after["spot"])
+
+                    return {"status": "margin_buy_executed", "order": resp, "leverage_used": str(leverage)}, 200
+
+                except BinanceAPIException as e:
+                    logging.error(f"Binance API error during margin buy: {e.message}")
+                    return {"error": f"Margin buy failed: {e.message}"}, 500
+                except Exception as e:
+                    logging.exception("Margin buy failed")
+                    return {"error": f"Margin buy failed: {str(e)}"}, 500
             else:
                 return {"error": f"Unknown trade type {trade_type}"}, 400
 
@@ -412,8 +559,7 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                         return response
                     qty = quantize_quantity(base_free, step_size)
                     logging.info(f"[EXECUTE SPOT SELL] {symbol}: base_free={base_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-
-                    # Safeguards
+                    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}={qty*price}.")
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
@@ -427,9 +573,70 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
 
             elif trade_type == "MARGIN":
                 # Sell on margin account only. After sell, attempt to repay any borrowed USDT.
-                logging.info("TODO : handle margin sells")
-                logging.warning("Margin sell not implemented")
-                return {"error": "Margin sell not implemented"}, 501
+                # Cross-Margin SELL (long-only unwind).
+                # IMPORTANT: Do NOT borrow the base asset to sell (no shorting).
+                try:
+                    # TODO: find a way to secure two signals (spot and margin)
+                    logging.info(f"Waiting for spot buy to be over. Proceeding in 21 seconds...")
+                    time.sleep(21)
+
+                    before = snapshot_balances()
+
+                    acc = client.get_margin_account()
+                    base_free = Decimal("0")
+                    for a in acc.get("userAssets", []):
+                        if a.get("asset") == base_asset:
+                            base_free = Decimal(str(a.get("free", "0")))
+                            break
+
+                    if base_free <= Decimal("0"):
+                        logging.warning(f"No margin {base_asset} balance to sell. Aborting.")
+                        return {"warning": f"No margin {base_asset} balance to sell. Aborting."}, 200
+
+                    qty = quantize_quantity(base_free, step_size)
+                    logging.info(f"[EXECUTE MARGIN SELL] {symbol}: sell_qty={qty}")
+                    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}={qty*price}.")
+                    is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
+                    if not is_valid:
+                        return resp_dict, status
+
+                    # Place market margin sell (no auto-repay needed since only USDT is borrowed)
+                    resp = client.create_margin_order(
+                        symbol=symbol,
+                        side="SELL",
+                        type="MARKET",
+                        quantity=float(qty),
+                        sideEffectType="NO_SIDE_EFFECT",  # AUTO_REPAY
+                        isIsolated=False
+                    )
+
+                    # After selling, attempt to repay any USDT debt using proceeds
+                    try:
+                        #TODO: check logic
+                        # Refresh balances to get latest free USDT and debt
+                        usdt_free_after = _get_margin_free("USDT")
+                        usdt_debt = _get_margin_debt("USDT")
+                        repay_amt = min(usdt_free_after, usdt_debt)
+                        if repay_amt > Decimal("0"):
+                            logging.info(f"[MARGIN AUTO-REPAY USDT] Repaying {repay_amt} USDT")
+                            client.repay_margin_loan(asset="USDT", amount=float(repay_amt))
+                    except Exception as e:
+                        logging.warning(f"Post-sell USDT auto-repay failed: {e}")
+
+                    logging.info(f"[MARGIN ORDER] {side} executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                    
+                    after = snapshot_balances()
+                    # Compare spot balances only
+                    compare_spot_balances(before["spot"], after["spot"])
+
+                    return {"status": "margin_sell_executed", "order": resp}, 200
+
+                except BinanceAPIException as e:
+                    logging.error(f"Binance API error during margin sell: {e.message}")
+                    return {"error": f"Margin sell failed: {e.message}"}, 500
+                except Exception as e:
+                    logging.exception("Margin sell failed")
+                    return {"error": f"Margin sell failed: {str(e)}"}, 500
             else:
                 return {"error": f"Unknown trade type {trade_type}"}, 400
 
@@ -501,7 +708,7 @@ def webhook():
         return error_response
     
     # Timestamp validation
-    valid_ts, ts, error_response = validate_timestamp(data)
+    valid_ts, error_response = validate_timestamp(data)
     if not valid_ts:
         return error_response
     
@@ -549,7 +756,7 @@ def webhook():
         trade_type=trade_type,
         buy_pct_raw=buy_pct_raw if is_buy else None,
         amt_raw=amt_raw,
-        leverage=leverage_raw,
+        leverage_raw=leverage_raw,
         place_order_fn=place_spot_market_order
     )
     logging.info("=====================end=====================")
