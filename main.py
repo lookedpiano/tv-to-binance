@@ -285,6 +285,7 @@ def compare_spot_balances(spot_before, spot_after):
                 diff = after_amt - before_amt
                 logging.warning(f"{asset}: {before_amt} → {after_amt} (diff: {diff})")
 
+
 # -------------------------
 # Spot functions
 # -------------------------
@@ -383,7 +384,6 @@ def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decim
 # -------------------------
 def _normalize_leverage(leverage_raw) -> tuple[int | None, str | None]:
     try:
-        #TODO: check leverage_raw=0
         if isinstance(leverage_raw, bool):
             raise ValueError
 
