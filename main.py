@@ -90,6 +90,9 @@ def get_filter_value(filters, filter_type, key):
             return f.get(key)
     raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
 
+def log_webhook_delimiter(at_point: str):
+    logging.info(f"====================={at_point}=====================")
+
 
 # -----------------------
 # Validation functions
@@ -449,6 +452,12 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
         if None in (step_size, min_qty, min_notional):
             logging.warning(f"Incomplete trade filters for {symbol}: step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
             return {"error": f"Filters not available for {symbol}"}, 200
+        
+        # bottleneck for margin trades
+        if trade_type == "MARGIN":
+            # TODO: find a way to secure two signals (spot and margin)
+            logging.info(f"Waiting for possible spot buy to be over. Proceeding in 7 seconds...")
+            time.sleep(7)
 
         # BUY flow
         if side == "BUY":
@@ -487,10 +496,6 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                 # MARGIN buy -> operate only on margin account (no spot fallback) : TODO: check if thats so
                 # Cross-Margin BUY (long with optional borrowing)
                 try:
-                    # TODO: find a way to secure two signals (spot and margin)
-                    logging.info(f"Waiting for possible spot buy to be over. Proceeding in 7 seconds...")
-                    time.sleep(7)
-
                     before = snapshot_balances()
 
                     usdt_free = _get_margin_free("USDT")
@@ -506,13 +511,14 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
 
                     max_borrow = (usdt_free * (leverage - Decimal("1"))).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
                     needed_borrow = invest_usdt - usdt_free if invest_usdt > usdt_free else Decimal("0")
+                    logging.info(f"[MARGIN BUY] max_borrow={max_borrow}, needed_borrow={needed_borrow}")
                     if needed_borrow > max_borrow:
                         logging.warning(f"Requested borrow {needed_borrow} exceeds leverage cap {max_borrow} (leverage={leverage}). Clamping invest amount.")
                         invest_usdt = usdt_free + max_borrow
 
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
-                    logging.info(f"[EXECUTE MARGIN BUY] {symbol}: invest={invest_usdt}, qty={qty}, usdt_free={usdt_free}, leverage={leverage}")
+                    logging.info(f"[EXECUTE MARGIN BUY] {symbol}: invest={invest_usdt}, leverage={leverage}, final_qty={qty}, raw_qty={raw_qty}")
                     logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}={qty*price}.")
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
                     if not is_valid:
@@ -576,12 +582,9 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
                 # Cross-Margin SELL (long-only unwind).
                 # IMPORTANT: Do NOT borrow the base asset to sell (no shorting).
                 try:
-                    # TODO: find a way to secure two signals (spot and margin)
-                    logging.info(f"Waiting for possible spot buy to be over. Proceeding in 7 seconds...")
-                    time.sleep(7)
-
                     before = snapshot_balances()
 
+                    # TODO: use existing function _get_margin_free to get base_free
                     acc = client.get_margin_account()
                     base_free = Decimal("0")
                     for a in acc.get("userAssets", []):
@@ -612,7 +615,7 @@ def execute_trade(symbol: str, side: str, trade_type: str ="SPOT", buy_pct_raw=N
 
                     # After selling, attempt to repay any USDT debt using proceeds
                     try:
-                        #TODO: check logic
+                        #TODO: check logic & also combine call _get_margin_free&_get_margin_debt to minimize api calls
                         # Refresh balances to get latest free USDT and debt
                         usdt_free_after = _get_margin_free("USDT")
                         usdt_debt = _get_margin_debt("USDT")
@@ -700,67 +703,70 @@ def healthz():
 # -------------------------
 @app.route(WEBHOOK_REQUEST_PATH, methods=['POST'])
 def webhook():
-    logging.info("=====================start=====================")
-    
-    # JSON validation
-    data, error_response = validate_json()
-    if not data:
-        return error_response
-    
-    # Timestamp validation
-    valid_ts, error_response = validate_timestamp(data)
-    if not valid_ts:
-        return error_response
-    
-    # Secret validation
-    valid_secret, error_response = validate_secret(data)
-    if not valid_secret:
-        return error_response
+    log_webhook_delimiter("start")
 
-    # Log payload without secret
-    data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
-    logging.info(f"[WEBHOOK] Received payload (no {SECRET_FIELD}): {data_for_log}")
-    
-    # Parse fields
     try:
-        action = data.get("action", "").strip().upper()
-        symbol = data.get("symbol", "").strip().upper()
-        buy_pct_raw = data.get("buy_pct", DEFAULT_BUY_PCT)
-        trade_type = data.get("type", "SPOT").strip().upper()  # MARGIN or SPOT
-        leverage_raw = data.get("leverage", None)
-        amt_raw = data.get("amt", None)
-    except Exception as e:
-        logging.exception("Failed to extract fields")
-        return jsonify({"error": "Invalid fields"}), 400
+        # JSON validation
+        data, error_response = validate_json()
+        if not data:
+            return error_response
+        
+        # Timestamp validation
+        valid_ts, error_response = validate_timestamp(data)
+        if not valid_ts:
+            return error_response
+        
+        # Secret validation
+        valid_secret, error_response = validate_secret(data)
+        if not valid_secret:
+            return error_response
 
-    logging.info(f"[PARSE] action={action}, symbol={symbol}, type={trade_type}, leverage={leverage_raw}, buy_pct={buy_pct_raw}, amt={amt_raw}")
+        # Log payload without secret
+        data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
+        logging.info(f"[WEBHOOK] Received payload (no {SECRET_FIELD}): {data_for_log}")
+        
+        # Parse fields
+        try:
+            action = data.get("action", "").strip().upper()
+            symbol = data.get("symbol", "").strip().upper()
+            buy_pct_raw = data.get("buy_pct", DEFAULT_BUY_PCT)
+            trade_type = data.get("type", "SPOT").strip().upper()  # MARGIN or SPOT
+            leverage_raw = data.get("leverage", None)
+            amt_raw = data.get("amt", None)
+        except Exception as e:
+            logging.exception("Failed to extract fields")
+            return jsonify({"error": "Invalid fields"}), 400
 
-    # Easter egg check
-    resp = detect_tradingview_placeholder(action)
-    if resp:
-        return resp
+        logging.info(f"[PARSE] action={action}, symbol={symbol}, type={trade_type}, leverage={leverage_raw}, buy_pct={buy_pct_raw}, amt={amt_raw}")
+
+        # Easter egg check
+        resp = detect_tradingview_placeholder(action)
+        if resp:
+            return resp
+        
+        # Validate action and symbol
+        if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
+            logging.error(f"Invalid action: {action}")
+            return jsonify({"error": "Invalid action"}), 400
+        if symbol not in ALLOWED_SYMBOLS:
+            logging.error(f"Symbol not allowed: {symbol}")
+            return jsonify({"error": "Symbol not allowed"}), 400
+
+        is_buy = action in {"BUY", "BUY_BTC_SMALL"}
+
+        result, status_code = execute_trade(
+            symbol=symbol,
+            side="BUY" if is_buy else "SELL",
+            trade_type=trade_type,
+            buy_pct_raw=buy_pct_raw if is_buy else None,
+            amt_raw=amt_raw,
+            leverage_raw=leverage_raw,
+            place_order_fn=place_spot_market_order
+        )
+        return jsonify(result), status_code
     
-    # Validate action and symbol
-    if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
-        logging.error(f"Invalid action: {action}")
-        return jsonify({"error": "Invalid action"}), 400
-    if symbol not in ALLOWED_SYMBOLS:
-        logging.error(f"Symbol not allowed: {symbol}")
-        return jsonify({"error": "Symbol not allowed"}), 400
-
-    is_buy = action in {"BUY", "BUY_BTC_SMALL"}
-
-    result, status_code = execute_trade(
-        symbol=symbol,
-        side="BUY" if is_buy else "SELL",
-        trade_type=trade_type,
-        buy_pct_raw=buy_pct_raw if is_buy else None,
-        amt_raw=amt_raw,
-        leverage_raw=leverage_raw,
-        place_order_fn=place_spot_market_order
-    )
-    logging.info("=====================end=====================")
-    return jsonify(result), status_code
+    finally:
+        log_webhook_delimiter("end")
 
 
 # -------------------------
