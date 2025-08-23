@@ -313,7 +313,7 @@ def get_spot_asset_free(asset: str) -> Decimal:
 def place_spot_market_order(symbol, side, quantity):
     return client.order_market(symbol=symbol, side=side, quantity=float(quantity))
 
-#prepared - not in use yet
+#TODO: prepared - not in use yet
 def place_margin_market_order(symbol, side, quantity):
     return client.create_margin_order(
                         symbol=symbol,
