@@ -343,18 +343,18 @@ def resolve_invest_usdt(usdt_free, amt_raw, buy_pct) -> tuple[Decimal | None, st
                 return None, "Amount must be positive."
 
             if amt > usdt_free:
-                logging.warning(f"[INVEST:AMT] Balance insufficient: requested amt={amt}, available={usdt_free}")
+                logging.warning(f"[INVEST:AMOUNT] Balance insufficient: requested amount={amt}, available={usdt_free}")
                 return None, f"Balance insufficient: requested={amt}, available={usdt_free}"
 
-            logging.info(f"[INVEST:AMT] Using explicit amt={amt}")
+            logging.info(f"[INVEST:AMOUNT] Using explicit amount={amt}")
             return amt, None
         except Exception as e:
-            logging.warning(f"[INVEST:AMT] Invalid amt provided ({amt_raw}). Aborting. Error: {e}")
-            return None, f"Invalid amt provided: {amt_raw}. Error: {e}"
+            logging.warning(f"[INVEST:AMOUNT] Invalid amount provided ({amt_raw}). Aborting. Error: {e}")
+            return None, f"Invalid amount provided: {amt_raw}. Error: {e}"
     
     # Use buy_pct if amt_raw is missing
     invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
-    logging.info(f"[INVEST:PCT] Using buy_pct={buy_pct}, invest_usdt={invest_usdt}")
+    logging.info(f"[INVEST:BUY-PERCENTAGE] Using buy_pct={buy_pct}, invest_usdt={invest_usdt}")
     return invest_usdt, None
 
 def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decimal, place_order_fn):
