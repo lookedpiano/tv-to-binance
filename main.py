@@ -737,7 +737,7 @@ def webhook():
             logging.exception("Failed to extract fields")
             return jsonify({"error": "Invalid fields"}), 400
 
-        logging.info(f"[PARSE] action={action}, symbol={symbol}, type={trade_type}, leverage={leverage_raw}, buy_pct={buy_pct_raw}, amt={amt_raw}")
+        logging.info(f"[PARSE] action={action}, symbol={symbol}, type={trade_type}, leverage={leverage_raw}, buy_pct={buy_pct_raw}, amount={amt_raw}")
 
         # Easter egg check
         resp = detect_tradingview_placeholder(action)
