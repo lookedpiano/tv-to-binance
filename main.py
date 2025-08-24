@@ -732,7 +732,7 @@ def webhook():
             buy_pct_raw = data.get("buy_pct", DEFAULT_BUY_PCT)
             trade_type = data.get("type", "SPOT").strip().upper()  # MARGIN or SPOT
             leverage_raw = data.get("leverage", None)
-            amt_raw = data.get("amt", None)
+            amt_raw = data.get("amount", None)
         except Exception as e:
             logging.exception("Failed to extract fields")
             return jsonify({"error": "Invalid fields"}), 400
