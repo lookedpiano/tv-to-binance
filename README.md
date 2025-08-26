@@ -18,10 +18,9 @@ It is intended solely for **educational and demonstration purposes** as part of 
 
 ## Usage
 
-1. Create a TradingView account and define your own alerts.  
-2. Create a Binance API key in your own account.  
-3. Clone this repository and deploy the code, e.g., at Render as your personal web service.  
-4. Store your own API keys there.
+1. Create a TradingView account and define your own alerts
+2. Create a Binance account and Binance API key in your own account with Reading and Spot & Margin Trading restrictions
+3. Create a Render account and setup a new web service with this public Git repository as Source Code
 
 ---
 
