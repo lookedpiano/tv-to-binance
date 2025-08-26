@@ -92,7 +92,7 @@ def get_filter_value(filters, filter_type, key):
 def log_order_safeguards(symbol: str, qty: Decimal, price: Decimal):
     logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}")
     total_investment = qty * price
-    logging.info(f"[INVESTMENT] Total investment for {symbol}: {qty} × {price} ≈ {total_investment:.4f} USDT")
+    logging.info(f"[INVESTMENT] Total investment ≈ {total_investment:.4f} USDT")
 
 def log_webhook_delimiter(at_point: str):
     logging.info(f"====================={at_point}=====================")
