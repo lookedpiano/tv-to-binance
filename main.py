@@ -89,6 +89,11 @@ def get_filter_value(filters, filter_type, key):
             return f.get(key)
     raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
 
+def log_order_safeguards(symbol: str, qty: Decimal, price: Decimal):
+    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}")
+    total_investment = qty * price
+    logging.info(f"[INVESTMENT] Total investment for {symbol}: {qty} × {price} ≈ {total_investment:.4f} USDT")
+
 def log_webhook_delimiter(at_point: str):
     logging.info(f"====================={at_point}=====================")
 
@@ -508,7 +513,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
                     logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, final_qty={qty}, raw_qty={raw_qty}")
-                    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}={qty*price}.")
+                    log_order_safeguards(symbol, qty, price)
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
@@ -546,7 +551,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
                     logging.info(f"[EXECUTE MARGIN BUY] {symbol}: invest={invest_usdt}, leverage={leverage}, final_qty={qty}, raw_qty={raw_qty}")
-                    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}={qty*price}.")
+                    log_order_safeguards(symbol, qty, price)
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
@@ -592,7 +597,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                         return response
                     qty = quantize_quantity(base_free, step_size)
                     logging.info(f"[EXECUTE SPOT SELL] {symbol}: base_free={base_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-                    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}={qty*price}.")
+                    log_order_safeguards(symbol, qty, price)
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
@@ -625,7 +630,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
 
                     qty = quantize_quantity(base_free, step_size)
                     logging.info(f"[EXECUTE MARGIN SELL] {symbol}: sell_qty={qty}")
-                    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}={qty*price}.")
+                    log_order_safeguards(symbol, qty, price)
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
