@@ -29,3 +29,29 @@ It is intended solely for **educational and demonstration purposes** as part of 
 The goal is to **demonstrate in a practical manner** to clients how automated trading can be implemented technically as part of my consulting services.  
 The focus is on **education and self-empowerment**—not on the execution of trades by me.
 
+---
+
+## Example alert
+
+TradingView alert message:
+{
+  "action": "{{strategy.order.action}}",
+  "symbol": "{{ticker}}",
+  "timestamp": "{{timenow}}",
+  "buy_pct": "0.0007",
+  "amount": "7",
+  "client_secret": "—your random client secret-"
+}
+
+Legend:
+- action: returns the string "buy" or "sell" for the executed order
+- symbol: returns the trading pair, e.g. BTCUSDT
+- timestamp: returns the current fire time of the alert
+- buy_pct: defines the percentage of the total USDT balance to be used for a buy order
+- amount: defines the amount to be used for a buy order
+- client_secret: defines your personally defined client secret
+
+Rule: 
+- If both the "buy_pct" and "amount" fields are provided, the "amount" field takes precedence. In this case, the value in the 'buy_pct' field is ignored.
+- If the action is "sell", the total asset balance is sold
+
