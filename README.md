@@ -55,4 +55,3 @@ Rule:
 - If both the "buy_pct" and "amount" fields are provided, the "amount" field takes precedence. In this case, the value in the 'buy_pct' field is ignored.
 - If the action is "sell", the total asset balance is sold
 
-
