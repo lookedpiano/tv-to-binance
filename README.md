@@ -40,7 +40,7 @@ TradingView alert message:
   "timestamp": "{{timenow}}",
   "buy_pct": "0.0007",
   "amount": "7",
-  "client_secret": "—your random client secret-"
+  "client_secret": "---client secret---"
 }
 
 Legend:
