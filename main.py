@@ -90,7 +90,11 @@ def get_filter_value(filters, filter_type, key):
     raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
 
 def log_webhook_delimiter(at_point: str):
-    logging.info(f"====================={at_point}=====================")
+    line = f" Webhook {at_point} "
+    border = "─" * (len(line) + 2)
+    logging.info(f"┌{border}┐")
+    logging.info(f"│ {line} │")
+    logging.info(f"└{border}┘")
 
 
 # -----------------------
@@ -732,7 +736,7 @@ def healthz():
 # -------------------------
 @app.route(WEBHOOK_REQUEST_PATH, methods=['POST'])
 def webhook():
-    log_webhook_delimiter("start")
+    log_webhook_delimiter("START")
 
     try:
         # JSON validation
@@ -798,7 +802,7 @@ def webhook():
         return jsonify(result), status_code
     
     finally:
-        log_webhook_delimiter("end")
+        log_webhook_delimiter("END")
 
 
 # -------------------------
