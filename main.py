@@ -145,9 +145,8 @@ def validate_order_qty(symbol: str, qty: Decimal, price: Decimal, min_qty: Decim
     If invalid, response_dict contains a warning.
     """
 
-    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}")
     total_investment = qty * price
-    logging.info(f"[INVESTMENT] Total investment ≈ {total_investment:.4f} USDT")
+    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price} with an approx. total investment≈{total_investment:.4f} USDT")
 
     if qty <= Decimal("0"):
         logging.warning("Trade qty is zero or negative after rounding. Aborting.")
