@@ -51,8 +51,9 @@ Legend:
 - amount: defines the amount to be used for a buy order
 - client_secret: defines your personally defined client secret
 
-Rule: 
-- If both the "buy_pct" and "amount" fields are provided, the "amount" field takes precedence. In this case, the value in the 'buy_pct' field is ignored.
+Rule:
+- If the action is "buy", exactly one of the fields "buy_pct" or "amount" must be provided.
+-- If both are provided → the payload is rejected.
+-- If neither is provided → the payload is rejected.
+-- If only one is provided → the payload is valid.
 - If the action is "sell", the total asset balance is sold
-
-
