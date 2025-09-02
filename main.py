@@ -89,11 +89,6 @@ def get_filter_value(filters, filter_type, key):
             return f.get(key)
     raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
 
-def log_order_safeguards(symbol: str, qty: Decimal, price: Decimal):
-    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}")
-    total_investment = qty * price
-    logging.info(f"[INVESTMENT] Total investment ≈ {total_investment:.4f} USDT")
-
 def log_webhook_delimiter(at_point: str):
     logging.info(f"====================={at_point}=====================")
 
@@ -143,12 +138,17 @@ def validate_secret(data):
         return False, jsonify({"error": "Unauthorized"}), 401
     return True, None
 
-def validate_order_qty(qty: Decimal, price: Decimal, min_qty: Decimal, min_notional: Decimal) -> tuple[bool, dict, int]:
+def validate_order_qty(symbol: str, qty: Decimal, price: Decimal, min_qty: Decimal, min_notional: Decimal) -> tuple[bool, dict, int]:
     """
     Validate order quantity and notional against exchange filters.
     Returns (is_valid, response_dict, http_status).
     If invalid, response_dict contains a warning.
     """
+
+    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price}")
+    total_investment = qty * price
+    logging.info(f"[INVESTMENT] Total investment ≈ {total_investment:.4f} USDT")
+
     if qty <= Decimal("0"):
         logging.warning("Trade qty is zero or negative after rounding. Aborting.")
         return False, {"warning": "Calculated trade size too small after rounding"}, 200
@@ -161,7 +161,7 @@ def validate_order_qty(qty: Decimal, price: Decimal, min_qty: Decimal, min_notio
         logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}. Aborting.")
         return False, {"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}, 200
 
-    logging.info("Successfully validated. Proceeding...")
+    logging.info("[SAFEGUARDS] Successfully validated. Proceeding with trade order placement.")
     return True, {}, 200
 
 def validate_and_normalize_buy_fields(is_buy: bool, buy_pct_raw, amt_raw):
@@ -514,8 +514,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
                     logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, final_qty={qty}, raw_qty={raw_qty}")
-                    log_order_safeguards(symbol, qty, price)
-                    is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
+                    is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
                     
@@ -552,8 +551,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
                     logging.info(f"[EXECUTE MARGIN BUY] {symbol}: invest={invest_usdt}, leverage={leverage}, final_qty={qty}, raw_qty={raw_qty}")
-                    log_order_safeguards(symbol, qty, price)
-                    is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
+                    is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
 
@@ -598,8 +596,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                         return response
                     qty = quantize_quantity(asset_free, step_size)
                     logging.info(f"[EXECUTE SPOT SELL] {symbol}: asset_free={asset_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-                    log_order_safeguards(symbol, qty, price)
-                    is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
+                    is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
                     
@@ -631,8 +628,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
 
                     qty = quantize_quantity(asset_free, step_size)
                     logging.info(f"[EXECUTE MARGIN SELL] {symbol}: sell_qty={qty}")
-                    log_order_safeguards(symbol, qty, price)
-                    is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
+                    is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
 
