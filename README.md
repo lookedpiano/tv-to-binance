@@ -20,7 +20,7 @@ It is intended solely for **educational and demonstration purposes** as part of 
 
 1. Create a TradingView account and define your own alerts
 2. Create a Binance account and Binance API key in your own account with Reading and Spot & Margin Trading restrictions
-3. Create a Render account and setup a new web service with this public Git repository as Source Code
+3. Create a Render account and setup a new web service with this Git repository as Source Code
 
 ---
 
