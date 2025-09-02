@@ -161,6 +161,7 @@ def validate_order_qty(qty: Decimal, price: Decimal, min_qty: Decimal, min_notio
         logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}. Aborting.")
         return False, {"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}, 200
 
+    logging.info("Successfully validated. Proceeding...")
     return True, {}, 200
 
 def validate_and_normalize_buy_fields(is_buy: bool, buy_pct_raw, amt_raw):
