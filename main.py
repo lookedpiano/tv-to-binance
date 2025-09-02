@@ -589,14 +589,14 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
             if trade_type == "SPOT":
                 # Sell on spot account only
                 try:
-                    base_free = get_spot_asset_free(base_asset)
-                    if base_free <= Decimal("0"):
+                    asset_free = get_spot_asset_free(base_asset)
+                    if asset_free <= Decimal("0"):
                         logging.warning(f"No spot {base_asset} balance to sell. Aborting.")
                         response = {"warning": f"No spot {base_asset} balance to sell. Aborting."}, 200
                         #logging.info(f"Sell attempt aborted due to empty balance, returning response: {response}")
                         return response
-                    qty = quantize_quantity(base_free, step_size)
-                    logging.info(f"[EXECUTE SPOT SELL] {symbol}: base_free={base_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
+                    qty = quantize_quantity(asset_free, step_size)
+                    logging.info(f"[EXECUTE SPOT SELL] {symbol}: asset_free={asset_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
                     log_order_safeguards(symbol, qty, price)
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
                     if not is_valid:
@@ -616,19 +616,19 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                 try:
                     before = snapshot_balances()
 
-                    # TODO: use existing function _get_margin_free to get base_free
+                    # TODO: use existing function _get_margin_free to get asset_free
                     acc = client.get_margin_account()
-                    base_free = Decimal("0")
+                    asset_free = Decimal("0")
                     for a in acc.get("userAssets", []):
                         if a.get("asset") == base_asset:
-                            base_free = Decimal(str(a.get("free", "0")))
+                            asset_free = Decimal(str(a.get("free", "0")))
                             break
 
-                    if base_free <= Decimal("0"):
+                    if asset_free <= Decimal("0"):
                         logging.warning(f"No margin {base_asset} balance to sell. Aborting.")
                         return {"warning": f"No margin {base_asset} balance to sell. Aborting."}, 200
 
-                    qty = quantize_quantity(base_free, step_size)
+                    qty = quantize_quantity(asset_free, step_size)
                     logging.info(f"[EXECUTE MARGIN SELL] {symbol}: sell_qty={qty}")
                     log_order_safeguards(symbol, qty, price)
                     is_valid, resp_dict, status = validate_order_qty(qty, price, min_qty, min_notional)
