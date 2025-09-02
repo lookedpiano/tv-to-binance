@@ -5,6 +5,7 @@ This repository contains sample code for the automated connection between **Trad
 It is intended solely for **educational and demonstration purposes** as part of my Bitcoin and crypto consulting services.
 
 
+
 ## ⚠️ Disclaimer
 
 - This repository does **not constitute financial or investment advice**.
@@ -14,6 +15,7 @@ It is intended solely for **educational and demonstration purposes** as part of 
 - By using this code, the user acknowledges that they assume full responsibility for all actions associated with their own accounts and API keys.
 
 
+
 ## Usage
 
 1. Create a TradingView account and define your own alerts
@@ -21,10 +23,12 @@ It is intended solely for **educational and demonstration purposes** as part of 
 3. Create a Render account and setup a new web service with this Git repository as Source Code
 
 
+
 ## Purpose
 
 The goal is to **demonstrate in a practical manner** to clients how automated trading can be implemented technically as part of my consulting services.  
 The focus is on **education and self-empowerment**—not on the execution of trades by me.
+
 
 
 ## Example alert
