@@ -53,7 +53,7 @@ Legend:
 
 Rule:
 - If the action is "buy", exactly one of the fields "buy_pct" or "amount" must be provided.
- - If both are provided → the payload is rejected.
- - If neither is provided → the payload is rejected.
- - If only one is provided → the payload is valid.
+  - If both are provided → the payload is rejected.
+  - If neither is provided → the payload is rejected.
+  - If only one is provided → the payload is valid.
 - If the action is "sell", the total asset balance is sold
