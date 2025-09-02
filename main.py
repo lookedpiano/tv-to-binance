@@ -420,7 +420,7 @@ def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decim
         else:
             raise
 
-    logging.info(f"[ORDER] {side} executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+    logging.info(f"[ORDER] {side} successfully executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
     return {"status": f"spot_{side.lower()}_executed", "order": resp}, 200
 
 
@@ -564,7 +564,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                         sideEffectType="MARGIN_BUY",
                         isIsolated=False
                     )
-                    logging.info(f"[MARGIN ORDER] {side} executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                    logging.info(f"[MARGIN ORDER] {side} successfully executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
                     
                     after = snapshot_balances()
                     # Compare spot balances only
@@ -655,7 +655,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                     except Exception as e:
                         logging.warning(f"Post-sell USDT auto-repay failed: {e}")
 
-                    logging.info(f"[MARGIN ORDER] {side} executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+                    logging.info(f"[MARGIN ORDER] {side} successfully executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
                     
                     after = snapshot_balances()
                     # Compare spot balances only
