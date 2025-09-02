@@ -146,7 +146,7 @@ def validate_order_qty(symbol: str, qty: Decimal, price: Decimal, min_qty: Decim
     """
 
     total_investment = qty * price
-    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol} with qty={qty} at price={price} with an approx. total investment≈{total_investment:.4f} USDT")
+    logging.info(f"[SAFEGUARDS] Validate order qty for {symbol}: qty={qty}, price={price} and approx. total investment≈{total_investment:.2f} USDT")
 
     if qty <= Decimal("0"):
         logging.warning("Trade qty is zero or negative after rounding. Aborting.")
