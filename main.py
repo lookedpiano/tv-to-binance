@@ -756,7 +756,7 @@ def webhook():
 
         # Log payload without secret
         data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
-        logging.info(f"[WEBHOOK] Received payload (no {SECRET_FIELD}): {data_for_log}")
+        logging.info(f"[WEBHOOK] Received payload: {data_for_log}")
         
         # Parse fields
         try:
