@@ -502,8 +502,10 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
         # bottleneck for margin trades
         if trade_type == "MARGIN":
             # TODO: find a way to secure two signals (spot and margin)
-            logging.info(f"Waiting for possible spot buy to be over. Proceeding in 7 seconds...")
-            time.sleep(7)
+            # logging.info(f"Waiting for possible spot buy to be over. Proceeding in 7 seconds...")
+            # time.sleep(7)
+            logging.warning("MARGIN-trading to be implemented. We'll be right back...")
+            return {"error": "MARGIN-trading not yet implemented."}, 200
 
         # BUY flow
         if side == "BUY":
