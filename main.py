@@ -747,9 +747,11 @@ def webhook():
             return error_response
         
         # Timestamp validation
+        '''
         valid_ts, error_response = validate_timestamp(data)
         if not valid_ts:
             return error_response
+        '''
         
         # Secret validation
         valid_secret, error_response = validate_secret(data)
