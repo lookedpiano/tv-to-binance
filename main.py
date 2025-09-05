@@ -57,7 +57,6 @@ client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT"}
 SECRET_FIELD = "client_secret"
 WEBHOOK_REQUEST_PATH = "/to-the-moon"
-MAX_REQUEST_AGE = 10  # seconds
 MAX_CROSS_LEVERAGE = 3
 # Allowlist of known TradingView alert IPs (must keep updated)
 # See: https://www.tradingview.com/support/solutions/43000529348
@@ -125,27 +124,6 @@ def validate_json():
         logging.exception(f"[FATAL ERROR] Failed to parse JSON payload: {e}")
         logging.info(f"[RAW DATA]\n{raw}")
         return None, jsonify({"error": "Invalid JSON payload"}), 400
-
-def validate_timestamp(data):
-    """Validate that the timestamp exists, is a proper ISO 8601 string, and is recent."""
-    timestamp = data.get("timestamp")
-    if not timestamp:
-        logging.warning("[TIMESTAMP] Missing timestamp")
-        return False, (jsonify({"error": "Missing timestamp"}), 400)
-
-    try:
-        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))  # Z = UTC
-        ts = int(dt.timestamp())
-    except ValueError:
-        logging.warning("[TIMESTAMP] Invalid timestamp format")
-        return False, (jsonify({"error": "Invalid timestamp"}), 400)
-
-    now = int(time.time())
-    if abs(now - ts) > MAX_REQUEST_AGE:
-        logging.warning("[TIMESTAMP] Request expired")
-        return False, (jsonify({"error": "Request expired"}), 401)
-
-    return True, None
 
 def validate_secret(data):
     """Validate that the webhook secret is correct."""
@@ -759,13 +737,6 @@ def webhook():
         data, error_response = validate_json()
         if not data:
             return error_response
-        
-        # Timestamp validation
-        '''
-        valid_ts, error_response = validate_timestamp(data)
-        if not valid_ts:
-            return error_response
-        '''
         
         # Secret validation
         valid_secret, error_response = validate_secret(data)

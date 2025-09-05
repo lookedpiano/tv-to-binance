@@ -37,7 +37,6 @@ TradingView alert message:
 {
   "action": "{{strategy.order.action}}",
   "symbol": "{{ticker}}",
-  "timestamp": "{{timenow}}",
   "buy_pct": "0.0007",
   "amount": "7",
   "client_secret": "-your client secret-"
@@ -46,7 +45,6 @@ TradingView alert message:
 Legend:
 - action: returns the string "buy" or "sell" for the executed order
 - symbol: returns the trading pair, e.g. BTCUSDT
-- timestamp: returns the current fire time of the alert
 - buy_pct: defines the percentage of the total USDT balance to be used for a buy order
 - amount: defines the amount to be used for a buy order
 - client_secret: defines your personally defined client secret
