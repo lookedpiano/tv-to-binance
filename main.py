@@ -96,6 +96,19 @@ def log_webhook_delimiter(at_point: str):
     logging.info(f"│ {line} │")
     logging.info(f"└{border}┘")
 
+def log_parsed_payload(action, symbol, buy_pct_raw, amt_raw, trade_type, leverage_raw=None):
+    """
+    Logs the parsed payload fields. Includes leverage only if type is MARGIN.
+    """
+    log_msg = (
+        f"[PARSE] action={action}, symbol={symbol}, "
+        f"buy_pct={buy_pct_raw}, amount={amt_raw}, type={trade_type}"
+    )
+    if trade_type == "MARGIN":
+        log_msg += f", leverage={leverage_raw}"
+    
+    logging.info(log_msg)
+
 
 # -----------------------
 # Validation functions
@@ -775,7 +788,7 @@ def webhook():
             logging.exception("Failed to extract fields")
             return jsonify({"error": "Invalid fields"}), 400
 
-        logging.info(f"[PARSE] action={action}, symbol={symbol}, buy_pct={buy_pct_raw}, amount={amt_raw}, type={trade_type}, leverage={leverage_raw}")
+        log_parsed_payload(action, symbol, buy_pct_raw, amt_raw, trade_type, leverage_raw)
 
         # Easter egg check
         resp = detect_tradingview_placeholder(action)
