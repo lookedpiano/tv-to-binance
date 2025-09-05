@@ -739,6 +739,7 @@ def healthz():
 @app.route(WEBHOOK_REQUEST_PATH, methods=['POST'])
 def webhook():
     log_webhook_delimiter("START")
+    start_time = time.perf_counter()
 
     try:
         # JSON validation
@@ -806,7 +807,9 @@ def webhook():
         return jsonify(result), status_code
     
     finally:
-        log_webhook_delimiter("END")
+        end_time = time.perf_counter()
+        elapsed = end_time - start_time
+        log_webhook_delimiter(f"END (elapsed: {elapsed:.4f} seconds)")
 
 
 # -------------------------
