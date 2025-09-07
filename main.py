@@ -510,7 +510,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                         return {"error": error_msg}, 200
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
-                    logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, qty={qty}, raw_qty={raw_qty}")
+                    logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, qty={qty}, raw_qty={raw_qty:.16f}")
                     is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
@@ -547,7 +547,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
 
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
-                    logging.info(f"[EXECUTE MARGIN BUY] {symbol}: invest={invest_usdt}, leverage={leverage}, qty={qty}, raw_qty={raw_qty}")
+                    logging.info(f"[EXECUTE MARGIN BUY] {symbol}: invest={invest_usdt}, leverage={leverage}, qty={qty}, raw_qty={raw_qty:.16f}")
                     is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
