@@ -99,6 +99,14 @@ def quantize_down(value: Decimal, precision: str) -> Decimal:
     """
     return value.quantize(Decimal(precision), rounding=ROUND_DOWN)
 
+def display_decimal(value: Decimal, places: int) -> str:
+    """
+    Return a string of the Decimal truncated to `places` decimal places.
+    Safe for display/logging (does not affect the underlying value).
+    """
+    quantizer = Decimal("1").scaleb(-places)  # e.g. places=16 → Decimal("0.0000000000000001")
+    return str(value.quantize(quantizer, rounding=ROUND_DOWN))
+
 def log_webhook_delimiter(at_point: str):
     line = f" Webhook {at_point} "
     border = "─" * (len(line) + 2)
@@ -521,8 +529,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                         return {"error": error_msg}, 200
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
-                    raw_qty_displayed = quantize_down(raw_qty, "0.0000000000000001")
-                    logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, qty={qty}, raw_qty={raw_qty_displayed}")
+                    logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, qty={qty}, raw_qty={display_decimal(raw_qty, 16)}")
                     is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
@@ -559,8 +566,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
 
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
-                    raw_qty_displayed = quantize_down(raw_qty, "0.0000000000000001")
-                    logging.info(f"[EXECUTE MARGIN BUY] {symbol}: invest={invest_usdt}, leverage={leverage}, qty={qty}, raw_qty={raw_qty_displayed}")
+                    logging.info(f"[EXECUTE MARGIN BUY] {symbol}: invest={invest_usdt}, leverage={leverage}, qty={qty}, raw_qty={display_decimal(raw_qty, 16)}")
                     is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
