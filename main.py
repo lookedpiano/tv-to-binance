@@ -88,6 +88,17 @@ def get_filter_value(filters, filter_type, key):
             return f.get(key)
     raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
 
+def quantize_down(value: Decimal, precision: str) -> Decimal:
+    """
+    Quantize a Decimal value to the given precision string,
+    rounding down to avoid exceeding allowed precision.
+
+    Example:
+        quantize_down(Decimal("1.23456789"), "0.00000001")
+        -> Decimal("1.23456789")
+    """
+    return value.quantize(Decimal(precision), rounding=ROUND_DOWN)
+
 def log_webhook_delimiter(at_point: str):
     line = f" Webhook {at_point} "
     border = "─" * (len(line) + 2)
@@ -390,7 +401,7 @@ def resolve_invest_usdt(usdt_free, amt, buy_pct) -> tuple[Decimal | None, str | 
         return amt, None
     
     # Use buy_pct if amt_raw is missing
-    invest_usdt = (usdt_free * buy_pct).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+    invest_usdt = quantize_down(usdt_free * buy_pct, "0.00000001")
     logging.info(f"[INVEST:BUY-PERCENTAGE] Using buy_pct={buy_pct}, invest_usdt={invest_usdt}")
     return invest_usdt, None
 
@@ -510,7 +521,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                         return {"error": error_msg}, 200
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
-                    raw_qty_displayed = raw_qty.quantize(Decimal("0.0000000000000001"), rounding=ROUND_DOWN)
+                    raw_qty_displayed = quantize_down(raw_qty, "0.0000000000000001")
                     logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, qty={qty}, raw_qty={raw_qty_displayed}")
                     is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
@@ -539,7 +550,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                         logging.warning(f"[MARGIN LEVERAGE ERROR] {error_msg}")
                         return {"error": error_msg}, 200
 
-                    max_borrow = (usdt_free * (leverage - Decimal("1"))).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                    max_borrow = quantize_down(usdt_free * (leverage - Decimal("1")), "0.00000001")
                     needed_borrow = invest_usdt - usdt_free if invest_usdt > usdt_free else Decimal("0")
                     logging.info(f"[MARGIN BUY] max_borrow={max_borrow}, needed_borrow={needed_borrow}")
                     if needed_borrow > max_borrow:
@@ -548,7 +559,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
 
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
-                    raw_qty_displayed = raw_qty.quantize(Decimal("0.0000000000000001"), rounding=ROUND_DOWN)
+                    raw_qty_displayed = quantize_down(raw_qty, "0.0000000000000001")
                     logging.info(f"[EXECUTE MARGIN BUY] {symbol}: invest={invest_usdt}, leverage={leverage}, qty={qty}, raw_qty={raw_qty_displayed}")
                     is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
