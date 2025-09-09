@@ -451,7 +451,7 @@ def resolve_trade_amount(free_balance: Decimal, amt: Decimal | None, pct: Decima
 
     # pct path
     resolved_amt = quantize_down(free_balance * pct, "0.00000001")
-    logging.info(f"[INVEST:{side}-PERCENTAGE] Using {pct=}, resolved_amt={resolved_amt}")
+    logging.info(f"[INVEST:{side}-PERCENTAGE] Using pct={float(pct)}, resolved_amt={resolved_amt}")
     return resolved_amt, None
 
 def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decimal, place_order_fn):
