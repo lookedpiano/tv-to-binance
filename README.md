@@ -33,25 +33,36 @@ The focus is on **education and self-empowerment**—not on the execution of tra
 
 ## Example alert
 
-TradingView alert message:
+TradingView alert message to buy with a fixed amount of 1000 USDT and to sell 80 % of the base asset:
 {
   "action": "{{strategy.order.action}}",
   "symbol": "{{ticker}}",
-  "buy_pct": "0.0007",
-  "amount": "7",
+  "buy_amount": "1000",
+  "sell_pct": "0.8",
+  "client_secret": "-your client secret-"
+}
+
+TradingView alert message to buy 34 % of available USDT and to sell a fixed amount of 100 of the base asset:
+{
+  "action": "{{strategy.order.action}}",
+  "symbol": "{{ticker}}",
+  "buy_pct": "0.34",
+  "sell_amount": "100",
   "client_secret": "-your client secret-"
 }
 
 Legend:
 - action: returns the string "buy" or "sell" for the executed order
-- symbol: returns the trading pair, e.g. BTCUSDT
-- buy_pct: defines the percentage of the total USDT balance to be used for a buy order
-- amount: defines the amount to be used for a buy order
+- symbol: returns the trading pair, e.g. BTCUSDT, ADAUSDT, etc.
+- buy_pct: A decimal fraction (0 < buy_pct <= 1) indicating what fraction of your available USDT balance should be invested in the buy order (Example: 0.05 = invest 5 % of available USDT).
+- buy_amount: An explicit numeric value specifying the exact USDT amount to invest in the buy order. Must not exceed your available USDT balance.
+- sell_pct: A decimal fraction (0 < sell_pct <= 1) indicating what fraction of your available base asset balance (e.g., ADA in ADAUSDT) should be sold (Example: 0.25 = sell 25 % of your ADA holdings).
+- sell_amount: An explicit numeric value specifying the exact base asset amount to sell. Must not exceed your available base asset balance.
 - client_secret: defines your personally defined client secret
 
 Rule:
-- If the action is "buy", exactly one of the fields "buy_pct" or "amount" must be provided.
-  - If both are provided → the payload is rejected.
-  - If neither is provided → the payload is rejected.
-  - If only one is provided → the payload is valid.
-- If the action is "sell", the total asset balance is sold
+- If the action is "buy" or "sell", exactly one of the following must be supplied in the payload:
+  - a percentage field (buy_pct for BUY, sell_pct for SELL) OR
+  - an amount field (buy_amount for BUY, sell_amount for SELL)
+- If both are present → the payload is rejected.
+- If neither is present → the payload is rejected.

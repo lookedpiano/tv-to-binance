@@ -55,6 +55,18 @@ client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 # Configuration
 # -------------------------
 ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT"}
+ALLOWED_FIELDS = {
+    "action",
+    "symbol",
+    "buy_pct",
+    "buy_amount",
+    "sell_pct",
+    "sell_amount",
+    "type",
+    "leverage",
+    "client_secret"
+}
+REQUIRED_FIELDS = {"action", "symbol", "client_secret"}
 SECRET_FIELD = "client_secret"
 WEBHOOK_REQUEST_PATH = "/to-the-moon"
 MAX_CROSS_LEVERAGE = 3
@@ -114,17 +126,24 @@ def log_webhook_delimiter(at_point: str):
     logging.info(f"│ {line} │")
     logging.info(f"└{border}┘")
 
-def log_parsed_payload(action, symbol, buy_pct_raw, amt_raw, trade_type, leverage_raw=None):
+def log_parsed_payload(action, symbol, buy_pct_raw, buy_amt_raw, sell_pct_raw, sell_amt_raw, trade_type, leverage_raw=None):
     """
     Logs the parsed payload fields. Includes leverage only if type is MARGIN.
+    Shows buy_pct and buy_amount for BUY actions and sell_pct and sell_amount for SELL actions.
     """
-    log_msg = (
-        f"[PARSE] action={action}, symbol={symbol}, "
-        f"buy_pct={buy_pct_raw}, amount={amt_raw}, type={trade_type}"
-    )
+    # Base log
+    log_msg = f"[PARSE] action={action}, symbol={symbol}, type={trade_type}"
+
+    # Action-specific logging
+    if action == "BUY":
+        log_msg += f", buy_pct={buy_pct_raw}, buy_amount={buy_amt_raw}"
+    elif action == "SELL":
+        log_msg += f", sell_pct={sell_pct_raw}, sell_amount={sell_amt_raw}"
+
+    # Add leverage only for margin
     if trade_type == "MARGIN":
         log_msg += f", leverage={leverage_raw}"
-    
+
     logging.info(log_msg)
 
 
@@ -142,14 +161,14 @@ def validate_json():
         raw = request.data.decode("utf-8", errors="ignore")
         logging.exception(f"[FATAL ERROR] Failed to parse JSON payload: {e}")
         logging.info(f"[RAW DATA]\n{raw}")
-        return None, jsonify({"error": "Invalid JSON payload"}), 400
+        return None, (jsonify({"error": "Invalid JSON payload"}), 400)
 
 def validate_secret(data):
     """Validate that the webhook secret is correct."""
     secret_from_request = data.get(SECRET_FIELD)
     if not secret_from_request or not hmac.compare_digest(str(secret_from_request), str(WEBHOOK_SECRET)):
         logging.warning("[SECURITY] Unauthorized attempt (invalid or missing secret)")
-        return False, jsonify({"error": "Unauthorized"}), 401
+        return False, (jsonify({"error": "Unauthorized"}), 401)
     return True, None
 
 def validate_order_qty(symbol: str, qty: Decimal, price: Decimal, min_qty: Decimal, min_notional: Decimal) -> tuple[bool, dict, int]:
@@ -178,50 +197,74 @@ def validate_order_qty(symbol: str, qty: Decimal, price: Decimal, min_qty: Decim
     logging.info("[SAFEGUARDS] Successfully validated. Proceeding with trade order placement.")
     return True, {}, 200
 
-def validate_and_normalize_buy_fields(is_buy: bool, buy_pct_raw, amt_raw):
+def validate_and_normalize_trade_fields(action: str, is_buy: bool, buy_pct_raw, buy_amt_raw, sell_pct_raw, sell_amt_raw):
     """
-    Validates that exactly one of buy_pct_raw or amt_raw is provided for buy orders,
-    converts them to Decimal, ensures numeric & positive, and returns:
-        (buy_pct: Decimal | None, amount: Decimal | None, error_response: Response | None)
-    For sell orders, both are ignored and return (None, None, None)
+    Validates and normalizes trade fields for BUY or SELL.
+    - For BUY: exactly one of (buy_pct_raw, buy_amt_raw) must be provided.
+    - For SELL: exactly one of (sell_pct_raw, sell_amt_raw) must be provided.
+    - Pct must be in (0, 1].
+    - Amount must be positive Decimal.
+    
+    Returns:
+        (pct: Decimal | None,
+         amt: Decimal | None,
+         error_response: Response | None)
     """
-    # Skip validation if not a BUY order
-    if not is_buy:
-        return None, None, None
+
+    # Select relevant fields based on action
+    pct_raw = buy_pct_raw if is_buy else sell_pct_raw
+    amt_raw = buy_amt_raw if is_buy else sell_amt_raw
+    pct_name = "buy_pct" if is_buy else "sell_pct"
+    amt_name = "buy_amount" if is_buy else "sell_amount"
 
     # Case 1: both provided → reject
-    if buy_pct_raw is not None and amt_raw is not None:
-        logging.error("Both buy_pct and amount provided — only one is allowed.")
-        return None, None, (jsonify({"error": "Please provide either buy_pct or amount, not both."}), 400)
+    if pct_raw is not None and amt_raw is not None:
+        logging.error(f"Both {pct_name} and {amt_name} provided — only one is allowed.")
+        return None, None, (jsonify({"error": f"Please provide either {pct_name} or {amt_name}, not both."}), 400)
 
     # Case 2: neither provided → reject
-    if buy_pct_raw is None and amt_raw is None:
-        logging.error("Neither buy_pct nor amount provided — one is required for a buy order.")
-        return None, None, (jsonify({"error": "Please provide either buy_pct or amount."}), 400)
-    
-    # If buy_pct was provided → check numeric & range
-    if buy_pct_raw is not None:
-        try:
-            buy_pct = Decimal(str(buy_pct_raw))
-            if not (Decimal("0") < buy_pct <= Decimal("1")):
-                logging.error(f"buy_pct out of range: {buy_pct_raw}")
-                return None, None, (jsonify({"error": "buy_pct must be a number between 0 and 1."}), 400)
-        except (InvalidOperation, ValueError):
-            logging.error(f"Invalid buy_pct value: {buy_pct_raw}")
-            return None, None, (jsonify({"error": "buy_pct must be a valid number between 0 and 1."}), 400)
-        return buy_pct, None, None
+    if pct_raw is None and amt_raw is None:
+        logging.error(f"Neither {pct_name} nor {amt_name} provided — one is required for a {action} order.")
+        return None, None, (jsonify({"error": f"Please provide either {pct_name} or {amt_name}."}), 400)
 
-    # If amount was provided → check numeric & positive
+    # If pct provided → check numeric & range
+    if pct_raw is not None:
+        try:
+            pct = Decimal(str(pct_raw))
+            if not (Decimal("0") < pct <= Decimal("1")):
+                logging.error(f"{pct_name} out of range: {pct_raw}")
+                return None, None, (jsonify({"error": f"{pct_name} must be a number between 0 and 1."}), 400)
+            return pct, None, None
+        except (InvalidOperation, ValueError):
+            logging.error(f"Invalid {pct_name} value: {pct_raw}")
+            return None, None, (jsonify({"error": f"{pct_name} must be a valid number between 0 and 1."}), 400)
+
+    # If amount provided → check numeric & positive
     if amt_raw is not None:
         try:
             amt = Decimal(str(amt_raw))
             if amt <= 0:
-                logging.error(f"amount must be positive, got: {amt_raw}")
-                return None, None, (jsonify({"error": "amount must be greater than zero."}), 400)
+                logging.error(f"{amt_name} must be positive, got: {amt_raw}")
+                return None, None, (jsonify({"error": f"{amt_name} must be greater than zero."}), 400)
+            return None, amt, None
         except (InvalidOperation, ValueError):
-            logging.error(f"Invalid amount value: {amt_raw}")
-            return None, None, (jsonify({"error": "amount must be a valid number."}), 400)
-        return None, amt, None
+            logging.error(f"Invalid {amt_name} value: {amt_raw}")
+            return None, None, (jsonify({"error": f"{amt_name} must be a valid number."}), 400)
+        
+def validate_fields(data: dict):
+    # 1. Reject unknown fields
+    unknown_fields = set(data.keys()) - ALLOWED_FIELDS
+    if unknown_fields:
+        logging.error(f"Unknown fields in payload: {unknown_fields}")
+        return False, (jsonify({"error": f"Unknown fields: {list(unknown_fields)}"}), 400)
+
+    # 2. Check required fields
+    missing_fields = REQUIRED_FIELDS - set(data.keys())
+    if missing_fields:
+        logging.error(f"Missing required fields: {missing_fields}")
+        return False, (jsonify({"error": f"Missing required fields: {list(missing_fields)}"}), 400)
+
+    return True, None
 
 
 # -------------------------
@@ -391,27 +434,25 @@ def place_margin_market_order(symbol, side, quantity):
                         isIsolated=False
                     )
 
-def resolve_invest_usdt(usdt_free, amt, buy_pct) -> tuple[Decimal | None, str | None]:
+def resolve_trade_amount(free_balance: Decimal, amt: Decimal | None, pct: Decimal | None, side: str) -> tuple[Decimal | None, str | None]:
     """
-    Decide how much USDT to invest.
-    
-    Returns:
-        (invest_usdt, error_message)
-        - invest_usdt (Decimal) if valid, else None
-        - error_message (str) if invalid, else None
+    Resolve the actual trade amount based on either pct or amt.
+    - For BUY: free_balance is the quote asset (e.g., USDT balance).
+    - For SELL: free_balance is the base asset (e.g., ADA balance).
+    - If amt > free_balance, return a warning and abort the order
+    Returns: (resolved_amount, error_msg)
     """
     if amt is not None:
-        if amt > usdt_free:
-            logging.warning(f"[INVEST:AMOUNT] Balance insufficient: requested amount={amt}, available={usdt_free}")
-            return None, f"Balance insufficient: requested={amt}, available={usdt_free}"
-
-        logging.info(f"[INVEST:AMOUNT] Using explicit amount={amt}")
+        if amt > free_balance:
+            logging.warning(f"[INVEST:{side}-AMOUNT] Balance insufficient: requested={amt}, available={free_balance}")
+            return None, f"Balance insufficient: requested={amt}, available={free_balance}"
+        logging.info(f"[INVEST:{side}-AMOUNT] Using explicit amount={amt}")
         return amt, None
-    
-    # Use buy_pct if amt_raw is missing
-    invest_usdt = quantize_down(usdt_free * buy_pct, "0.00000001")
-    logging.info(f"[INVEST:BUY-PERCENTAGE] Using buy_pct={buy_pct}, invest_usdt={invest_usdt}")
-    return invest_usdt, None
+
+    # pct path
+    resolved_amt = quantize_down(free_balance * pct, "0.00000001")
+    logging.info(f"[INVEST:{side}-PERCENTAGE] Using {pct=}, resolved_amt={resolved_amt}")
+    return resolved_amt, None
 
 def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decimal, place_order_fn):
     """
@@ -483,7 +524,7 @@ def _get_margin_debt(asset: str) -> Decimal:
 # ---------------------------------
 # Unified trade execution
 # ---------------------------------
-def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: str ="SPOT", leverage_raw=None, place_order_fn=None):
+def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="SPOT", leverage_raw=None, place_order_fn=None):
     """
     Unified trade executor for SPOT and Cross-Margin.
     - Handles buy/sell, quantity math, filter validation, and order placement.
@@ -523,7 +564,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                 # SPOT buy -> use spot USDT balance
                 try:
                     usdt_free = get_spot_asset_free("USDT")
-                    invest_usdt, error_msg = resolve_invest_usdt(usdt_free, amt, buy_pct)
+                    invest_usdt, error_msg = resolve_trade_amount(usdt_free, amt, pct, side="BUY")
                     if error_msg:
                         logging.warning(f"[INVEST ERROR] {error_msg}")
                         return {"error": error_msg}, 200
@@ -545,9 +586,9 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                 # Cross-Margin BUY (long with optional borrowing)
                 try:
                     before = snapshot_balances()
-
+                    '''
                     usdt_free = _get_margin_free("USDT")
-                    invest_usdt, error_msg = resolve_invest_usdt(usdt_free, amt, buy_pct)
+                    invest_usdt, error_msg = resolve_invest_usdt(usdt_free, amt, pct) # TODO: replaced with resolve_trade_amount
                     if error_msg:
                         logging.warning(f"[MARGIN INVEST ERROR] {error_msg}")
                         return {"error": error_msg}, 200
@@ -581,12 +622,13 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                         isIsolated=False
                     )
                     logging.info(f"[MARGIN ORDER] {side} successfully executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-                    
+                    '''
                     after = snapshot_balances()
                     # Compare spot balances only
                     compare_spot_balances(before["spot"], after["spot"])
 
-                    return {"status": "margin_buy_executed", "order": resp, "leverage_used": str(leverage)}, 200
+                    #return {"status": "margin_buy_executed", "order": resp, "leverage_used": str(leverage)}, 200
+                    return {"status": "uncomment line above - just for compiling reasons..."}, 200
 
                 except BinanceAPIException as e:
                     logging.error(f"Binance API error during margin buy: {e.message}")
@@ -607,10 +649,12 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                     asset_free = get_spot_asset_free(base_asset)
                     if asset_free <= Decimal("0"):
                         logging.warning(f"No spot {base_asset} balance to sell. Aborting.")
-                        response = {"warning": f"No spot {base_asset} balance to sell. Aborting."}, 200
-                        #logging.info(f"Sell attempt aborted due to empty balance, returning response: {response}")
-                        return response
-                    qty = quantize_quantity(asset_free, step_size)
+                        return {"warning": f"No spot {base_asset} balance to sell. Aborting."}, 200
+                    sell_qty, error_msg = resolve_trade_amount(asset_free, amt, pct, side="SELL")
+                    if error_msg:
+                        logging.warning(f"[INVEST ERROR] {error_msg}")
+                        return {"error": error_msg}, 200
+                    qty = quantize_quantity(sell_qty, step_size)
                     logging.info(f"[EXECUTE SPOT SELL] {symbol}: asset_free={asset_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
                     is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
@@ -629,7 +673,7 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                 # IMPORTANT: Do NOT borrow the base asset to sell (no shorting).
                 try:
                     before = snapshot_balances()
-
+                    '''
                     # TODO: use existing function _get_margin_free to get asset_free
                     acc = client.get_margin_account()
                     asset_free = Decimal("0")
@@ -672,12 +716,13 @@ def execute_trade(symbol: str, side: str, buy_pct=None, amt=None, trade_type: st
                         logging.warning(f"Post-sell USDT auto-repay failed: {e}")
 
                     logging.info(f"[MARGIN ORDER] {side} successfully executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
-                    
+                    '''
                     after = snapshot_balances()
                     # Compare spot balances only
                     compare_spot_balances(before["spot"], after["spot"])
 
-                    return {"status": "margin_sell_executed", "order": resp}, 200
+                    #return {"status": "margin_sell_executed", "order": resp}, 200
+                    return {"status": "uncomment line above - just for compiling reasons..."}, 200
 
                 except BinanceAPIException as e:
                     logging.error(f"Binance API error during margin sell: {e.message}")
@@ -757,6 +802,11 @@ def webhook():
         if not data:
             return error_response
         
+        # Field validation
+        valid, error_response = validate_fields(data)
+        if not valid:
+            return error_response
+        
         # Secret validation
         valid_secret, error_response = validate_secret(data)
         if not valid_secret:
@@ -771,14 +821,16 @@ def webhook():
             action = data.get("action", "").strip().upper()
             symbol = data.get("symbol", "").strip().upper()
             buy_pct_raw = data.get("buy_pct", None)
-            amt_raw = data.get("amount", None)
+            buy_amt_raw = data.get("buy_amount", None)
+            sell_pct_raw = data.get("sell_pct", None)
+            sell_amt_raw = data.get("sell_amount", None)
             trade_type = data.get("type", "SPOT").strip().upper()  # MARGIN or SPOT
             leverage_raw = data.get("leverage", None)
         except Exception as e:
             logging.exception("Failed to extract fields")
             return jsonify({"error": "Invalid fields"}), 400
 
-        log_parsed_payload(action, symbol, buy_pct_raw, amt_raw, trade_type, leverage_raw)
+        log_parsed_payload(action, symbol, buy_pct_raw, buy_amt_raw, sell_pct_raw, sell_amt_raw, trade_type, leverage_raw)
 
         # Easter egg check
         resp = detect_tradingview_placeholder(action)
@@ -786,22 +838,24 @@ def webhook():
             return resp
         
         # Validate action and symbol
-        if action not in {"BUY", "BUY_BTC_SMALL", "SELL"}:
+        if action not in {"BUY", "SELL"}:
             logging.error(f"Invalid action: {action}")
             return jsonify({"error": "Invalid action"}), 400
         if symbol not in ALLOWED_SYMBOLS:
             logging.error(f"Symbol not allowed: {symbol}")
             return jsonify({"error": "Symbol not allowed"}), 400
 
-        is_buy = action in {"BUY", "BUY_BTC_SMALL"}
-        buy_pct, amt, error_response = validate_and_normalize_buy_fields(is_buy, buy_pct_raw, amt_raw)
+        is_buy = action == "BUY"
+        pct, amt, error_response = validate_and_normalize_trade_fields(
+            action, is_buy, buy_pct_raw, buy_amt_raw, sell_pct_raw, sell_amt_raw
+        )
         if error_response:
             return error_response
 
         result, status_code = execute_trade(
             symbol=symbol,
             side="BUY" if is_buy else "SELL",
-            buy_pct=buy_pct if is_buy else None,
+            pct=pct,
             amt=amt,
             trade_type=trade_type,
             leverage_raw=leverage_raw,
