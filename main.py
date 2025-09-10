@@ -159,7 +159,8 @@ def validate_json():
         return data, None
     except Exception as e:
         raw = request.data.decode("utf-8", errors="ignore")
-        logging.exception(f"[FATAL ERROR] Failed to parse JSON payload: {e}")
+        #logging.exception(f"[FATAL ERROR] Failed to parse JSON payload: {e}")
+        logging.exception(f"[FATAL ERROR] Failed to parse JSON payload")
         logging.info(f"[RAW DATA]\n{raw}")
         return None, (jsonify({"error": "Invalid JSON payload"}), 400)
 
