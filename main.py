@@ -171,15 +171,19 @@ def validate_secret(data):
         return False, (jsonify({"error": "Unauthorized"}), 401)
     return True, None
 
-def validate_order_qty(symbol: str, qty: Decimal, price: Decimal, min_qty: Decimal, min_notional: Decimal) -> tuple[bool, dict, int]:
+def validate_order_qty(symbol: str, side: str, qty: Decimal, price: Decimal, min_qty: Decimal, min_notional: Decimal) -> tuple[bool, dict, int]:
     """
     Validate order quantity and notional against exchange filters.
     Returns (is_valid, response_dict, http_status).
     If invalid, response_dict contains a warning.
     """
+    
+    total_value = qty * price
+    if side == "BUY":
+        logging.info(f"[INVESTMENT] Approx. total investment ≈ {total_value:.2f} USDT --> price={price}, qty={qty}")
+    elif side == "SELL":
+        logging.info(f"[PROCEEDS] Approx. total proceeds ≈ {total_value:.2f} USDT --> price={price}, qty={qty}")
 
-    total_investment = qty * price
-    logging.info(f"[INVESTMENT] Approx. total investment ≈ {total_investment:.2f} USDT --> price={price}, qty={qty}")
 
     logging.info(f"[SAFEGUARDS] Validate order qty for {symbol}: {qty}")
     if qty <= Decimal("0"):
@@ -571,7 +575,7 @@ def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="
                     raw_qty = invest_usdt / price
                     qty = quantize_quantity(raw_qty, step_size)
                     logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, qty={qty}, raw_qty={display_decimal(raw_qty, 16)}")
-                    is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
+                    is_valid, resp_dict, status = validate_order_qty(symbol, side, qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
                     
@@ -656,7 +660,7 @@ def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="
                         return {"error": error_msg}, 200
                     qty = quantize_quantity(sell_qty, step_size)
                     logging.info(f"[EXECUTE SPOT SELL] {symbol}: asset_free={asset_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-                    is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
+                    is_valid, resp_dict, status = validate_order_qty(symbol, side, qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
                     
