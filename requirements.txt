@@ -1,4 +1,4 @@
-Flask==2.3.2
-requests==2.31.0
-gunicorn==21.2.0
-python-binance==1.0.29
+Flask
+requests
+gunicorn
+python-binance
