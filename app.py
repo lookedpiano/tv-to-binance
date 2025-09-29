@@ -15,7 +15,7 @@ from binance.exceptions import BinanceAPIException, BinanceRequestException
 # -------------------------
 # Configuration
 # -------------------------
-from config.settings import (
+from config._settings import (
     ALLOWED_SYMBOLS,
     ALLOWED_FIELDS,
     REQUIRED_FIELDS,
