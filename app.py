@@ -13,6 +13,18 @@ from binance.exceptions import BinanceAPIException, BinanceRequestException
 
 
 # -------------------------
+# Configuration
+# -------------------------
+from config.settings import (
+    ALLOWED_SYMBOLS,
+    ALLOWED_FIELDS,
+    REQUIRED_FIELDS,
+    SECRET_FIELD,
+    WEBHOOK_REQUEST_PATH,
+    MAX_CROSS_LEVERAGE,
+)
+
+# -------------------------
 # Logging configuration
 # -------------------------
 logging.basicConfig(
@@ -49,28 +61,6 @@ if not PORT:
 # CLIENT INIT
 # -----------------------------
 client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
-
-
-# -------------------------
-# Configuration
-# -------------------------
-ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT", "SOLUSDT"}
-ALLOWED_FIELDS = {
-    "action",
-    "symbol",
-    "buy_pct",
-    "buy_amount",
-    "sell_pct",
-    "sell_amount",
-    "type",
-    "leverage",
-    "client_secret"
-}
-REQUIRED_FIELDS = {"action", "symbol", "client_secret"}
-SECRET_FIELD = "client_secret"
-WEBHOOK_REQUEST_PATH = "/to-the-moon"
-MAX_CROSS_LEVERAGE = 3
-
 
 
 # -------------------------
