@@ -69,6 +69,11 @@ client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 def should_log_request():
     return request.path not in ('/health-check', '/healthz', '/ping', '/')
 
+def log_webhook_payload(data: dict, secret_field: str):
+    """Log the incoming webhook payload without leaking the secret field."""
+    data_for_log = {k: v for k, v in data.items() if k != secret_field}
+    logging.info(f"[WEBHOOK] Received payload: {data_for_log}")
+
 def quantize_quantity(quantity: Decimal, step_size_str: str) -> Decimal:
     """Round down quantity to conform to stepSize."""
     step = Decimal(step_size_str)
@@ -847,8 +852,7 @@ def webhook():
             return error_response
 
         # Log payload without secret
-        data_for_log = {k: v for k, v in data.items() if k != SECRET_FIELD}
-        logging.info(f"[WEBHOOK] Received payload: {data_for_log}")
+        log_webhook_payload(data, SECRET_FIELD)
         
         # Parse fields
         try:
