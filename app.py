@@ -775,7 +775,6 @@ def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="
 @app.before_request
 def check_ip_whitelist():
     if request.method == "POST" and request.path == WEBHOOK_REQUEST_PATH:
-        logging.info("POST and /to-the-moon")
         raw_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
         client_ip = raw_ip.split(",")[0].strip() # Take only the first IP in case there are multiple
 
