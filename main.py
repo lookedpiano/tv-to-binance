@@ -281,7 +281,7 @@ def validate_outbound_ip_address() -> tuple[bool, tuple | None]:
         "74.220.51.0/24" # the first 24 bits of the address are fixed -> 74.220.51.0, 74.220.51.1, ..., 74.220.51.255 -> 256 ips
         "74.220.59.0/24" # the first 24 bits of the address are fixed -> 74.220.59.0, 74.220.59.1, ..., 74.220.59.255 -> 256 ips
         '''
-        ALLOWED_OUTBOUND_IPS = load_ip_file("config/allowed_outbound_ips.txt")
+        ALLOWED_OUTBOUND_IPS = load_ip_file("config/outbound_ips.txt")
 
         if current_ip not in ALLOWED_OUTBOUND_IPS:
             logging.warning(f"[SECURITY] Outbound IP {current_ip} not in allowed list")
