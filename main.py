@@ -146,6 +146,14 @@ def log_parsed_payload(action, symbol, buy_pct_raw, buy_amt_raw, sell_pct_raw, s
 
     logging.info(log_msg)
 
+def log_outbound_ip():
+    """Log the current outbound IP address for this service."""
+    try:
+        ip = requests.get("https://api.ipify.org", timeout=5).text.strip()
+        logging.info(f"[OUTBOUND_IP] Current outbound IP for Binance calls: {ip}")
+    except Exception as e:
+        logging.error(f"[OUTBOUND_IP] Failed to detect outbound IP: {e}")
+
 
 # -----------------------
 # Validation functions
@@ -793,6 +801,7 @@ def healthz():
 @app.route(WEBHOOK_REQUEST_PATH, methods=['POST'])
 def webhook():
     log_webhook_delimiter("START")
+    log_outbound_ip()
     start_time = time.perf_counter()
 
     try:
@@ -865,6 +874,7 @@ def webhook():
     finally:
         end_time = time.perf_counter()
         elapsed = end_time - start_time
+        log_outbound_ip()
         log_webhook_delimiter(f"END (elapsed: {elapsed:.4f} seconds)")
 
 
