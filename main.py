@@ -72,14 +72,14 @@ WEBHOOK_REQUEST_PATH = "/to-the-moon"
 MAX_CROSS_LEVERAGE = 3
 # Allowlist of known TradingView alert IPs (must keep updated)
 # See: https://www.tradingview.com/support/solutions/43000529348
-TRADINGVIEW_IPS = {
+TRADINGVIEW_IPS_old = {
     "52.89.214.238",
     "34.212.75.30",
     "54.218.53.128",
     "52.32.178.7"
 }
 # Allowed outbound IPs for Binance calls
-ALLOWED_OUTBOUND_IPS = {
+ALLOWED_OUTBOUND_IPS_old = {
     "18.156.158.53",
     "18.156.42.200",
     "52.59.103.54"
@@ -156,6 +156,14 @@ def log_parsed_payload(action, symbol, buy_pct_raw, buy_amt_raw, sell_pct_raw, s
         log_msg += f", leverage={leverage_raw}"
 
     logging.info(log_msg)
+
+def load_ip_file(path):
+    try:
+        with open(path) as f:
+            return {line.strip() for line in f if line.strip()}
+    except FileNotFoundError:
+        logging.warning(f"[SECURITY] IP file {path} not found")
+        return set()
 
 
 # -----------------------
@@ -282,6 +290,10 @@ def validate_outbound_ip_address() -> tuple[bool, tuple | None]:
     try:
         current_ip = requests.get("https://api.ipify.org", timeout=21).text.strip()
         logging.info(f"[OUTBOUND_IP] Validate current outbound IP for Binance calls: {current_ip}")
+
+        # Load allowed outbound IPs
+        ALLOWED_OUTBOUND_IPS = load_ip_file("allowed_outbound_ips.txt")
+
         if current_ip not in ALLOWED_OUTBOUND_IPS:
             logging.warning(f"[SECURITY] Outbound IP {current_ip} not in allowed list")
             return False, (jsonify({"error": f"Outbound IP {current_ip} not allowed"}), 403)
@@ -776,6 +788,10 @@ def check_ip_whitelist():
     if request.method == "POST" and request.path == WEBHOOK_REQUEST_PATH:
         raw_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
         client_ip = raw_ip.split(",")[0].strip() # Take only the first IP in case there are multiple
+
+        # Load TradingView IPs
+        TRADINGVIEW_IPS = load_ip_file("tradingview_ips.txt")
+
         if client_ip not in TRADINGVIEW_IPS:
             logging.warning(f"Blocked request from unauthorized IP: {client_ip}")
             logging.warning(f"IP address owned by: https://ipapi.co/{client_ip}/json/")
