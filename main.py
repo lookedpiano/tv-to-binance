@@ -157,14 +157,6 @@ def log_parsed_payload(action, symbol, buy_pct_raw, buy_amt_raw, sell_pct_raw, s
 
     logging.info(log_msg)
 
-def log_outbound_ip():
-    """Log the current outbound IP address for this service."""
-    try:
-        ip = requests.get("https://api.ipify.org", timeout=5).text.strip()
-        logging.info(f"[OUTBOUND_IP] Current outbound IP for Binance calls: {ip}")
-    except Exception as e:
-        logging.error(f"[OUTBOUND_IP] Failed to detect outbound IP: {e}")
-
 
 # -----------------------
 # Validation functions
@@ -282,21 +274,21 @@ def validate_fields(data: dict):
 
     return True, None
 
-def is_outbound_ip_allowed() -> tuple[bool, tuple | None]:
+def validate_outbound_ip_address() -> tuple[bool, tuple | None]:
     """
     Checks if the current outbound IP is in the allowed list.
     Returns (True, None) if allowed, (False, (response, status_code)) if not.
     """
     try:
         current_ip = requests.get("https://api.ipify.org", timeout=21).text.strip()
+        logging.info(f"[OUTBOUND_IP] Validate current outbound IP for Binance calls: {current_ip}")
         if current_ip not in ALLOWED_OUTBOUND_IPS:
             logging.warning(f"[SECURITY] Outbound IP {current_ip} not in allowed list")
             return False, (jsonify({"error": f"Outbound IP {current_ip} not allowed"}), 403)
-        logging.info(f"[SECURITY] Outbound IP {current_ip} verified OK")
         return True, None
     except Exception as e:
-        logging.exception(f"Failed to verify outbound IP: {e}")
-        return False, (jsonify({"error": "Could not verify outbound IP"}), 500)
+        logging.exception(f"Failed to validate outbound IP: {e}")
+        return False, (jsonify({"error": "Could not validate outbound IP"}), 500)
 
 
 # -------------------------
@@ -830,11 +822,9 @@ def webhook():
     log_webhook_delimiter("START")
     start_time = time.perf_counter()
 
-    log_outbound_ip()
-
     try:
         # Outbound IP validation
-        valid_ip, error_response = is_outbound_ip_allowed()
+        valid_ip, error_response = validate_outbound_ip_address()
         if not valid_ip:
             return error_response
 
