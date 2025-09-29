@@ -136,6 +136,29 @@ def load_ip_file(path):
     except FileNotFoundError:
         logging.warning(f"[SECURITY] IP file {path} not found")
         return set()
+    
+def run_webhook_validations():
+    # Outbound IP validation
+    valid_ip, error_response = validate_outbound_ip_address()
+    if not valid_ip:
+        return None, error_response
+
+    # JSON validation
+    data, error_response = validate_json()
+    if not data:
+        return None, error_response
+
+    # Field validation
+    valid_fields, error_response = validate_fields(data)
+    if not valid_fields:
+        return None, error_response
+
+    # Secret validation
+    valid_secret, error_response = validate_secret(data)
+    if not valid_secret:
+        return None, error_response
+
+    return data, None
 
 
 # -----------------------
@@ -819,24 +842,8 @@ def webhook():
     start_time = time.perf_counter()
 
     try:
-        # Outbound IP validation
-        valid_ip, error_response = validate_outbound_ip_address()
-        if not valid_ip:
-            return error_response
-
-        # JSON validation
-        data, error_response = validate_json()
-        if not data:
-            return error_response
-        
-        # Field validation
-        valid_fields, error_response = validate_fields(data)
-        if not valid_fields:
-            return error_response
-        
-        # Secret validation
-        valid_secret, error_response = validate_secret(data)
-        if not valid_secret:
+        data, error_response = run_webhook_validations()
+        if error_response:
             return error_response
 
         # Log payload without secret
