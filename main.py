@@ -70,25 +70,7 @@ REQUIRED_FIELDS = {"action", "symbol", "client_secret"}
 SECRET_FIELD = "client_secret"
 WEBHOOK_REQUEST_PATH = "/to-the-moon"
 MAX_CROSS_LEVERAGE = 3
-# Allowlist of known TradingView alert IPs (must keep updated)
-# See: https://www.tradingview.com/support/solutions/43000529348
-TRADINGVIEW_IPS_old = {
-    "52.89.214.238",
-    "34.212.75.30",
-    "54.218.53.128",
-    "52.32.178.7"
-}
-# Allowed outbound IPs for Binance calls
-ALLOWED_OUTBOUND_IPS_old = {
-    "18.156.158.53",
-    "18.156.42.200",
-    "52.59.103.54"
-    '''
-    NEW # remember: up to 30 IPs per API key are allowed
-    "74.220.51.0/24" # the first 24 bits of the address are fixed -> 74.220.51.0, 74.220.51.1, ..., 74.220.51.255
-    "74.220.59.0/24" # the first 24 bits of the address are fixed -> 74.220.59.0, 74.220.59.1, ..., 74.220.59.255
-    '''
-}
+
 
 
 # -------------------------
@@ -291,8 +273,15 @@ def validate_outbound_ip_address() -> tuple[bool, tuple | None]:
         current_ip = requests.get("https://api.ipify.org", timeout=21).text.strip()
         logging.info(f"[OUTBOUND_IP] Validate current outbound IP for Binance calls: {current_ip}")
 
-        # Load allowed outbound IPs
-        ALLOWED_OUTBOUND_IPS = load_ip_file("allowed_outbound_ips.txt")
+        # Load allowed outbound IPs for Binance calls
+        '''
+        On October 27th, Render will introduce new outbound IP ranges for each region - OBSERVE
+
+        NEW # remember: up to 30 IPs per API key are allowed on Binance
+        "74.220.51.0/24" # the first 24 bits of the address are fixed -> 74.220.51.0, 74.220.51.1, ..., 74.220.51.255 -> 256 ips
+        "74.220.59.0/24" # the first 24 bits of the address are fixed -> 74.220.59.0, 74.220.59.1, ..., 74.220.59.255 -> 256 ips
+        '''
+        ALLOWED_OUTBOUND_IPS = load_ip_file("config/allowed_outbound_ips.txt")
 
         if current_ip not in ALLOWED_OUTBOUND_IPS:
             logging.warning(f"[SECURITY] Outbound IP {current_ip} not in allowed list")
@@ -790,7 +779,8 @@ def check_ip_whitelist():
         client_ip = raw_ip.split(",")[0].strip() # Take only the first IP in case there are multiple
 
         # Load TradingView IPs
-        TRADINGVIEW_IPS = load_ip_file("tradingview_ips.txt")
+        # Allowlist of known TradingView alert IPs (must keep updated), see: https://www.tradingview.com/support/solutions/43000529348
+        TRADINGVIEW_IPS = load_ip_file("config/tradingview_ips.txt")
 
         if client_ip not in TRADINGVIEW_IPS:
             logging.warning(f"Blocked request from unauthorized IP: {client_ip}")
