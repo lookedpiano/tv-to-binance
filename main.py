@@ -51,6 +51,7 @@ if not PORT:
 client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 
 
+
 # -------------------------
 # Configuration
 # -------------------------
