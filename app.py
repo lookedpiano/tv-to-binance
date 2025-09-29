@@ -182,7 +182,7 @@ def validate_order_qty(symbol: str, qty: Decimal, price: Decimal, min_qty: Decim
         logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}. Aborting.")
         return False, {"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}, 200
 
-    logging.info("[SAFEGUARDS] Successfully validated. Proceeding with trade order placement.")
+    # Successfully validated
     return True, {}, 200
 
 def validate_and_normalize_trade_fields(action: str, is_buy: bool, buy_pct_raw, buy_amt_raw, sell_pct_raw, sell_amt_raw):
