@@ -51,11 +51,10 @@ if not PORT:
 client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 
 
-
 # -------------------------
 # Configuration
 # -------------------------
-ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT", "SOLUSDT", "TESTUSDT"}
+ALLOWED_SYMBOLS = {"BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT", "SOLUSDT"}
 ALLOWED_FIELDS = {
     "action",
     "symbol",
