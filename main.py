@@ -78,6 +78,17 @@ TRADINGVIEW_IPS = {
     "54.218.53.128",
     "52.32.178.7"
 }
+# Allowed outbound IPs for Binance calls
+ALLOWED_OUTBOUND_IPS = {
+    "18.156.158.53",
+    "18.156.42.200",
+    "52.59.103.54"
+    '''
+    NEW # remember: up to 30 IPs per API key are allowed
+    "74.220.51.0/24" # the first 24 bits of the address are fixed -> 74.220.51.0, 74.220.51.1, ..., 74.220.51.255
+    "74.220.59.0/24" # the first 24 bits of the address are fixed -> 74.220.59.0, 74.220.59.1, ..., 74.220.59.255
+    '''
+}
 
 
 # -------------------------
@@ -270,6 +281,22 @@ def validate_fields(data: dict):
         return False, (jsonify({"error": f"Missing required fields: {list(missing_fields)}"}), 400)
 
     return True, None
+
+def is_outbound_ip_allowed() -> tuple[bool, tuple | None]:
+    """
+    Checks if the current outbound IP is in the allowed list.
+    Returns (True, None) if allowed, (False, (response, status_code)) if not.
+    """
+    try:
+        current_ip = requests.get("https://api.ipify.org", timeout=21).text.strip()
+        if current_ip not in ALLOWED_OUTBOUND_IPS:
+            logging.warning(f"[SECURITY] Outbound IP {current_ip} not in allowed list")
+            return False, (jsonify({"error": f"Outbound IP {current_ip} not allowed"}), 403)
+        logging.info(f"[SECURITY] Outbound IP {current_ip} verified OK")
+        return True, None
+    except Exception as e:
+        logging.exception(f"Failed to verify outbound IP: {e}")
+        return False, (jsonify({"error": "Could not verify outbound IP"}), 500)
 
 
 # -------------------------
@@ -801,18 +828,24 @@ def healthz():
 @app.route(WEBHOOK_REQUEST_PATH, methods=['POST'])
 def webhook():
     log_webhook_delimiter("START")
-    log_outbound_ip()
     start_time = time.perf_counter()
 
+    log_outbound_ip()
+
     try:
+        # Outbound IP validation
+        valid_ip, error_response = is_outbound_ip_allowed()
+        if not valid_ip:
+            return error_response
+
         # JSON validation
         data, error_response = validate_json()
         if not data:
             return error_response
         
         # Field validation
-        valid, error_response = validate_fields(data)
-        if not valid:
+        valid_fields, error_response = validate_fields(data)
+        if not valid_fields:
             return error_response
         
         # Secret validation
@@ -874,7 +907,6 @@ def webhook():
     finally:
         end_time = time.perf_counter()
         elapsed = end_time - start_time
-        log_outbound_ip()
         log_webhook_delimiter(f"END (elapsed: {elapsed:.4f} seconds)")
 
 
