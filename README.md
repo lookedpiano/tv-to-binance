@@ -53,10 +53,10 @@ TradingView alert message to buy 34 % of available USDT and to sell a fixed amou
 
 Legend:
 - action: returns the string "buy" or "sell" for the executed order
-- symbol: returns the trading pair, e.g. BTCUSDT, ADAUSDT, etc.
-- buy_pct: A decimal fraction (0 < buy_pct <= 1) indicating what fraction of your available USDT balance should be invested in the buy order (Example: 0.05 = invest 5 % of available USDT).
-- buy_amount: An explicit numeric value specifying the exact USDT amount to invest in the buy order. Must not exceed your available USDT balance.
-- sell_pct: A decimal fraction (0 < sell_pct <= 1) indicating what fraction of your available base asset balance (e.g., ADA in ADAUSDT) should be sold (Example: 0.25 = sell 25 % of your ADA holdings).
+- symbol: returns the trading pair, e.g. BTCUSDT, ETHUSDC, etc.
+- buy_pct: A decimal fraction (0 < buy_pct <= 1) indicating what fraction of your available quote asset balance (e.g., USDT or USDC) should be invested in the buy order. (Example: 0.05 = invest 5 % of your available quote balance.)
+- buy_amount: An explicit numeric value specifying the exact quote asset amount to invest in the buy order. Must not exceed your available quote asset balance.
+- sell_pct: A decimal fraction (0 < sell_pct <= 1) indicating what fraction of your available base asset balance (e.g., ADA in ADAUSDT, ETH in ETHUSDC) should be sold. (Example: 0.25 = sell 25% of your ADA holdings.)
 - sell_amount: An explicit numeric value specifying the exact base asset amount to sell. Must not exceed your available base asset balance.
 - client_secret: defines your personally defined client secret
 
