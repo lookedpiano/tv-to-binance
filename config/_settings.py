@@ -1,6 +1,9 @@
 # config/settings.py
 
-# Symbols you allow for trading
+# Types allowed for trading
+ALLOWED_TRADE_TYPES = {"SPOT"}
+
+# Symbols allowed for trading
 ALLOWED_SYMBOLS = {
     # USDT pairs
     "BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT",
