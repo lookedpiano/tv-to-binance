@@ -527,60 +527,51 @@ def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="
 
         # BUY flow
         if side == "BUY":
-            if trade_type == "SPOT":
-                try:
-                    quote_free = get_spot_asset_free(quote_asset)
-                    invest_amount, error_msg = resolve_trade_amount(quote_free, amt, pct, side="BUY")
-                    if error_msg:
-                        logging.warning(f"[INVEST ERROR] {error_msg}")
-                        return {"error": error_msg}, 200
-                    raw_qty = invest_amount / price
-                    qty = quantize_quantity(raw_qty, step_size)
-                    logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest_amount={invest_amount}, qty={qty}, raw_qty={display_decimal(raw_qty, 16)}")
-                    logging.info(f"[INVESTMENT] Approx. total investment ≈ {(qty * price):.2f} USDT --> price={price}, qty={qty}")
-                    is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
-                    if not is_valid:
-                        return resp_dict, status
-                    
-                    # Place the order after safeguards pass
-                    return place_order_with_handling(symbol, side, qty, price, place_order_fn)
-                                
-                except Exception as e:
-                    logging.exception("Spot buy failed")
-                    return {"error": f"Spot buy failed: {str(e)}"}, 500
-            
-            else:
-                return {"error": f"Unknown trade type {trade_type}"}, 400
+            try:
+                quote_free = get_spot_asset_free(quote_asset)
+                invest_amount, error_msg = resolve_trade_amount(quote_free, amt, pct, side="BUY")
+                if error_msg:
+                    logging.warning(f"[INVEST ERROR] {error_msg}")
+                    return {"error": error_msg}, 200
+                raw_qty = invest_amount / price
+                qty = quantize_quantity(raw_qty, step_size)
+                logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest_amount={invest_amount}, qty={qty}, raw_qty={display_decimal(raw_qty, 16)}")
+                logging.info(f"[INVESTMENT] Approx. total investment ≈ {(qty * price):.2f} USDT --> price={price}, qty={qty}")
+                is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
+                if not is_valid:
+                    return resp_dict, status
+                
+                # Place the order after safeguards pass
+                return place_order_with_handling(symbol, side, qty, price, place_order_fn)
+                            
+            except Exception as e:
+                logging.exception("Spot buy failed")
+                return {"error": f"Spot buy failed: {str(e)}"}, 500
 
         # SELL flow
         elif side == "SELL":
-            if trade_type == "SPOT":
-                # Sell on spot account only
-                try:
-                    asset_free = get_spot_asset_free(base_asset)
-                    if asset_free <= Decimal("0"):
-                        logging.warning(f"No spot {base_asset} balance to sell. Aborting.")
-                        return {"warning": f"No spot {base_asset} balance to sell. Aborting."}, 200
-                    sell_qty, error_msg = resolve_trade_amount(asset_free, amt, pct, side="SELL")
-                    if error_msg:
-                        logging.warning(f"[INVEST ERROR] {error_msg}")
-                        return {"error": error_msg}, 200
-                    qty = quantize_quantity(sell_qty, step_size)
-                    logging.info(f"[EXECUTE SPOT SELL] {symbol}: asset_free={asset_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-                    logging.info(f"[PROCEEDS] Approx. total proceeds ≈ {(qty * price):.2f} {quote_asset} --> price={price}, qty={qty}")
-                    is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
-                    if not is_valid:
-                        return resp_dict, status
-                    
-                    # Place the order after safeguards pass
-                    return place_order_with_handling(symbol, side, qty, price, place_order_fn)
+            try:
+                asset_free = get_spot_asset_free(base_asset)
+                if asset_free <= Decimal("0"):
+                    logging.warning(f"No spot {base_asset} balance to sell. Aborting.")
+                    return {"warning": f"No spot {base_asset} balance to sell. Aborting."}, 200
+                sell_qty, error_msg = resolve_trade_amount(asset_free, amt, pct, side="SELL")
+                if error_msg:
+                    logging.warning(f"[INVEST ERROR] {error_msg}")
+                    return {"error": error_msg}, 200
+                qty = quantize_quantity(sell_qty, step_size)
+                logging.info(f"[EXECUTE SPOT SELL] {symbol}: asset_free={asset_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
+                logging.info(f"[PROCEEDS] Approx. total proceeds ≈ {(qty * price):.2f} {quote_asset} --> price={price}, qty={qty}")
+                is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
+                if not is_valid:
+                    return resp_dict, status
                 
-                except Exception as e:
-                    logging.exception("Spot sell failed")
-                    return {"error": f"Spot sell failed: {str(e)}"}, 500
-
-            else:
-                return {"error": f"Unknown trade type {trade_type}"}, 400
+                # Place the order after safeguards pass
+                return place_order_with_handling(symbol, side, qty, price, place_order_fn)
+            
+            except Exception as e:
+                logging.exception("Spot sell failed")
+                return {"error": f"Spot sell failed: {str(e)}"}, 500
 
         # Unknown side (shouldn't happen)
         else:
