@@ -2,8 +2,13 @@
 
 # Symbols you allow for trading
 ALLOWED_SYMBOLS = {
+    # USDT pairs
     "BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT",
-    "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT", "SOLUSDT"
+    "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT", "SOLUSDT",
+
+    # USDC pairs
+    "BTCUSDC", "ETHUSDC", "ADAUSDC", "DOGEUSDC",
+    "PEPEUSDC", "XRPUSDC", "WIFUSDC", "BNBUSDC", "SOLUSDC"
 }
 
 # Payload fields

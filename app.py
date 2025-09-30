@@ -165,6 +165,18 @@ def run_webhook_validations():
 
     return data, None
 
+def split_symbol(symbol: str):
+    """
+    Splits a trading symbol into (base_asset, quote_asset).
+    Works for BTCUSDT, ETHUSDC, etc.
+    Assumes symbol ends with a known stablecoin suffix.
+    """
+    known_quotes = ("USDT", "USDC")
+    for q in known_quotes:
+        if symbol.endswith(q):
+            return symbol[:-len(q)], q
+    raise ValueError(f"Unknown quote asset in symbol: {symbol}")
+
 
 # -----------------------
 # Validation functions
@@ -600,7 +612,7 @@ def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="
             logging.warning(f"Incomplete trade filters for {symbol}: step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
             return {"error": f"Filters not available for {symbol}"}, 200
         
-        # bottleneck for margin trades
+        # Rejection of margin trades - not implemented
         if trade_type == "MARGIN":
             # TODO: find a way to secure two signals (spot and margin)
             # logging.info(f"Waiting for possible spot buy to be over. Proceeding in 7 seconds...")
@@ -608,19 +620,25 @@ def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="
             logging.warning("MARGIN-trading to be implemented. We'll be right back...")
             return {"error": "MARGIN-trading not yet implemented."}, 200
 
+        try:
+            base_asset, quote_asset = split_symbol(symbol)
+        except ValueError as e:
+            logging.error("Failed to parse base/quote assets")
+            return {"error": f"Failed to parse base/quote assets: {str(e)}"}, 400
+
         # BUY flow
         if side == "BUY":
             if trade_type == "SPOT":
                 # SPOT buy -> use spot USDT balance
                 try:
-                    usdt_free = get_spot_asset_free("USDT")
-                    invest_usdt, error_msg = resolve_trade_amount(usdt_free, amt, pct, side="BUY")
+                    quote_free = get_spot_asset_free(quote_asset)
+                    invest_amount, error_msg = resolve_trade_amount(quote_free, amt, pct, side="BUY")
                     if error_msg:
                         logging.warning(f"[INVEST ERROR] {error_msg}")
                         return {"error": error_msg}, 200
-                    raw_qty = invest_usdt / price
+                    raw_qty = invest_amount / price
                     qty = quantize_quantity(raw_qty, step_size)
-                    logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest={invest_usdt}, qty={qty}, raw_qty={display_decimal(raw_qty, 16)}")
+                    logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest_amount={invest_amount}, qty={qty}, raw_qty={display_decimal(raw_qty, 16)}")
                     logging.info(f"[INVESTMENT] Approx. total investment ≈ {(qty * price):.2f} USDT --> price={price}, qty={qty}")
                     is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
@@ -692,8 +710,6 @@ def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="
 
         # SELL flow
         elif side == "SELL":
-            # We'll use base asset name
-            base_asset = symbol.replace("USDT", "")
             if trade_type == "SPOT":
                 # Sell on spot account only
                 try:
@@ -707,7 +723,7 @@ def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="
                         return {"error": error_msg}, 200
                     qty = quantize_quantity(sell_qty, step_size)
                     logging.info(f"[EXECUTE SPOT SELL] {symbol}: asset_free={asset_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-                    logging.info(f"[PROCEEDS] Approx. total proceeds ≈ {(qty * price):.2f} USDT --> price={price}, qty={qty}")
+                    logging.info(f"[PROCEEDS] Approx. total proceeds ≈ {(qty * price):.2f} {quote_asset} --> price={price}, qty={qty}")
                     is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                     if not is_valid:
                         return resp_dict, status
