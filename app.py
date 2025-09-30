@@ -183,11 +183,18 @@ def validate_json():
         return None, (jsonify({"error": "Invalid JSON payload"}), 400)
 
 def validate_secret(data):
-    """Validate that the webhook secret is correct."""
+    """Validate that the webhook secret from TradingView matches the expected value."""
     secret_from_request = data.get(SECRET_FIELD)
-    if not secret_from_request or not hmac.compare_digest(str(secret_from_request), str(WEBHOOK_SECRET)):
-        logging.warning("[SECURITY] Unauthorized attempt (invalid or missing secret)")
+
+    if not secret_from_request:
+        logging.warning("[SECURITY] Missing secret field")
         return False, (jsonify({"error": "Unauthorized"}), 401)
+
+    # Timing-sicherer Vergleich
+    if not hmac.compare_digest(secret_from_request, WEBHOOK_SECRET):
+        logging.warning("[SECURITY] Unauthorized attempt (invalid secret)")
+        return False, (jsonify({"error": "Unauthorized"}), 401)
+
     return True, None
 
 def validate_order_qty(symbol: str, qty: Decimal, price: Decimal, min_qty: Decimal, min_notional: Decimal) -> tuple[bool, dict, int]:
