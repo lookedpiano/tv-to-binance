@@ -221,9 +221,12 @@ def validate_order_qty(symbol: str, qty: Decimal, price: Decimal, min_qty: Decim
         logging.warning(f"Trade qty {qty} is below min_qty {min_qty}. Aborting.")
         return False, {"warning": f"Trade qty {qty} is below min_qty {min_qty}"}, 200
 
-    if (qty * price) < min_notional:
-        logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}. Aborting.")
-        return False, {"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}, 200
+    if price is not None:
+        if (qty * price) < min_notional:
+            logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}. Aborting.")
+            return False, {"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}, 200
+    else:
+        logging.info(f"[SAFEGUARDS] Skipping notional validation for {symbol} because price is None.")
 
     # Successfully validated
     return True, {}, 200
@@ -504,16 +507,20 @@ def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="
     Returns (response_dict, http_status).
     """
     try:
-        # Fetch price and filters
-        price = get_current_price(symbol)
-        if price is None:
-            logging.info(f"Retrying once for {symbol}. Retrying in 3 seconds...")
-            time.sleep(3)
-            price = get_current_price(symbol)
-        if price is None:
-            logging.warning(f"No price available for {symbol}. Cannot proceed.")
-            return {"error": f"Price not available for {symbol}"}, 200
+        price = None
 
+        # Fetch price if needed
+        if side == "BUY":
+            price = get_current_price(symbol)
+            if price is None:
+                logging.info(f"Retrying once for {symbol}. Retrying in 3 seconds...")
+                time.sleep(3)
+                price = get_current_price(symbol)
+            if price is None:
+                logging.warning(f"No price available for {symbol}. Cannot proceed.")
+                return {"error": f"Price not available for {symbol}"}, 200
+
+        # Fetch filters
         step_size, min_qty, min_notional = get_trade_filters(symbol)
         if None in (step_size, min_qty, min_notional):
             logging.warning(f"Incomplete trade filters for {symbol}: step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
@@ -561,7 +568,7 @@ def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="
                     return {"error": error_msg}, 200
                 qty = quantize_quantity(sell_qty, step_size)
                 logging.info(f"[EXECUTE SPOT SELL] {symbol}: asset_free={asset_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-                logging.info(f"[PROCEEDS] Approx. total proceeds ≈ {(qty * price):.2f} {quote_asset} --> price={price}, qty={qty}")
+                #logging.info(f"[PROCEEDS] Approx. total proceeds ≈ {(qty * price):.2f} {quote_asset} --> price={price}, qty={qty}")
                 is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
                 if not is_valid:
                     return resp_dict, status
