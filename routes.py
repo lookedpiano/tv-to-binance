@@ -1,11 +1,24 @@
 import json
 import logging
 from flask import Blueprint, jsonify, request
-from binance_data import _get_redis
+from binance.spot import Spot as Client
+from binance_data import _get_redis, fetch_and_cache_balances, fetch_and_cache_filters
 from utils import should_log_request, load_ip_file
-from config._settings import WEBHOOK_REQUEST_PATH, ADMIN_API_KEY
+from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS, ADMIN_API_KEY, BINANCE_API_KEY, BINANCE_SECRET_KEY
 
 routes = Blueprint("routes", __name__)
+
+# -------------------------
+# LAZY CLIENT INIT
+# -------------------------
+_client = None
+
+def get_client() -> Client:
+    """Return a lazily initialized Binance Spot client."""
+    global _client
+    if _client is None:
+        _client = Client(api_key=BINANCE_API_KEY, api_secret=BINANCE_SECRET_KEY)
+    return _client
 
 # ==========================================================
 # ========== REQUEST HOOKS =================================
@@ -161,7 +174,7 @@ def cache_filters(symbol):
         logging.error(f"[ROUTE] /cache/filters/{symbol} failed: {e}")
         return jsonify({"error": "Failed to fetch symbol filters"}), 500
 
-'''
+
 @routes.route("/cache/update/balances", methods=["POST"])
 def update_balances():
     provided_key = request.headers.get("X-Admin-Key")
@@ -171,7 +184,7 @@ def update_balances():
         return jsonify({"error": "Unauthorized"}), 401
 
     try:
-        client = get_binance_client()
+        client = get_client()
         fetch_and_cache_balances(client)
         return jsonify({"status": "Balances updated successfully"}), 200
     except Exception as e:
@@ -188,13 +201,12 @@ def update_filters():
         return jsonify({"error": "Unauthorized"}), 401
 
     try:
-        client = get_binance_client()
+        client = get_client()
         fetch_and_cache_filters(client, ALLOWED_SYMBOLS)
         return jsonify({"status": "Filters updated successfully"}), 200
     except Exception as e:
         logging.exception(f"[ROUTE] /cache/update/filters failed: {e}")
         return jsonify({"error": "Failed to update filters"}), 500
-'''
 
 
 # ==========================================================
