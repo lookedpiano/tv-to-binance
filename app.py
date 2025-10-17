@@ -4,12 +4,35 @@ import requests
 import time
 import os
 import logging
-from decimal import Decimal, InvalidOperation, ROUND_DOWN
-from datetime import datetime, timezone
-from requests.exceptions import HTTPError
-from binance.client import Client
-from binance.exceptions import BinanceAPIException, BinanceRequestException
+from decimal import Decimal
 
+# binance-connector imports (official SDK)
+from binance.spot import Spot as Client
+from binance.error import ClientError, ServerError
+
+# Redis and WebSocket price cache and background_cache
+from binance_data import (
+    init_redis,
+    start_ws_price_cache,
+    start_background_cache,
+    get_cached_price,
+    get_cached_balances,
+    get_cached_symbol_filters,
+    refresh_balances_for_assets
+)
+
+from routes import routes
+from utils import (
+    load_ip_file,
+    log_webhook_payload,
+    log_webhook_delimiter,
+    log_parsed_payload,
+    split_symbol,
+    quantize_quantity,
+    quantize_down,
+    get_filter_value,
+    sanitize_filters,
+)
 
 
 # -------------------------
@@ -22,6 +45,11 @@ from config._settings import (
     REQUIRED_FIELDS,
     SECRET_FIELD,
     WEBHOOK_REQUEST_PATH,
+    BINANCE_API_KEY,
+    BINANCE_SECRET_KEY,
+    WEBHOOK_SECRET,
+    REDIS_URL,
+    PORT,
 )
 
 # -------------------------
@@ -34,151 +62,49 @@ logging.basicConfig(
 
 app = Flask(__name__)
 
+# Register routes
+app.register_blueprint(routes)
+
 
 # -------------------------
-# Environment variables
-# -------------------------
-BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY")
-BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")
-WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
-PORT = os.environ.get("PORT")
-
-if not BINANCE_API_KEY:
-    raise RuntimeError("Missing required environment variable: BINANCE_API_KEY")
-if not BINANCE_SECRET_KEY:
-    raise RuntimeError("Missing required environment variable: BINANCE_SECRET_KEY")
-if not WEBHOOK_SECRET:
-    raise RuntimeError("Missing required environment variable: WEBHOOK_SECRET")
-if not PORT:
-    raise RuntimeError(
-        "Missing required environment variable: PORT.\n"
-        "The following ports are reserved by Render and cannot be used: 18012, 18013 and 19099.\n"
-        "Choose a port such that: 1024 < PORT <= 49000, excluding the reserved ones."
-    )
-
-
-# -----------------------------
 # CLIENT INIT
-# -----------------------------
-client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
-
+# -------------------------
+client = Client(api_key=BINANCE_API_KEY, api_secret=BINANCE_SECRET_KEY)
 
 # -------------------------
-# Utilities
+# REDIS + WS INIT
 # -------------------------
-def should_log_request():
-    return request.path not in ('/health-check', '/healthz', '/ping', '/')
+try:
+    init_redis(REDIS_URL)
+    start_ws_price_cache(ALLOWED_SYMBOLS)
+    start_background_cache(client, ALLOWED_SYMBOLS)
+    logging.info("[INIT] Background caches initialized successfully.")
+except Exception as e:
+    logging.exception(f"[INIT] Failed to initialize background caches: {e}")
 
-def log_webhook_payload(data: dict, secret_field: str):
-    """Log the incoming webhook payload without leaking the secret field."""
-    data_for_log = {k: v for k, v in data.items() if k != secret_field}
-    logging.info(f"[WEBHOOK] Received payload: {data_for_log}")
-
-def quantize_quantity(quantity: Decimal, step_size_str: str) -> Decimal:
-    """Round down quantity to conform to stepSize."""
-    step = Decimal(step_size_str)
-    # floor to step multiple
-    quant = (Decimal(quantity) // step) * step
-    # quantize to the same scale as step
-    return quant.quantize(step, rounding=ROUND_DOWN)
-
-def get_filter_value(filters, filter_type, key):
-    for f in filters:
-        if f.get("filterType") == filter_type:
-            return f.get(key)
-    raise ValueError(f"{filter_type} or key '{key}' not found in filters.")
-
-def quantize_down(value: Decimal, precision: str) -> Decimal:
-    """
-    Quantize a Decimal value to the given precision string,
-    rounding down to avoid exceeding allowed precision.
-
-    Example:
-        quantize_down(Decimal("1.23456789"), "0.00000001")
-        -> Decimal("1.23456789")
-    """
-    return value.quantize(Decimal(precision), rounding=ROUND_DOWN)
-
-def display_decimal(value: Decimal, places: int) -> str:
-    """
-    Return a string of the Decimal truncated to `places` decimal places.
-    Safe for display/logging (does not affect the underlying value).
-    """
-    quantizer = Decimal("1").scaleb(-places)  # e.g. places=16 → Decimal("0.0000000000000001")
-    return str(value.quantize(quantizer, rounding=ROUND_DOWN))
-
-def log_webhook_delimiter(at_point: str):
-    line = f" Webhook {at_point} "
-    border = "─" * (len(line) + 2)
-    logging.info(f"┌{border}┐")
-    logging.info(f"│ {line} │")
-    logging.info(f"└{border}┘")
-
-def log_parsed_payload(action, symbol, buy_pct_raw, buy_amt_raw, sell_pct_raw, sell_amt_raw, trade_type):
-    """
-    Logs the parsed payload fields.
-    Shows buy_pct and buy_amount for BUY actions and sell_pct and sell_amount for SELL actions.
-    """
-    # Base log
-    log_msg = f"[PARSE] action={action}, symbol={symbol}, type={trade_type}"
-
-    # Action-specific logging
-    if action == "BUY":
-        log_msg += f", buy_pct={buy_pct_raw}, buy_amount={buy_amt_raw}"
-    elif action == "SELL":
-        log_msg += f", sell_pct={sell_pct_raw}, sell_amount={sell_amt_raw}"
-
-    logging.info(log_msg)
-
-def load_ip_file(path):
-    try:
-        with open(path) as f:
-            return {line.strip() for line in f if line.strip()}
-    except FileNotFoundError:
-        logging.warning(f"[SECURITY] IP file {path} not found")
-        return set()
-    
+# -----------------------
+# Validation functions
+# -----------------------
 def run_webhook_validations():
-    # Outbound IP validation
     valid_ip, error_response = validate_outbound_ip_address()
     if not valid_ip:
         return None, error_response
 
-    # JSON validation
     data, error_response = validate_json()
     if not data:
         return None, error_response
 
-    # Field validation
     valid_fields, error_response = validate_fields(data)
     if not valid_fields:
         return None, error_response
 
-    # Secret validation
     valid_secret, error_response = validate_secret(data)
     if not valid_secret:
         return None, error_response
 
     return data, None
 
-def split_symbol(symbol: str):
-    """
-    Splits a trading symbol into (base_asset, quote_asset).
-    Works for BTCUSDT, ETHUSDC, etc.
-    Assumes symbol ends with a known stablecoin suffix.
-    """
-    known_quotes = ("USDT", "USDC")
-    for q in known_quotes:
-        if symbol.endswith(q):
-            return symbol[:-len(q)], q
-    raise ValueError(f"Unknown quote asset in symbol: {symbol}")
-
-
-# -----------------------
-# Validation functions
-# -----------------------
 def validate_json():
-    """Validate that the incoming request contains valid JSON."""
     try:
         data = request.get_json(force=False, silent=False)
         if not isinstance(data, dict):
@@ -191,28 +117,29 @@ def validate_json():
         return None, (jsonify({"error": "Invalid JSON payload"}), 400)
 
 def validate_secret(data):
-    """Validate that the webhook secret from TradingView matches the expected value."""
     secret_from_request = data.get(SECRET_FIELD)
-
     if not secret_from_request:
         logging.warning("[SECURITY] Missing secret field")
         return False, (jsonify({"error": "Unauthorized"}), 401)
 
-    # Timing-sicherer Vergleich
     if not hmac.compare_digest(secret_from_request, WEBHOOK_SECRET):
         logging.warning("[SECURITY] Unauthorized attempt (invalid secret)")
         return False, (jsonify({"error": "Unauthorized"}), 401)
 
     return True, None
 
-def validate_order_qty(symbol: str, qty: Decimal, price: Decimal, min_qty: Decimal, min_notional: Decimal) -> tuple[bool, dict, int]:
+def validate_order_qty(
+    symbol: str,
+    qty: Decimal,
+    price: Decimal | None,
+    min_qty: Decimal,
+    min_notional: Decimal,
+) -> tuple[bool, dict, int]:
     """
     Validate order quantity and notional against exchange filters.
-    Returns (is_valid, response_dict, http_status).
-    If invalid, response_dict contains a warning.
     """
-
     logging.info(f"[SAFEGUARDS] Validate order qty for {symbol}: {qty}")
+
     if qty <= Decimal("0"):
         logging.warning("Trade qty is zero or negative after rounding. Aborting.")
         return False, {"warning": "Calculated trade size too small after rounding"}, 200
@@ -228,68 +155,100 @@ def validate_order_qty(symbol: str, qty: Decimal, price: Decimal, min_qty: Decim
     # Successfully validated
     return True, {}, 200
 
-def validate_and_normalize_trade_fields(action: str, is_buy: bool, buy_pct_raw, buy_amt_raw, sell_pct_raw, sell_amt_raw):
+def validate_and_normalize_trade_fields(
+    action: str,
+    is_buy: bool,
+    buy_funds_pct_raw,
+    buy_funds_amount_raw,
+    buy_crypto_amount_raw,
+    sell_crypto_pct_raw,
+    sell_crypto_amount_raw,
+    sell_funds_amount_raw
+):
     """
     Validates and normalizes trade fields for BUY or SELL.
-    - For BUY: exactly one of (buy_pct_raw, buy_amt_raw) must be provided.
-    - For SELL: exactly one of (sell_pct_raw, sell_amt_raw) must be provided.
+
+    Rules:
+    - BUY: only buy_* fields are considered.
+    - SELL: only sell_* fields are considered.
+    - Exactly one of the relevant fields must be provided.
     - Pct must be in (0, 1].
     - Amount must be positive Decimal.
-    
+
     Returns:
-        (pct: Decimal | None,
-         amt: Decimal | None,
-         error_response: Response | None)
+        pct, amt, amt_in_crypto, amt_in_funds, error_response
     """
 
-    # Select relevant fields based on action
-    pct_raw = buy_pct_raw if is_buy else sell_pct_raw
-    amt_raw = buy_amt_raw if is_buy else sell_amt_raw
-    pct_name = "buy_pct" if is_buy else "sell_pct"
-    amt_name = "buy_amount" if is_buy else "sell_amount"
+    # --- Step 1: pick the relevant group ---
+    if is_buy:
+        relevant = {
+            "buy_funds_pct": buy_funds_pct_raw,
+            "buy_funds_amount": buy_funds_amount_raw,
+            "buy_crypto_amount": buy_crypto_amount_raw,
+        }
+    else:
+        relevant = {
+            "sell_crypto_pct": sell_crypto_pct_raw,
+            "sell_crypto_amount": sell_crypto_amount_raw,
+            "sell_funds_amount": sell_funds_amount_raw,
+        }
 
-    # Case 1: both provided → reject
-    if pct_raw is not None and amt_raw is not None:
-        logging.error(f"Both {pct_name} and {amt_name} provided — only one is allowed.")
-        return None, None, (jsonify({"error": f"Please provide either {pct_name} or {amt_name}, not both."}), 400)
+    # --- Step 2: check how many were provided ---
+    non_none = {k: v for k, v in relevant.items() if v is not None}
 
-    # Case 2: neither provided → reject
-    if pct_raw is None and amt_raw is None:
-        logging.error(f"Neither {pct_name} nor {amt_name} provided — one is required for a {action} order.")
-        return None, None, (jsonify({"error": f"Please provide either {pct_name} or {amt_name}."}), 400)
+    if len(non_none) == 0:
+        logging.error(f"No trade size field provided for {action}")
+        return None, None, False, False, (
+            jsonify({"error": f"Please provide one of: {', '.join(relevant.keys())}."}), 400
+        )
 
-    # If pct provided → check numeric & range
-    if pct_raw is not None:
+    if len(non_none) > 1:
+        logging.error(f"Multiple trade size fields provided for {action}: {list(non_none.keys())}")
+        return None, None, False, False, (
+            jsonify({"error": f"Please provide only one of: {', '.join(relevant.keys())}."}), 400
+        )
+
+    # --- Step 3: normalize ---
+    field_name, raw_value = next(iter(non_none.items()))
+    logging.info(f"[FIELDS] Using {field_name}={raw_value}")
+
+    # Percentage case
+    if "pct" in field_name:
         try:
-            pct = Decimal(str(pct_raw))
+            pct = Decimal(str(raw_value))
             if not (Decimal("0") < pct <= Decimal("1")):
-                logging.error(f"{pct_name} out of range: {pct_raw}")
-                return None, None, (jsonify({"error": f"{pct_name} must be a number between 0 and 1."}), 400)
-            return pct, None, None
-        except (InvalidOperation, ValueError):
-            logging.error(f"Invalid {pct_name} value: {pct_raw}")
-            return None, None, (jsonify({"error": f"{pct_name} must be a valid number between 0 and 1."}), 400)
+                raise ValueError
+            # For BUY pct → funds-based, for SELL pct → crypto-based
+            amt_in_funds = is_buy
+            amt_in_crypto = not is_buy
+            return pct, None, amt_in_crypto, amt_in_funds, None
+        except Exception:
+            return None, None, False, False, (
+                jsonify({"error": f"{field_name} must be a number between 0 and 1."}), 400
+            )
 
-    # If amount provided → check numeric & positive
-    if amt_raw is not None:
-        try:
-            amt = Decimal(str(amt_raw))
-            if amt <= 0:
-                logging.error(f"{amt_name} must be positive, got: {amt_raw}")
-                return None, None, (jsonify({"error": f"{amt_name} must be greater than zero."}), 400)
-            return None, amt, None
-        except (InvalidOperation, ValueError):
-            logging.error(f"Invalid {amt_name} value: {amt_raw}")
-            return None, None, (jsonify({"error": f"{amt_name} must be a valid number."}), 400)
-        
+    # Amount case
+    try:
+        amt = Decimal(str(raw_value))
+        if amt <= 0:
+            raise ValueError
+    except Exception:
+        return None, None, False, False, (
+            jsonify({"error": f"{field_name} must be a positive number."}), 400
+        )
+
+    # --- Step 4: flag mapping ---
+    amt_in_crypto = field_name in ("buy_crypto_amount", "sell_crypto_amount")
+    amt_in_funds = field_name in ("buy_funds_amount", "sell_funds_amount")
+
+    return None, amt, amt_in_crypto, amt_in_funds, None
+
 def validate_fields(data: dict):
-    # 1. Reject unknown fields
     unknown_fields = set(data.keys()) - ALLOWED_FIELDS
     if unknown_fields:
         logging.error(f"Unknown fields in payload: {unknown_fields}")
         return False, (jsonify({"error": f"Unknown fields: {list(unknown_fields)}"}), 400)
 
-    # 2. Check required fields
     missing_fields = REQUIRED_FIELDS - set(data.keys())
     if missing_fields:
         logging.error(f"Missing required fields: {missing_fields}")
@@ -298,15 +257,10 @@ def validate_fields(data: dict):
     return True, None
 
 def validate_outbound_ip_address() -> tuple[bool, tuple | None]:
-    """
-    Checks if the current outbound IP is in the allowed list.
-    Returns (True, None) if allowed, (False, (response, status_code)) if not.
-    """
     try:
         current_ip = requests.get("https://api.ipify.org", timeout=21).text.strip()
         logging.info(f"[OUTBOUND_IP] Validate current outbound IP for Binance calls: {current_ip}")
 
-        # Load allowed outbound IPs for Binance calls
         '''
         On October 27th, Render will introduce new outbound IP ranges for each region - OBSERVE
 
@@ -324,137 +278,117 @@ def validate_outbound_ip_address() -> tuple[bool, tuple | None]:
         logging.exception(f"Failed to validate outbound IP: {e}")
         return False, (jsonify({"error": "Could not validate outbound IP"}), 500)
 
-
 # -------------------------
-# Exchange helpers
+# Exchange helpers (connector)
 # -------------------------
 def get_symbol_filters(symbol: str):
     """
     Fetch symbol filters (lot size, min notional, etc.) for a given symbol.
+    Using exchange_info(symbol=...) → info["symbols"][0]["filters"]
     """
     try:
-        info = client.get_symbol_info(symbol)
-        if not info:
+        info = client.exchange_info(symbol=symbol)
+        if not info or "symbols" not in info or not info["symbols"]:
             return []
-        filters = info.get("filters", [])
-        # log_filters(symbol, filters)
+        filters = info["symbols"][0].get("filters", [])
         return filters
-    except BinanceAPIException as e:
-        logging.error(f"Binance API error while fetching filters for {symbol}: {e.message}")
+    except ClientError as e:
+        logging.error(f"Binance API error while fetching filters for {symbol}: {e.error_message}")
         return []
     except Exception as e:
         logging.exception(f"Failed to fetch exchangeInfo for {symbol}: {e}")
         return []
 
 def get_min_notional(filters):
-    # Attempt to retrieve the MIN_NOTIONAL filter
     min_notional = next((f['minNotional'] for f in filters if f['filterType'] == 'MIN_NOTIONAL'), None)
     if min_notional:
         return Decimal(min_notional)
-    
-    # If MIN_NOTIONAL is not found, check for the NOTIONAL filter
     notional_filter = next((f for f in filters if f['filterType'] == 'NOTIONAL'), None)
-    if notional_filter:
-        return Decimal(notional_filter['minNotional'])
-    
-    # If neither filter is found, return a default value
-    return Decimal('0.0')
+    if not notional_filter:
+        return Decimal('0.0')
+    return Decimal(notional_filter['minNotional'])
 
 def get_trade_filters(symbol):
-    """Fetch filters and return step_size, min_qty, min_notional as Decimals or (None, None, None) on failure."""
     filters = get_symbol_filters(symbol)
-    if not filters:  # no filters available
+    if not filters:
         logging.warning(f"No filters found for {symbol}")
         return None, None, None
-
     try:
         step_size_val = get_filter_value(filters, "LOT_SIZE", "stepSize")
         min_qty_val = get_filter_value(filters, "LOT_SIZE", "minQty")
-        
         min_notional = get_min_notional(filters)
-
         step_size = Decimal(step_size_val)
         min_qty = Decimal(min_qty_val)
-
         logging.info(f"[FILTERS] step_size={step_size}, min_notional={min_notional}, min_qty={min_qty}")
         return step_size, min_qty, min_notional
-
     except Exception as e:
         logging.exception(f"Error parsing filters for {symbol}: {e}")
         return None, None, None
 
+# -------- Price (connector) --------
 def get_current_price(symbol: str):
     """
-    Fetch current price for a symbol using Binance client.
+    Return current price using the WebSocket cache first.
+    Fallback to REST once if cache is cold (e.g., right after restart).
     """
-    try:
-        data = client.get_symbol_ticker(symbol=symbol)
-        price = Decimal(str(data["price"]))
-        logging.info(f"[PRICE] {symbol}: {price}")
+    # 1) Try cached price (no REST hit)
+    price = get_cached_price(symbol)
+    if price is not None:
+        logging.info(f"[PRICE:CACHE] {symbol}: {price}")
         return price
-    
-    except BinanceAPIException as e:
-        logging.error(f"Binance API error while fetching price for {symbol}: {e.message}")
-        if e.status_code == 418:
-            logging.warning(f"Rate limit hit or temp block for {symbol}:<{e}>")
-            #logging.warning(f"Rate limit hit or temp block for {symbol}. Retrying in 5s...")
-            #time.sleep(5)
-            # retry once
-            #return get_current_price(symbol)
+
+    # 2) Fallback: single REST call (rare; only if cache hasn't seen this symbol yet)
+    try:
+        data = client.ticker_price(symbol)
+        price = Decimal(data["price"])
+        logging.info(f"[PRICE:REST] {symbol}: {price}")
+        return price
+    except ClientError as e:
+        logging.error(f"[PRICE:REST] ClientError while fetching price for {symbol}: {e.error_message}")
+        if e.status_code in (418, 429) or e.error_code in (-1003,):
+            logging.warning(f"Rate limit or temp block for {symbol}: <{e.error_message}>")
             return None
-        if e.status_code == 429:
-            logging.warning(f"Request limit hit or temp block for {symbol}:<{e}>")
-            return None
-        else:
-            logging.exception(f"HTTP error for {symbol}:<{e}>")
-            return None  # or raise again if you want it to bubble up
-    
-    except BinanceRequestException as e:
-        # Network or connection issues
-        logging.error(f"Binance request error for {symbol}: {e}")
         return None
-    
     except Exception as e:
-        logging.exception(f"Unexpected error fetching price for {symbol}: {e}")
+        logging.exception(f"[PRICE:REST] Unexpected error fetching price for {symbol}: {e}")
         return None
-
-
 
 # -------------------------
-# Spot functions
+# Spot functions (connector)
 # -------------------------
 def get_spot_asset_free(asset: str) -> Decimal:
     """
     Return free balance for asset from spot account as Decimal.
     """
     try:
-        account_info = client.get_account()
+        account_info = client.account()
         balances = account_info.get("balances", [])
-        # log_balances(balances)
         for b in balances:
             if b.get("asset") == asset:
                 free = Decimal(str(b.get("free", "0")))
                 logging.info(f"[SPOT BALANCE] {asset} free={free}")
                 return free
         return Decimal("0")
-    except BinanceAPIException as e:
-        logging.error(f"Binance API error while fetching {asset} balance: {e.message}")
+    except ClientError as e:
+        logging.error(f"Binance API error while fetching {asset} balance: {e.error_message}")
         raise
     except Exception as e:
         logging.exception(f"Failed to fetch spot asset balance for {asset}: {e}")
         raise
 
 def place_spot_market_order(symbol, side, quantity):
-    return client.order_market(symbol=symbol, side=side, quantity=float(quantity))
+    """
+    Place a MARKET order. Quantity must be base asset amount.
+    """
+    # use str(quantity) to avoid float precision
+    return client.new_order(symbol=symbol, side=side, type="MARKET", quantity=str(quantity))
 
-def resolve_trade_amount(free_balance: Decimal, amt: Decimal | None, pct: Decimal | None, side: str) -> tuple[Decimal | None, str | None]:
-    """
-    Resolve the actual trade amount based on either pct or amt.
-    - For BUY: free_balance is the quote asset (e.g., USDT balance).
-    - For SELL: free_balance is the base asset (e.g., ADA balance).
-    - If amt > free_balance, return a warning and abort the order
-    Returns: (resolved_amount, error_msg)
-    """
+def resolve_trade_amount(
+    free_balance: Decimal,
+    amt: Decimal | None,
+    pct: Decimal | None,
+    side: str,
+) -> tuple[Decimal | None, str | None]:
     if amt is not None:
         if amt > free_balance:
             logging.warning(f"[INVEST:{side}-AMOUNT] Balance insufficient: requested={amt}, available={free_balance}")
@@ -470,168 +404,161 @@ def resolve_trade_amount(free_balance: Decimal, amt: Decimal | None, pct: Decima
 def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decimal, place_order_fn):
     """
     Place an order safely with unified exception handling and logging.
-    Returns (response_dict, status_code).
     """
     try:
         resp = place_order_fn(symbol, side, qty)
-    except requests.exceptions.HTTPError as e:
-        err_str = str(e).lower()
-        if "418" in err_str or "teapot" in err_str:
-            logging.error(f"Binance rate limit hit (418): {e}")
-            return {"error": "Binance rate limit hit (418 I'm a teapot)"}, 429
-        elif "429" in err_str or "too many requests" in err_str:
-            logging.error(f"Binance request limit hit (429): {e}")
-            return {"error": "Binance request limit hit (429)"}, 429
-        elif "notional" in err_str:
+    except ClientError as e:
+        msg = e.error_message.lower() if e.error_message else ""
+        code = e.error_code
+        status = e.status_code
+        if status in (418, 429) or code in (-1003,):
+            logging.error(f"Binance rate limit hit ({status}/{code}): {e.error_message}")
+            return {"error": f"Binance request limit hit ({status})"}, 429
+        if "notional" in msg or code in (-1013,):
             logging.error("Trade rejected: below Binance min_notional")
             return {"error": "Trade rejected: below Binance min_notional"}, 400
-        else:
-            raise
+        logging.exception(f"Order placement failed: {e}")
+        return {"error": f"Order failed: {e.error_message}"}, 400
+    except ServerError as e:
+        logging.error(f"Binance server error: {e}")
+        return {"error": "Binance server error"}, 502
+    except Exception as e:
+        logging.exception(f"Unexpected order error: {e}")
+        return {"error": f"Unexpected order error: {str(e)}"}, 500
 
-    logging.info(f"[ORDER] {side} successfully executed: {qty} {symbol} at {price} on {datetime.now(timezone.utc).isoformat()}")
+    logging.info(f"[ORDER] {side} successfully executed: qty={qty} {symbol} at price={price}")
     return {"status": f"spot_{side.lower()}_executed", "order": resp}, 200
-
-
 
 # ---------------------------------
 # Unified trade execution
 # ---------------------------------
-def execute_trade(symbol: str, side: str, pct=None, amt=None, trade_type: str ="SPOT", place_order_fn=None):
+def execute_trade(
+    symbol: str,
+    side: str,
+    pct=None,
+    amt=None,
+    amt_in_crypto=False,
+    amt_in_funds=False,
+    trade_type="SPOT",
+    place_order_fn=None,
+):
     """
-    Unified trade executor for SPOT, with the potential to extend to Cross-Margin in the future.
-    - Handles buy/sell, quantity math, filter validation, and order placement.
-    and we additionally repay any USDT debt using the sale proceeds.
-    Returns (response_dict, http_status).
+    Unified trade executor for SPOT; handles buy/sell, quantity math, filter validation, and order placement.
     """
     try:
-        # Fetch price and filters
+        logging.info(f"[EXECUTE] side={side}, pct={pct}, amt={amt}, amt_in_crypto={amt_in_crypto}, amt_in_funds={amt_in_funds}")
+
+        # === 1. Price retrieval (with one retry) ===
         price = get_current_price(symbol)
         if price is None:
-            logging.info(f"Retrying once for {symbol}. Retrying in 3 seconds...")
+            logging.info(f"[EXECUTE] Retrying price fetch for {symbol} in 3s...")
             time.sleep(3)
             price = get_current_price(symbol)
         if price is None:
-            logging.warning(f"No price available for {symbol}. Cannot proceed.")
+            logging.warning(f"[EXECUTE] No price available for {symbol}. Aborting trade.")
             return {"error": f"Price not available for {symbol}"}, 200
 
-        step_size, min_qty, min_notional = get_trade_filters(symbol)
-        if None in (step_size, min_qty, min_notional):
-            logging.warning(f"Incomplete trade filters for {symbol}: step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-            return {"error": f"Filters not available for {symbol}"}, 200
+        # === 2. Fetch filters ===
+        filters = get_cached_symbol_filters(symbol)
+        if not filters:
+            logging.warning(f"[EXECUTE] Filters unavailable for {symbol}")
+            return {"error": f"Filters unavailable for {symbol}"}, 200
+        
+        filters = sanitize_filters(filters)
 
+        step_size = Decimal(filters.get("step_size", "0"))
+        min_qty = Decimal(filters.get("min_qty", "0"))
+        min_notional = Decimal(filters.get("min_notional", "0"))
+        if not all([step_size, min_qty, min_notional]):
+            logging.warning(
+                f"[EXECUTE] Incomplete filters for {symbol}: "
+                f"step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}"
+            )
+            return {"error": f"Incomplete filters for {symbol}"}, 200
+
+        # === 3. Determine assets ===
         try:
             base_asset, quote_asset = split_symbol(symbol)
         except ValueError as e:
-            logging.error("Failed to parse base/quote assets")
-            return {"error": f"Failed to parse base/quote assets: {str(e)}"}, 400
+            logging.error(f"[EXECUTE] Failed to parse base/quote assets for {symbol}: {e}")
+            return {"error": f"Failed to parse base/quote assets: {e}"}, 400
 
-        # BUY flow
+        # === 4. Determine balance and target amount ===
+        balances = get_cached_balances() or {}
         if side == "BUY":
-            try:
-                quote_free = get_spot_asset_free(quote_asset)
-                invest_amount, error_msg = resolve_trade_amount(quote_free, amt, pct, side="BUY")
-                if error_msg:
-                    logging.warning(f"[INVEST ERROR] {error_msg}")
-                    return {"error": error_msg}, 200
-                raw_qty = invest_amount / price
-                qty = quantize_quantity(raw_qty, step_size)
-                logging.info(f"[EXECUTE SPOT BUY] {symbol}: invest_amount={invest_amount}, qty={qty}, raw_qty={display_decimal(raw_qty, 16)}")
-                logging.info(f"[INVESTMENT] Approx. total investment ≈ {(qty * price):.2f} USDT --> price={price}, qty={qty}")
-                is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
-                if not is_valid:
-                    return resp_dict, status
-                
-                # Place the order after safeguards pass
-                return place_order_with_handling(symbol, side, qty, price, place_order_fn)
-                            
-            except Exception as e:
-                logging.exception("Spot buy failed")
-                return {"error": f"Spot buy failed: {str(e)}"}, 500
-
-        # SELL flow
+            balance_asset = quote_asset
         elif side == "SELL":
-            try:
-                asset_free = get_spot_asset_free(base_asset)
-                if asset_free <= Decimal("0"):
-                    logging.warning(f"No spot {base_asset} balance to sell. Aborting.")
-                    return {"warning": f"No spot {base_asset} balance to sell. Aborting."}, 200
-                sell_qty, error_msg = resolve_trade_amount(asset_free, amt, pct, side="SELL")
-                if error_msg:
-                    logging.warning(f"[INVEST ERROR] {error_msg}")
-                    return {"error": error_msg}, 200
-                qty = quantize_quantity(sell_qty, step_size)
-                logging.info(f"[EXECUTE SPOT SELL] {symbol}: asset_free={asset_free}, sell_qty={qty}, step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
-                logging.info(f"[PROCEEDS] Approx. total proceeds ≈ {(qty * price):.2f} {quote_asset} --> price={price}, qty={qty}")
-                is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
-                if not is_valid:
-                    return resp_dict, status
-                
-                # Place the order after safeguards pass
-                return place_order_with_handling(symbol, side, qty, price, place_order_fn)
-            
-            except Exception as e:
-                logging.exception("Spot sell failed")
-                return {"error": f"Spot sell failed: {str(e)}"}, 500
-
-        # Unknown side (shouldn't happen)
+            balance_asset = base_asset
         else:
-            return {"error": f"Unknown side {side}. No action performed."}, 400
+            return {"error": f"Unknown side {side}. Must be BUY or SELL."}, 400
+
+        free_balance = balances.get(balance_asset, Decimal("0"))
+        if free_balance <= 0:
+            logging.warning(f"[EXECUTE] No available {balance_asset} balance to {side.lower()}.")
+            return {"warning": f"No available {balance_asset} balance to {side.lower()}."}, 200
+
+        # Resolve amount
+        target_amount, error_msg = resolve_trade_amount(free_balance, amt, pct, side=side)
+        if error_msg:
+            logging.warning(f"[EXECUTE] {error_msg}")
+            return {"error": error_msg}, 200
+
+        # === 5. Compute quantity ===
+        # target_amount here may refer to base or quote, depending on flags
+        if side == "BUY":
+            if amt_in_crypto:
+                # User specified base asset directly, e.g. buy 1.2 ETH
+                raw_qty = amt
+                notional = raw_qty * price
+                logging.info(f"[BUY:CRYPTO-AMOUNT] qty={raw_qty} ({notional:.2f} quote value)")
+            else:
+                # Normal path: buy_funds_amount or buy_funds_pct (in quote)
+                raw_qty = target_amount / price
+                notional = target_amount
+                logging.info(f"[BUY:FUNDS-{('PCT' if pct else 'AMT')}] notional≈{notional:.2f}, qty={raw_qty}")
+
+        elif side == "SELL":
+            if amt_in_funds:
+                # User specified desired quote amount, e.g. sell BTC worth 100 USDT
+                raw_qty = amt / price
+                notional = amt
+                logging.info(f"[SELL:FUNDS-AMOUNT] notional≈{notional:.2f}, qty={raw_qty}")
+            else:
+                # Normal path: sell_crypto_amount or sell_crypto_pct (in base)
+                raw_qty = target_amount
+                notional = raw_qty * price
+                logging.info(f"[SELL:CRYPTO-{('PCT' if pct else 'AMT')}] qty={raw_qty}, notional≈{notional:.2f}")
+        else:
+            return {"error": f"Unknown side {side}"}, 400
+
+        qty = quantize_quantity(raw_qty, step_size)
+        notional = qty * price
+
+        # === 6. Log trade intent ===
+        action_label = "BUY" if side == "BUY" else "SELL"
+        logging.info(f"[EXECUTE {action_label}] {symbol}: qty={qty}, price={price}, notional≈{notional:.2f}")
+        logging.debug(f"[DETAILS] step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
+
+        # === 7. Validate filters ===
+        is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
+        if not is_valid:
+            return resp_dict, status
+
+        # === 8. Place order ===
+        result, status_code = place_order_with_handling(symbol, side, qty, price, place_order_fn)
+
+        # === 9. Refresh balances if trade succeeded ===
+        if status_code == 200 and result and "error" not in result:
+            try:
+                refresh_balances_for_assets(client, [base_asset, quote_asset])
+            except Exception as e:
+                logging.warning(f"[CACHE] Post-trade balance refresh failed: {e}")
+
+        return result, status_code
 
     except Exception as e:
-        logging.exception("Trade execution failed")
+        logging.exception(f"[EXECUTE] Trade execution failed for {symbol}")
         return {"error": f"Trade execution failed: {str(e)}"}, 500
-
-
-# -------------------------
-# Flask hooks and health endpoints
-# -------------------------
-@app.before_request
-def check_ip_whitelist():
-    if request.method == "POST" and request.path == WEBHOOK_REQUEST_PATH:
-        raw_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-        client_ip = raw_ip.split(",")[0].strip() # Take only the first IP in case there are multiple
-
-        # Load TradingView IPs
-        # Allowlist of known TradingView alert IPs (must keep updated), see: https://www.tradingview.com/support/solutions/43000529348
-        TRADINGVIEW_IPS = load_ip_file("config/tradingview_ips.txt")
-
-        if client_ip not in TRADINGVIEW_IPS:
-            logging.warning(f"Blocked request from unauthorized IP: {client_ip}")
-            logging.warning(f"IP address owned by: https://ipapi.co/{client_ip}/json/")
-            return jsonify({"error": f"IP {client_ip} not allowed"}), 403
-        
-@app.before_request
-def before_req():
-    if should_log_request():
-        logging.info(f"[REQUEST] Method:'{request.method}', Path:'{request.path}'")
-
-@app.after_request
-def after_req(response):
-    if should_log_request():
-        logging.info(f"[RESPONSE] Method:'{request.method}', Path:'{request.path}' -> Status Code:'{response.status_code}'")
-    return response
-    
-@app.route('/', methods=['GET', 'HEAD'])
-def root():
-    # logging.info(f"[ROOT] Call to root endpoint received.")
-    # return '', 204
-    return jsonify({"status": "rooty"}), 200
-
-@app.route('/ping', methods=['GET'])
-def ping():
-    # logging.info("[PING] Keep-alive ping received.")
-    return "pong", 200
-
-@app.route('/health-check', methods=['GET', 'HEAD'])
-def health_check():
-    # logging.info("[HEALTH CHECK] Call to health-check endpoint received.")
-    return jsonify({"status": "healthy"}), 200
-
-@app.route('/healthz', methods=['GET', 'HEAD'])
-def healthz():
-    # logging.info("[HEALTHZ CHECK] Call to healthz endpoint received.")
-    return jsonify({"status": "healthzy"}), 200
-
 
 # -------------------------
 # Webhook endpoint
@@ -646,30 +573,38 @@ def webhook():
         if error_response:
             return error_response
 
-        # Log payload without secret
         log_webhook_payload(data, SECRET_FIELD)
-        
-        # Parse fields
+
         try:
             action = data.get("action", "").strip().upper()
             symbol = data.get("symbol", "").strip().upper()
-            buy_pct_raw = data.get("buy_pct", None)
-            buy_amt_raw = data.get("buy_amount", None)
-            sell_pct_raw = data.get("sell_pct", None)
-            sell_amt_raw = data.get("sell_amount", None)
+            buy_funds_pct_raw = data.get("buy_funds_pct")
+            buy_funds_amount_raw = data.get("buy_funds_amount")
+            buy_crypto_amount_raw = data.get("buy_crypto_amount")
+            sell_crypto_pct_raw = data.get("sell_crypto_pct")
+            sell_crypto_amount_raw = data.get("sell_crypto_amount")
+            sell_funds_amount_raw = data.get("sell_funds_amount")
             trade_type = data.get("type", "SPOT").strip().upper()
-        except Exception as e:
+        except Exception:
             logging.exception("Failed to extract fields")
             return jsonify({"error": "Invalid fields"}), 400
 
-        log_parsed_payload(action, symbol, buy_pct_raw, buy_amt_raw, sell_pct_raw, sell_amt_raw, trade_type)
+        log_parsed_payload(
+            action,
+            symbol,
+            buy_funds_pct_raw,
+            buy_funds_amount_raw,
+            buy_crypto_amount_raw,
+            sell_crypto_pct_raw,
+            sell_crypto_amount_raw,
+            sell_funds_amount_raw,
+            trade_type
+        )
 
-        # Easter egg check
         resp = detect_tradingview_placeholder(action)
         if resp:
             return resp
-        
-        # Validate action and symbol
+
         if action not in {"BUY", "SELL"}:
             logging.error(f"Invalid action: {action}")
             return jsonify({"error": "Invalid action"}), 400
@@ -681,8 +616,10 @@ def webhook():
             return jsonify({"error": "Symbol not allowed"}), 400
 
         is_buy = action == "BUY"
-        pct, amt, error_response = validate_and_normalize_trade_fields(
-            action, is_buy, buy_pct_raw, buy_amt_raw, sell_pct_raw, sell_amt_raw
+        pct, amt, amt_in_crypto, amt_in_funds, error_response = validate_and_normalize_trade_fields(
+            action, is_buy,
+            buy_funds_pct_raw, buy_funds_amount_raw, buy_crypto_amount_raw,
+            sell_crypto_pct_raw, sell_crypto_amount_raw, sell_funds_amount_raw
         )
         if error_response:
             return error_response
@@ -692,16 +629,17 @@ def webhook():
             side="BUY" if is_buy else "SELL",
             pct=pct,
             amt=amt,
+            amt_in_crypto=amt_in_crypto,
+            amt_in_funds=amt_in_funds,
             trade_type=trade_type,
             place_order_fn=place_spot_market_order
         )
         return jsonify(result), status_code
-    
+
     finally:
         end_time = time.perf_counter()
         elapsed = end_time - start_time
         log_webhook_delimiter(f"END (elapsed: {elapsed:.4f} seconds)")
-
 
 # -------------------------
 # maybe useful in future
@@ -721,21 +659,18 @@ def log_balances(balances):
         if total > 0:
             logging.info(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
 
-
 # -------------------------
 # easter egg
 # -------------------------
 def detect_tradingview_placeholder(action: str):
-    """
-    Detect if the action is still the raw TradingView placeholder.
-    Returns a Flask response if placeholder is found, otherwise None.
-    """
     if action == "{{STRATEGY.ORDER.ACTION}}":
         logging.warning("TradingView placeholder received instead of explicit action.")
-        logging.warning("Did you accidentally paste {{strategy.order.action}} instead of letting TradingView expand it? Use BUY or SELL instead...")
+        logging.warning(
+            "Did you accidentally paste {{strategy.order.action}} instead of letting "
+            "TradingView expand it? Use BUY or SELL instead..."
+        )
         return jsonify({"error": "Did you accidentally paste {{strategy.order.action}} instead of letting TradingView expand it?"}), 400
     return None
-
 
 # -------------------------
 # Run app
