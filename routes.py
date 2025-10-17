@@ -1,7 +1,7 @@
 import json
 import logging
 from flask import Blueprint, jsonify, request
-from app import get_binance_client
+from binance_client import get_binance_client
 from binance_data import _get_redis, fetch_and_cache_balances, fetch_and_cache_filters
 from utils import should_log_request, load_ip_file
 from config._settings import WEBHOOK_REQUEST_PATH, ADMIN_API_KEY, ALLOWED_SYMBOLS
