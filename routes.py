@@ -1,10 +1,9 @@
 import json
 import logging
 from flask import Blueprint, jsonify, request
-from binance_client import get_binance_client
-from binance_data import _get_redis, fetch_and_cache_balances, fetch_and_cache_filters
+from binance_data import _get_redis
 from utils import should_log_request, load_ip_file
-from config._settings import WEBHOOK_REQUEST_PATH, ADMIN_API_KEY, ALLOWED_SYMBOLS
+from config._settings import WEBHOOK_REQUEST_PATH, ADMIN_API_KEY
 
 routes = Blueprint("routes", __name__)
 
@@ -162,7 +161,7 @@ def cache_filters(symbol):
         logging.error(f"[ROUTE] /cache/filters/{symbol} failed: {e}")
         return jsonify({"error": "Failed to fetch symbol filters"}), 500
 
-
+'''
 @routes.route("/cache/update/balances", methods=["POST"])
 def update_balances():
     provided_key = request.headers.get("X-Admin-Key")
@@ -195,6 +194,7 @@ def update_filters():
     except Exception as e:
         logging.exception(f"[ROUTE] /cache/update/filters failed: {e}")
         return jsonify({"error": "Failed to update filters"}), 500
+'''
 
 
 # ==========================================================

@@ -6,10 +6,8 @@ import logging
 from decimal import Decimal
 
 # binance-connector imports (official SDK)
+from binance.spot import Spot as Client
 from binance.error import ClientError, ServerError
-
-# Shared Binance client
-from binance_client import get_binance_client
 
 # Redis and WebSocket price cache and background_cache
 from binance_data import (
@@ -70,7 +68,7 @@ app.register_blueprint(routes)
 # -------------------------
 # CLIENT INIT
 # -------------------------
-client = get_binance_client()
+client = Client(api_key=BINANCE_API_KEY, api_secret=BINANCE_SECRET_KEY)
 
 # -------------------------
 # REDIS + WS INIT
