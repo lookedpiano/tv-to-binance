@@ -71,6 +71,10 @@ app.register_blueprint(routes)
 # -------------------------
 client = Client(api_key=BINANCE_API_KEY, api_secret=BINANCE_SECRET_KEY)
 
+def get_binance_client():
+    """Return the shared Binance Spot client instance."""
+    return client
+
 # -------------------------
 # REDIS + WS INIT
 # -------------------------
