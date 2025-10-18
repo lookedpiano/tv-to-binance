@@ -12,6 +12,8 @@ from binance.error import ClientError, ServerError
 # Redis and WebSocket price cache and background_cache
 from binance_data import (
     init_redis,
+    init_client,
+    get_client,
     start_ws_price_cache,
     start_background_cache,
     get_cached_price,
@@ -68,7 +70,7 @@ app.register_blueprint(routes)
 # -------------------------
 # CLIENT INIT
 # -------------------------
-client = Client(api_key=BINANCE_API_KEY, api_secret=BINANCE_SECRET_KEY)
+client = init_client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 
 # -------------------------
 # REDIS + WS INIT
@@ -76,7 +78,7 @@ client = Client(api_key=BINANCE_API_KEY, api_secret=BINANCE_SECRET_KEY)
 try:
     init_redis(REDIS_URL)
     start_ws_price_cache(ALLOWED_SYMBOLS)
-    start_background_cache(client, ALLOWED_SYMBOLS)
+    start_background_cache(ALLOWED_SYMBOLS)
     logging.info("[INIT] Background caches initialized successfully.")
 except Exception as e:
     logging.exception(f"[INIT] Failed to initialize background caches: {e}")

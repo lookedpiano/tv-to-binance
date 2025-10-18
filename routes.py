@@ -1,9 +1,9 @@
 import json
 import logging
 from flask import Blueprint, jsonify, request
-from binance_data import _get_redis
+from binance_data import _get_redis, get_client, fetch_and_cache_balances, fetch_and_cache_filters
 from utils import should_log_request, load_ip_file
-from config._settings import WEBHOOK_REQUEST_PATH, ADMIN_API_KEY
+from config._settings import WEBHOOK_REQUEST_PATH, ADMIN_API_KEY, ALLOWED_SYMBOLS
 
 routes = Blueprint("routes", __name__)
 
@@ -160,6 +160,38 @@ def cache_filters(symbol):
     except Exception as e:
         logging.error(f"[ROUTE] /cache/filters/{symbol} failed: {e}")
         return jsonify({"error": "Failed to fetch symbol filters"}), 500
+
+
+@routes.route("/cache/refresh/balances", methods=["POST"])
+def refresh_balances():
+    provided_key = request.headers.get("X-Admin-Key")
+    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
+        logging.warning("[SECURITY] Unauthorized attempt to refresh balances")
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        client = get_client()
+        fetch_and_cache_balances(client)
+        return jsonify({"message": "Balances refreshed successfully"}), 200
+    except Exception as e:
+        logging.exception("[ROUTE] /cache/refresh/balances failed")
+        return jsonify({"error": f"Failed to refresh balances: {e}"}), 500
+
+
+@routes.route("/cache/refresh/filters", methods=["POST"])
+def refresh_filters():
+    provided_key = request.headers.get("X-Admin-Key")
+    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
+        logging.warning("[SECURITY] Unauthorized attempt to refresh filters")
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        client = get_client()
+        fetch_and_cache_filters(client, ALLOWED_SYMBOLS)
+        return jsonify({"message": "Filters refreshed successfully"}), 200
+    except Exception as e:
+        logging.exception("[ROUTE] /cache/refresh/filters failed")
+        return jsonify({"error": f"Failed to refresh filters: {e}"}), 500
 
 
 # ==========================================================

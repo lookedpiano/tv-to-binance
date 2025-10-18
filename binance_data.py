@@ -53,13 +53,33 @@ threading.excepthook = _suppress_thread_exceptions
 
 
 # ==========================================================
-# ========== CONFIG CONSTANTS ===============================
+# ========== CONFIG CONSTANTS ==============================
 # ==========================================================
 WS_LOG_INTERVAL = 42                    # Interval for logging price snapshots (seconds)
 BALANCE_REFRESH_INTERVAL = 3600         # 1 hour
 FILTER_REFRESH_INTERVAL = 1 * 24 * 3600 # 1 day
 WS_RECONNECT_GRACE = 60                 # Restart stale WS streams if no update for 60s
 WS_CHECK_INTERVAL = 30                  # Health monitor check interval (seconds)
+
+
+# ==========================================================
+# ========== CLIENT ========================================
+# ==========================================================
+_client: Optional[Client] = None
+
+def init_client(api_key: str, api_secret: str):
+    """Initialize global Binance Spot client."""
+    global _client
+    if _client is None:
+        _client = Client(api_key=api_key, api_secret=api_secret)
+        logging.info("[INIT] Binance client initialized.")
+    return _client
+
+def get_client() -> Client:
+    """Return initialized Binance client or raise."""
+    if _client is None:
+        raise RuntimeError("Binance client not initialized. Call init_client() first.")
+    return _client
 
 
 # ==========================================================
@@ -338,9 +358,10 @@ Called once at server startup to begin background caching threads:
 - Periodic balance + filter refresh
 """
 
-def start_background_cache(client: Client, symbols: List[str]):
+def start_background_cache(symbols: List[str]):
     """Start background threads to keep balances and filters fresh."""
     logging.info("[CACHE] Starting background threads...")
+    client = get_client()
     fetch_and_cache_balances(client)
     fetch_and_cache_filters(client, symbols)
     threading.Thread(target=_balance_updater, args=(client,), daemon=True, name="BalanceCache").start()
