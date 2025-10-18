@@ -192,3 +192,4 @@ def cache_summary():
     except Exception as e:
         logging.error(f"[ROUTE] /cache/summary failed: {e}")
         return jsonify({"error": "Failed to fetch cache summary"}), 500
+    
