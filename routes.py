@@ -1,6 +1,7 @@
 import json
 import logging
 from flask import Blueprint, jsonify, request
+from datetime import datetime
 from binance_data import _get_redis, get_client, fetch_and_cache_balances, fetch_and_cache_filters
 from utils import should_log_request, load_ip_file
 from config._settings import WEBHOOK_REQUEST_PATH, ADMIN_API_KEY, ALLOWED_SYMBOLS
@@ -223,5 +224,92 @@ def cache_summary():
 
     except Exception as e:
         logging.error(f"[ROUTE] /cache/summary failed: {e}")
-        return jsonify({"error": "Failed to fetch cache summary"}), 500
-    
+        return jsonify({"error": "Failed to fetch cache summary"}), 500    
+
+
+# ==========================================================
+# ========== DASHBOARD======================================
+# ==========================================================
+@routes.route("/dashboard", methods=["GET"])
+def dashboard():
+    try:
+        r = _get_redis()
+
+        # Load cache summaries
+        prices = r.hgetall("price_cache")
+        balances_raw = r.get("account_balances")
+        balances = json.loads(balances_raw)["balances"] if balances_raw else {}
+
+        filters_count = len(r.keys("filters:*"))
+
+        ts_bal = r.get("last_refresh_balances")
+        ts_filt = r.get("last_refresh_filters")
+
+        last_balances = datetime.fromtimestamp(float(ts_bal)).strftime("%Y-%m-%d %H:%M:%S") if ts_bal else "Never"
+        last_filters = datetime.fromtimestamp(float(ts_filt)).strftime("%Y-%m-%d %H:%M:%S") if ts_filt else "Never"
+
+        # Simple HTML dashboard
+        html = f"""
+        <html>
+        <head>
+            <title>TV → Binance Cache Dashboard</title>
+            <style>
+                body {{ font-family: sans-serif; background: #111; color: #eee; margin: 40px; }}
+                h1 {{ color: #0f0; }}
+                .section {{ margin-bottom: 2rem; }}
+                button {{ background: #0f0; color: #111; border: none; padding: 10px 20px; cursor: pointer; font-weight: bold; border-radius: 8px; }}
+                button:hover {{ background: #6f6; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                th, td {{ padding: 6px 10px; border-bottom: 1px solid #333; text-align: left; }}
+                .time {{ color: #999; }}
+            </style>
+        </head>
+        <body>
+            <h1>Binance Cache Dashboard</h1>
+
+            <div class="section">
+                <h2>Balances</h2>
+                <p class="time">Last refreshed: <b>{last_balances}</b></p>
+                <button onclick="refresh('balances')">Refresh Balances</button>
+                <table>
+                    <tr><th>Asset</th><th>Free</th></tr>
+                    {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in balances.items())}
+                </table>
+            </div>
+
+            <div class="section">
+                <h2>Filters</h2>
+                <p class="time">Last refreshed: <b>{last_filters}</b></p>
+                <button onclick="refresh('filters')">Refresh Filters</button>
+                <p>Total cached filters: {filters_count}</p>
+            </div>
+
+            <div class="section">
+                <h2>Prices</h2>
+                <p>Total cached prices: {len(prices)}</p>
+                <table>
+                    <tr><th>Symbol</th><th>Price</th></tr>
+                    {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in list(prices.items())[:30])}
+                </table>
+                <p style="color:#666">(Showing up to 30 symbols)</p>
+            </div>
+
+            <script>
+                async function refresh(type) {{
+                    const key = "{ADMIN_API_KEY}";
+                    const resp = await fetch(`/cache/refresh/${{type}}`, {{
+                        method: "POST",
+                        headers: {{ "X-Admin-Key": key }}
+                    }});
+                    const data = await resp.json();
+                    alert(data.message || data.error);
+                    location.reload();
+                }}
+            </script>
+        </body>
+        </html>
+        """
+        return html, 200
+    except Exception as e:
+        logging.exception("[ROUTE] /dashboard failed")
+        return jsonify({"error": f"Failed to render dashboard: {e}"}), 500

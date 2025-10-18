@@ -254,6 +254,7 @@ def fetch_and_cache_balances(client: Client):
         }
         data = {"balances": {k: str(v) for k, v in balances.items()}, "ts": time.time()}
         _get_redis().set("account_balances", json.dumps(data))
+        _get_redis().set("last_refresh_balances", time.time())
         logging.info(f"[CACHE] Balances updated ({len(balances)} assets).")
     except ClientError as e:
         logging.error(f"[CACHE] Binance error fetching balances: {e.error_message}")
@@ -326,6 +327,7 @@ def fetch_and_cache_filters(client: Client, symbols: List[str]):
                 f"filters:{symbol.upper()}",
                 json.dumps({"filters": {k: str(v) for k, v in filters.items()}, "ts": time.time()}),
             )
+            _get_redis().set("last_refresh_filters", time.time())
 
             logging.debug(f"[CACHE] Filters cached for {symbol}")
 
