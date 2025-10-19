@@ -398,8 +398,8 @@ def dashboard():
                     }} else if (type === "prices") {{
                         url = "/cache/prices";
                     }} else {{
-                        alert("Unknown refresh type");
-                        overlay.style.display = 'none';
+                        overlayText.textContent = "Unknown refresh type";
+                        setTimeout(() => overlay.style.display = 'none', 1500);
                         return;
                     }}
 
@@ -413,22 +413,28 @@ def dashboard():
                         let data;
                         try {{ data = JSON.parse(text); }} catch (e) {{ data = {{ raw: text }}; }}
 
-                        overlay.style.display = 'none';  // Hide overlay after fetch completes
-
                         if (!resp.ok) {{
-                            alert((data && (data.error || data.message)) || `HTTP {{resp.status}}`);
+                            overlayText.textContent = (data && (data.error || data.message)) || `HTTP {{resp.status}}`;
+                            overlayText.style.color = "#ff3333";
+                            setTimeout(() => overlay.style.display = 'none', 2500);
                             return;
                         }}
 
-                        if (type === "prices") {{
-                            alert("Prices fetched from cache.");
-                        }} else {{
-                            alert(data.message || data.error || "Done");
-                        }}
-                        location.reload();
+                        // Success message in overlay
+                        overlayText.textContent = `✓ ${{
+                            type.charAt(0).toUpperCase() + type.slice(1)
+                        }} refreshed successfully`;
+                        overlayText.style.color = "#00cc66"; // green success
+
+                        // Wait a moment, then reload
+                        setTimeout(() => {{
+                            overlay.style.display = 'none';
+                            location.reload();
+                        }}, 1500);
                     }} catch (err) {{
-                        overlay.style.display = 'none';
-                        alert("Refresh failed: " + err);
+                        overlayText.textContent = "Refresh failed: " + err;
+                        overlayText.style.color = "#ff3333";
+                        setTimeout(() => overlay.style.display = 'none', 2500);
                     }}
                 }}
             </script>
