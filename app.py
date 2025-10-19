@@ -46,11 +46,13 @@ from config._settings import (
     REQUIRED_FIELDS,
     SECRET_FIELD,
     WEBHOOK_REQUEST_PATH,
+    ADMIN_API_KEY,
     BINANCE_API_KEY,
     BINANCE_SECRET_KEY,
     WEBHOOK_SECRET,
-    REDIS_URL,
     PORT,
+    REDIS_URL,
+    RENDER_EXTERNAL_URL,
 )
 
 # -------------------------
@@ -80,9 +82,11 @@ try:
     start_ws_price_cache(ALLOWED_SYMBOLS)
     start_background_cache(ALLOWED_SYMBOLS)
     logging.info("[INIT] Background caches initialized successfully.")
+
+    dashboard_url = f"{RENDER_EXTERNAL_URL}/dashboard?key={ADMIN_API_KEY}"
     logging.info("─────────────────────────────────────────────")
     logging.info("Visit the dashboard for live cache info:")
-    logging.info("👉 https://tv-to-binance.onrender.com/dashboard")
+    logging.info(f"👉  {dashboard_url}")
     logging.info("─────────────────────────────────────────────")
 except Exception as e:
     logging.exception(f"[INIT] Failed to initialize background caches: {e}")
