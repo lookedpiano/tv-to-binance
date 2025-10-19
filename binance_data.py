@@ -69,6 +69,8 @@ threading.excepthook = _suppress_thread_exceptions
 # ========== CONFIG CONSTANTS ==============================
 # ==========================================================
 WS_LOG_INTERVAL = 42                    # Interval for logging price snapshots (seconds)
+LAST_SEEN_UPDATE_INTERVAL = 5           # 5 seconds
+UPDATE_THROTTLE_SECONDS = 120           # 2 minutes
 BALANCE_REFRESH_INTERVAL = 3600         # 1 hour
 FILTER_REFRESH_INTERVAL = 1 * 24 * 3600 # 1 day
 WS_RECONNECT_GRACE = 60                 # Restart stale WS streams if no update for 60s
@@ -133,8 +135,9 @@ If a connection goes stale (>60s without updates), it is automatically restarted
 _ws_lock = threading.Lock()
 _ws_started = False
 _ws_clients: Dict[str, SpotWebsocketStreamClient] = {}   # active websocket clients per symbol
-_last_update: Dict[str, float] = {}                      # last update timestamp per symbol
 _last_logged: Dict[str, float] = {}                      # last logged timestamp per symbol
+_last_seen = {}                                          # last time we received any message per symbol
+_last_saved = {}                                         # last time we actually saved (throttled updates)
 
 def set_cached_price(symbol: str, price: Decimal):
     """Store price in Redis hash."""
@@ -151,7 +154,7 @@ def get_cached_price(symbol: str) -> Optional[Decimal]:
     return Decimal(price)
 
 def _on_ws_message(_, message):
-    """Process incoming Binance websocket messages."""
+    """Process incoming Binance websocket messages (throttled per symbol)."""
     try:
         data = json.loads(message)
         symbol = data.get("s")
@@ -160,13 +163,21 @@ def _on_ws_message(_, message):
         if not symbol or not bid or not ask:
             return
 
+        now = time.time()
+        
+        if symbol not in _last_seen or now - _last_seen[symbol] > LAST_SEEN_UPDATE_INTERVAL:
+            _last_seen[symbol] = now # only mark as seen occasionally
+
+        last_saved = _last_saved.get(symbol, 0)
+        if now - last_saved < UPDATE_THROTTLE_SECONDS:
+            return  # skip this update
+
         mid_price = (Decimal(str(bid)) + Decimal(str(ask))) / 2
         set_cached_price(symbol, mid_price)
-        _last_update[symbol] = time.time()
-        _get_redis().set("last_refresh_prices", time.time())
+        _last_saved[symbol] = now
 
-        # Log occasionally (every 10s per symbol)
-        now = time.time()
+        _get_redis().set("last_refresh_prices", now)
+
         if symbol not in _last_logged or now - _last_logged[symbol] > 10:
             logging.debug(f"[WS UPDATE] {symbol}: {mid_price}")
             _last_logged[symbol] = now
@@ -202,14 +213,14 @@ def _ws_loop(symbols: List[str]):
     logging.info("[WS] All dedicated WebSocket clients started successfully.")
 
 def _ws_health_monitor(symbols: List[str]):
-    """Monitor each WebSocket stream and restart if stale (>WS_RECONNECT_GRACE seconds without updates)."""
+    """Monitor each WebSocket stream and restart if stale (>WS_RECONNECT_GRACE seconds without any message)."""
     while True:
         time.sleep(WS_CHECK_INTERVAL)
         now = time.time()
         for sym in symbols:
-            last = _last_update.get(sym, 0)
-            if now - last > WS_RECONNECT_GRACE:
-                logging.debug(f"[WS MONITOR] {sym} stale for > {WS_RECONNECT_GRACE}s — restarting...")
+            last_seen = _last_seen.get(sym, 0)
+            if now - last_seen > WS_RECONNECT_GRACE:
+                logging.debug(f"[WS MONITOR] {sym} stale for >{WS_RECONNECT_GRACE}s — restarting...")
                 client = _ws_clients.pop(sym, None)
                 if client:
                     try:
@@ -217,7 +228,7 @@ def _ws_health_monitor(symbols: List[str]):
                     except Exception:
                         pass
                 threading.Thread(target=_start_ws_for_symbol, args=(sym,), daemon=True).start()
-                _last_update[sym] = now
+                _last_seen[sym] = now  # reset to prevent immediate retrigger
 
 
 def _log_price_snapshot():
