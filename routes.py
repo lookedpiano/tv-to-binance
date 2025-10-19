@@ -262,13 +262,13 @@ def dashboard():
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
-                body {
+                body {{
                     font-family: 'Inter', sans-serif;
                     background: #111;
                     color: #eee;
                     margin: 40px;
-                }
-                h1 {
+                }}
+                h1 {{
                     color: #ff6600;
                     font-size: 2.8rem;
                     font-weight: 700;
@@ -276,9 +276,9 @@ def dashboard():
                     text-transform: uppercase;
                     text-align: center;
                     margin-bottom: 40px;
-                }
-                .section { margin-bottom: 2rem; }
-                button {
+                }}
+                .section {{ margin-bottom: 2rem; }}
+                button {{
                     background: #ff6600;
                     color: #111;
                     border: none;
@@ -287,11 +287,11 @@ def dashboard():
                     font-weight: bold;
                     border-radius: 8px;
                     transition: background 0.2s ease;
-                }
-                button:hover { background: #ff8533; }
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                th, td { padding: 6px 10px; border-bottom: 1px solid #333; text-align: left; }
-                .time { color: #999; }
+                }}
+                button:hover {{ background: #ff8533; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                th, td {{ padding: 6px 10px; border-bottom: 1px solid #333; text-align: left; }}
+                .time {{ color: #999; }}
             </style>
         </head>
         <body>
