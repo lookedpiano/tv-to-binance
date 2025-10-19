@@ -384,8 +384,11 @@ def dashboard():
                 async function refresh(type) {{
                     const overlay = document.getElementById('overlay');
                     const overlayText = document.getElementById('overlay-text');
+                    const spinner = document.querySelector('.spinner');
                     overlayText.textContent = `Refreshing ${{type}}…`;
-                    overlay.style.display = 'flex'; // Show overlay immediately
+                    overlayText.style.color = "#ff6600"; // reset to orange
+                    spinner.style.display = 'block';
+                    overlay.style.display = 'flex'; // show overlay immediately
 
                     const params = new URLSearchParams(window.location.search);
                     const key = params.get('key');
@@ -399,6 +402,7 @@ def dashboard():
                         url = "/cache/prices";
                     }} else {{
                         overlayText.textContent = "Unknown refresh type";
+                        spinner.style.display = 'none';
                         setTimeout(() => overlay.style.display = 'none', 1500);
                         return;
                     }}
@@ -414,13 +418,15 @@ def dashboard():
                         try {{ data = JSON.parse(text); }} catch (e) {{ data = {{ raw: text }}; }}
 
                         if (!resp.ok) {{
+                            spinner.style.display = 'none';
                             overlayText.textContent = (data && (data.error || data.message)) || `HTTP {{resp.status}}`;
                             overlayText.style.color = "#ff3333";
                             setTimeout(() => overlay.style.display = 'none', 2500);
                             return;
                         }}
 
-                        // Success message in overlay
+                        // ✅ Hide spinner before showing success message
+                        spinner.style.display = 'none';
                         overlayText.textContent = `✓ ${{
                             type.charAt(0).toUpperCase() + type.slice(1)
                         }} refreshed successfully`;
@@ -432,6 +438,7 @@ def dashboard():
                             location.reload();
                         }}, 1500);
                     }} catch (err) {{
+                        spinner.style.display = 'none';
                         overlayText.textContent = "Refresh failed: " + err;
                         overlayText.style.color = "#ff3333";
                         setTimeout(() => overlay.style.display = 'none', 2500);
