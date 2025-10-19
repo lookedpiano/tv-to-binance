@@ -258,195 +258,260 @@ def dashboard():
         # Simple HTML dashboard
         html = f"""
         <html>
-        <head>
-            <title>Binance Cache Dashboard</title>
-            <link rel="icon" type="image/png" href="/static/bitcoin_fav.png">
-            <style>
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            <head>
+                <title>Binance Cache Dashboard</title>
+                <link rel="icon" type="image/png" href="/static/bitcoin_fav.png">
+                <style>
+                    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
-                body {{
-                    font-family: 'Inter', sans-serif;
-                    background: #111;
-                    color: #eee;
-                    margin: 40px;
-                }}
-                h1 {{
-                    font-size: 2.6rem;
-                    font-weight: 700;
-                    letter-spacing: 0.5px;
-                    text-align: center;
-                    margin-bottom: 40px;
-                }}
-                .white-part {{
-                    color: #fff;
-                }}
-                .orange-part {{
-                    color: #ff6600;
-                }}
-                .section {{ margin-bottom: 2rem; }}
-                button {{
-                    background: #ff6600;
-                    color: #111;
-                    border: none;
-                    padding: 10px 20px;
-                    cursor: pointer;
-                    font-weight: bold;
-                    border-radius: 8px;
-                    transition: background 0.2s ease;
-                }}
-                button:hover {{ background: #ff8533; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-                th, td {{ padding: 6px 10px; border-bottom: 1px solid #333; text-align: left; }}
-                .time {{ color: #999; }}
+                    body {{
+                        font-family: 'Inter', sans-serif;
+                        background: #111;
+                        color: #eee;
+                        margin: 40px;
+                    }}
+                    h1 {{
+                        font-size: 2.6rem;
+                        font-weight: 700;
+                        letter-spacing: 0.5px;
+                        text-align: center;
+                        margin-bottom: 40px;
+                    }}
+                    .white-part {{ color: #fff; }}
+                    .orange-part {{ color: #ff6600; }}
 
-                /* ---- Overlay / Loading ---- */
-                #overlay {{
-                    position: fixed;
-                    top: 0; left: 0;
-                    width: 100%; height: 100%;
-                    background: rgba(0, 0, 0, 0.75);
-                    display: none;
-                    justify-content: center;
-                    align-items: center;
-                    z-index: 9999;
-                }}
-                #overlay-box {{
-                    background: #222;
-                    padding: 30px 40px;
-                    border-radius: 12px;
-                    text-align: center;
-                    box-shadow: 0 0 20px rgba(0,0,0,0.5);
-                }}
-                #overlay-text {{
-                    color: #ff6600;
-                    font-weight: 600;
-                    margin-top: 12px;
-                    font-size: 1.1rem;
-                }}
-                .spinner {{
-                    border: 4px solid #444;
-                    border-top: 4px solid #ff6600;
-                    border-radius: 50%;
-                    width: 40px;
-                    height: 40px;
-                    animation: spin 1s linear infinite;
-                    margin: 0 auto;
-                }}
-                @keyframes spin {{
-                    0%   {{ transform: rotate(0deg); }}
-                    100% {{ transform: rotate(360deg); }}
-                }}
-            </style>
-        </head>
-        <body>
-            <h1>
-                <span class="white-part">21 Mio&nbsp;|&nbsp;</span>
-                <span class="orange-part">Friedrich Bitcoin Consulting</span>
-            </h1>
+                    .section {{ margin-bottom: 2rem; }}
 
-            <div class="section">
-                <h2>Balances</h2>
-                <p>Total cached prices: {len(balances)}</p>
-                <table>
-                    <tr><th>Asset</th><th>Free</th></tr>
-                    {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in balances.items())}
-                </table>
-                <button onclick="refresh('balances')">Refresh Balances</button>
-                <p class="time">Last refreshed: <b>{last_balances}</b></p>
-            </div>
-
-            <div class="section">
-                <h2>Prices</h2>
-                <p>Total cached prices: {len(prices)}</p>
-                <table>
-                    <tr><th>Symbol</th><th>Price</th></tr>
-                    {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in prices.items())}
-                </table>
-                <button onclick="refresh('prices')">Refresh Prices</button>
-                <p class="time">Last updated: <b>{last_prices}</b></p>
-            </div>
-
-            <div class="section">
-                <h2>Filters</h2>
-                <p>Total cached filters: {filters_count}</p>
-                <button onclick="refresh('filters')">Refresh Filters</button>
-                <p class="time">Last refreshed: <b>{last_filters}</b></p>
-            </div>
-
-            <!-- Overlay -->
-            <div id="overlay">
-                <div id="overlay-box">
-                    <div class="spinner"></div>
-                    <p id="overlay-text">Please wait…</p>
-                </div>
-            </div>
-
-            <script>
-                async function refresh(type) {{
-                    const overlay = document.getElementById('overlay');
-                    const overlayText = document.getElementById('overlay-text');
-                    const spinner = document.querySelector('.spinner');
-                    overlayText.textContent = `Refreshing ${{type}}…`;
-                    overlayText.style.color = "#ff6600"; // reset to orange
-                    spinner.style.display = 'block';
-                    overlay.style.display = 'flex'; // show overlay immediately
-
-                    const params = new URLSearchParams(window.location.search);
-                    const key = params.get('key');
-                    let url = "";
-
-                    if (type === "balances") {{
-                        url = "/cache/refresh/balances";
-                    }} else if (type === "filters") {{
-                        url = "/cache/refresh/filters";
-                    }} else if (type === "prices") {{
-                        url = "/cache/prices";
-                    }} else {{
-                        overlayText.textContent = "Unknown refresh type";
-                        spinner.style.display = 'none';
-                        setTimeout(() => overlay.style.display = 'none', 1500);
-                        return;
+                    /* ---- Shared glowing animation ---- */
+                    @keyframes glowPulse {{
+                        0% {{
+                            box-shadow: 0 0 10px rgba(255,102,0,0.08),
+                                        0 0 20px rgba(255,102,0,0.05);
+                            border-color: rgba(255,102,0,0.5);
+                        }}
+                        50% {{
+                            box-shadow: 0 0 15px rgba(255,140,0,0.25),
+                                        0 0 30px rgba(255,102,0,0.15);
+                            border-color: rgba(255,102,0,0.7);
+                        }}
+                        100% {{
+                            box-shadow: 0 0 10px rgba(255,102,0,0.08),
+                                        0 0 20px rgba(255,102,0,0.05);
+                            border-color: rgba(255,102,0,0.5);
+                        }}
                     }}
 
-                    const opts = (type === "prices")
-                        ? {{ method: "GET" }}
-                        : {{ method: "POST", headers: key ? {{ "X-Admin-Key": key }} : {{}} }};
+                    /* ---- Buttons ---- */
+                    button {{
+                        background: #ff6600;
+                        color: #111;
+                        border: 1px solid rgba(255,102,0,0.6);
+                        padding: 10px 20px;
+                        cursor: pointer;
+                        font-weight: bold;
+                        border-radius: 8px;
+                        transition: all 0.25s ease;
+                        box-shadow: 0 0 10px rgba(255,102,0,0.2);
+                        animation: glowPulse 4s ease-in-out infinite;
+                    }}
+                    button:hover {{
+                        background: #ff8533;
+                        transform: scale(1.07);
+                        box-shadow: 0 0 20px rgba(255,140,0,0.4),
+                                    0 0 40px rgba(255,102,0,0.25);
+                    }}
+                    button:focus-visible {{
+                        outline: none;
+                        box-shadow: 0 0 0 3px rgba(255,102,0,0.5);
+                    }}
 
-                    try {{
-                        const resp = await fetch(url, opts);
-                        const text = await resp.text();
-                        let data;
-                        try {{ data = JSON.parse(text); }} catch (e) {{ data = {{ raw: text }}; }}
+                    /* ---- Table styling ---- */
+                    table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                    th, td {{ padding: 8px 12px; border-bottom: 1px solid #333; text-align: left; }}
+                    th {{ color: #ff6600; text-transform: uppercase; font-size: 0.9rem; }}
+                    .time {{ color: #999; }}
 
-                        if (!resp.ok) {{
+                    /* ---- Table card container ---- */
+                    .table-card {{
+                        background: linear-gradient(to bottom right, rgba(255,102,0,0.08), rgba(255,102,0,0.02));
+                        border: 1px solid rgba(255,102,0,0.5);
+                        border-radius: 16px;
+                        padding: 20px;
+                        flex: 1;
+                        margin: 10px;
+                        box-shadow: 0 0 15px rgba(255,102,0,0.1);
+                        transition: transform 0.3s ease, box-shadow 0.3s ease;
+                        animation: glowPulse 4s ease-in-out infinite;
+                    }}
+                    .table-card:hover {{
+                        transform: translateY(-3px);
+                        box-shadow: 0 0 25px rgba(255,102,0,0.2);
+                    }}
+
+                    /* ---- Layout for side-by-side ---- */
+                    .tables-row {{
+                        display: flex;
+                        flex-wrap: wrap;
+                        justify-content: space-between;
+                    }}
+                    @media (max-width: 900px) {{
+                        .tables-row {{
+                            flex-direction: column;
+                        }}
+                    }}
+
+                    /* ---- Overlay / Loading ---- */
+                    #overlay {{
+                        position: fixed;
+                        top: 0; left: 0;
+                        width: 100%; height: 100%;
+                        background: rgba(0, 0, 0, 0.85);
+                        display: none;
+                        justify-content: center;
+                        align-items: center;
+                        z-index: 9999;
+                    }}
+                    #overlay-box {{
+                        background: #222;
+                        padding: 40px 50px;
+                        border-radius: 16px;
+                        text-align: center;
+                        border: 1px solid rgba(255,102,0,0.4);
+                        box-shadow: 0 0 25px rgba(255,102,0,0.2);
+                        animation: glowPulse 4s ease-in-out infinite;
+                    }}
+                    #overlay-text {{
+                        color: #ff6600;
+                        font-weight: 600;
+                        margin-top: 14px;
+                        font-size: 1.1rem;
+                        text-shadow: 0 0 8px rgba(255,102,0,0.4);
+                    }}
+                    .spinner {{
+                        border: 4px solid #444;
+                        border-top: 4px solid #ff6600;
+                        border-radius: 50%;
+                        width: 50px;
+                        height: 50px;
+                        animation: spin 1s linear infinite, glowPulse 4s ease-in-out infinite;
+                        margin: 0 auto;
+                        box-shadow: 0 0 15px rgba(255,102,0,0.2);
+                    }}
+                    @keyframes spin {{
+                        0%   {{ transform: rotate(0deg); }}
+                        100% {{ transform: rotate(360deg); }}
+                    }}
+                </style>
+            </head>
+            <body>
+                <h1>
+                    <span class="white-part">21 Mio&nbsp;|&nbsp;</span>
+                    <span class="orange-part">Friedrich Bitcoin Consulting</span>
+                </h1>
+
+                <div class="tables-row">
+                    <!-- Balances -->
+                    <div class="table-card">
+                        <h2>Balances</h2>
+                        <p>Total cached balances: {len(balances)}</p>
+                        <table>
+                            <tr><th>Asset</th><th>Free</th></tr>
+                            {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in balances.items())}
+                        </table>
+                        <button onclick="refresh('balances')">Refresh Balances</button>
+                        <p class="time">Last refreshed: <b>{last_balances}</b></p>
+                    </div>
+
+                    <!-- Prices -->
+                    <div class="table-card">
+                        <h2>Prices</h2>
+                        <p>Total cached prices: {len(prices)}</p>
+                        <table>
+                            <tr><th>Symbol</th><th>Price</th></tr>
+                            {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in prices.items())}
+                        </table>
+                        <button onclick="refresh('prices')">Refresh Prices</button>
+                        <p class="time">Last updated: <b>{last_prices}</b></p>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Filters</h2>
+                    <p>Total cached filters: {filters_count}</p>
+                    <button onclick="refresh('filters')">Refresh Filters</button>
+                    <p class="time">Last refreshed: <b>{last_filters}</b></p>
+                </div>
+
+                <!-- Overlay -->
+                <div id="overlay">
+                    <div id="overlay-box">
+                        <div class="spinner"></div>
+                        <p id="overlay-text">Please wait…</p>
+                    </div>
+                </div>
+
+                <script>
+                    async function refresh(type) {{
+                        const overlay = document.getElementById('overlay');
+                        const overlayText = document.getElementById('overlay-text');
+                        const spinner = document.querySelector('.spinner');
+                        overlayText.textContent = `Refreshing ${{type}}…`;
+                        overlayText.style.color = "#ff6600";
+                        spinner.style.display = 'block';
+                        overlay.style.display = 'flex';
+
+                        const params = new URLSearchParams(window.location.search);
+                        const key = params.get('key');
+                        let url = "";
+
+                        if (type === "balances") {{
+                            url = "/cache/refresh/balances";
+                        }} else if (type === "filters") {{
+                            url = "/cache/refresh/filters";
+                        }} else if (type === "prices") {{
+                            url = "/cache/prices";
+                        }} else {{
+                            overlayText.textContent = "Unknown refresh type";
                             spinner.style.display = 'none';
-                            overlayText.textContent = (data && (data.error || data.message)) || `HTTP {{resp.status}}`;
-                            overlayText.style.color = "#ff3333";
-                            setTimeout(() => overlay.style.display = 'none', 2500);
+                            setTimeout(() => overlay.style.display = 'none', 1500);
                             return;
                         }}
 
-                        // ✅ Hide spinner before showing success message
-                        spinner.style.display = 'none';
-                        overlayText.textContent = `✓ ${{
-                            type.charAt(0).toUpperCase() + type.slice(1)
-                        }} refreshed successfully`;
-                        overlayText.style.color = "#00cc66"; // green success
+                        const opts = (type === "prices")
+                            ? {{ method: "GET" }}
+                            : {{ method: "POST", headers: key ? {{ "X-Admin-Key": key }} : {{}} }};
 
-                        // Wait a moment, then reload
-                        setTimeout(() => {{
-                            overlay.style.display = 'none';
-                            location.reload();
-                        }}, 1500);
-                    }} catch (err) {{
-                        spinner.style.display = 'none';
-                        overlayText.textContent = "Refresh failed: " + err;
-                        overlayText.style.color = "#ff3333";
-                        setTimeout(() => overlay.style.display = 'none', 2500);
+                        try {{
+                            const resp = await fetch(url, opts);
+                            const text = await resp.text();
+                            let data;
+                            try {{ data = JSON.parse(text); }} catch (e) {{ data = {{ raw: text }}; }}
+
+                            if (!resp.ok) {{
+                                spinner.style.display = 'none';
+                                overlayText.textContent = (data && (data.error || data.message)) || `HTTP {{resp.status}}`;
+                                overlayText.style.color = "#ff3333";
+                                setTimeout(() => overlay.style.display = 'none', 2500);
+                                return;
+                            }}
+
+                            spinner.style.display = 'none';
+                            overlayText.textContent = `✓ ${{type.charAt(0).toUpperCase() + type.slice(1)}} refreshed successfully`;
+                            overlayText.style.color = "#00cc66";
+
+                            setTimeout(() => {{
+                                overlay.style.display = 'none';
+                                location.reload();
+                            }}, 1500);
+                        }} catch (err) {{
+                            spinner.style.display = 'none';
+                            overlayText.textContent = "Refresh failed: " + err;
+                            overlayText.style.color = "#ff3333";
+                            setTimeout(() => overlay.style.display = 'none', 2500);
+                        }}
                     }}
-                }}
-            </script>
-        </body>
+                </script>
+            </body>
         </html>
         """
         return html, 200
