@@ -274,7 +274,6 @@ def dashboard():
                     font-size: 2.6rem;
                     font-weight: 700;
                     letter-spacing: 0.5px;
-                    text-transform: uppercase;
                     text-align: center;
                     margin-bottom: 40px;
                 }}
@@ -309,8 +308,8 @@ def dashboard():
 
             <div class="section">
                 <h2>Balances</h2>
-                <p class="time">Last refreshed: <b>{last_balances}</b></p>
                 <button onclick="refresh('balances')">Refresh Balances</button>
+                <p class="time">Last refreshed: <b>{last_balances}</b></p>
                 <table>
                     <tr><th>Asset</th><th>Free</th></tr>
                     {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in balances.items())}
@@ -319,16 +318,16 @@ def dashboard():
 
             <div class="section">
                 <h2>Filters</h2>
-                <p class="time">Last refreshed: <b>{last_filters}</b></p>
-                <button onclick="refresh('filters')">Refresh Filters</button>
                 <p>Total cached filters: {filters_count}</p>
+                <button onclick="refresh('filters')">Refresh Filters</button>
+                <p class="time">Last refreshed: <b>{last_filters}</b></p>
             </div>
 
             <div class="section">
                 <h2>Prices</h2>
-                <p class="time">Last updated: <b>{last_prices}</b></p>
                 <p>Total cached prices: {len(prices)}</p>
                 <button onclick="refresh('prices')">Refresh Prices</button>
+                <p class="time">Last updated: <b>{last_prices}</b></p>
                 <table>
                     <tr><th>Symbol</th><th>Price</th></tr>
                     {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in list(prices.items())[:30])}
