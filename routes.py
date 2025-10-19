@@ -368,9 +368,8 @@ def dashboard():
                 <p class="time">Last updated: <b>{last_prices}</b></p>
                 <table>
                     <tr><th>Symbol</th><th>Price</th></tr>
-                    {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in list(prices.items())[:30])}
+                    {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in prices.items())}
                 </table>
-                <p style="color:#666">(Showing up to 30 symbols)</p>
             </div>
 
             <!-- Overlay -->
