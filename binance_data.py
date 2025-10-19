@@ -34,8 +34,9 @@ logging.getLogger("binance.websocket").setLevel(logging.CRITICAL)
 logging.getLogger("binance.websockets").setLevel(logging.CRITICAL)
 
 def _suppress_thread_exceptions(args):
-    """Suppress noisy thread-level exceptions caused by websocket disconnects."""
-    msg = str(args.exc_value)
+    """Suppress noisy thread-level exceptions caused by websocket disconnects or Redis overload."""
+    msg = str(args.exc_value).lower()
+
     harmless_patterns = (
         "connection to remote host was lost",
         "socket is already closed",
@@ -44,9 +45,21 @@ def _suppress_thread_exceptions(args):
         "close frame received",
         "broken pipe",
     )
-    if any(pat in msg.lower() for pat in harmless_patterns):
+
+    redis_warning_patterns = (
+        "max number of clients reached",
+        "connection refused",
+        "too many connections",
+    )
+
+    if any(pattern in msg for pattern in harmless_patterns):
         return  # Silently ignore
-    # Otherwise, use default excepthook to display genuine errors
+
+    if any(pattern in msg for pattern in redis_warning_patterns):
+        logging.warning("Consider replacing the current Redis caching data store.")
+        return  # Prevent full traceback spam
+
+    # Otherwise, let real errors through
     sys.__excepthook__(args.exc_type, args.exc_value, args.exc_traceback)
 
 threading.excepthook = _suppress_thread_exceptions
