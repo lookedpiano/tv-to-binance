@@ -346,12 +346,24 @@ def dashboard():
 
             <div class="section">
                 <h2>Balances</h2>
-                <button onclick="refresh('balances')">Refresh Balances</button>
-                <p class="time">Last refreshed: <b>{last_balances}</b></p>
+                <p>Total cached prices: {len(balances)}</p>
                 <table>
                     <tr><th>Asset</th><th>Free</th></tr>
                     {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in balances.items())}
                 </table>
+                <button onclick="refresh('balances')">Refresh Balances</button>
+                <p class="time">Last refreshed: <b>{last_balances}</b></p>
+            </div>
+
+            <div class="section">
+                <h2>Prices</h2>
+                <p>Total cached prices: {len(prices)}</p>
+                <table>
+                    <tr><th>Symbol</th><th>Price</th></tr>
+                    {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in prices.items())}
+                </table>
+                <button onclick="refresh('prices')">Refresh Prices</button>
+                <p class="time">Last updated: <b>{last_prices}</b></p>
             </div>
 
             <div class="section">
@@ -359,17 +371,6 @@ def dashboard():
                 <p>Total cached filters: {filters_count}</p>
                 <button onclick="refresh('filters')">Refresh Filters</button>
                 <p class="time">Last refreshed: <b>{last_filters}</b></p>
-            </div>
-
-            <div class="section">
-                <h2>Prices</h2>
-                <p>Total cached prices: {len(prices)}</p>
-                <button onclick="refresh('prices')">Refresh Prices</button>
-                <p class="time">Last updated: <b>{last_prices}</b></p>
-                <table>
-                    <tr><th>Symbol</th><th>Price</th></tr>
-                    {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in prices.items())}
-                </table>
             </div>
 
             <!-- Overlay -->
