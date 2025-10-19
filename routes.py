@@ -249,9 +249,11 @@ def dashboard():
 
         ts_bal = r.get("last_refresh_balances")
         ts_filt = r.get("last_refresh_filters")
+        ts_prices = r.get("last_refresh_prices")
 
         last_balances = datetime.fromtimestamp(float(ts_bal)).strftime("%Y-%m-%d %H:%M:%S") if ts_bal else "Never"
         last_filters = datetime.fromtimestamp(float(ts_filt)).strftime("%Y-%m-%d %H:%M:%S") if ts_filt else "Never"
+        last_prices = datetime.fromtimestamp(float(ts_prices)).strftime("%Y-%m-%d %H:%M:%S") if ts_prices else "Never"
 
         # Simple HTML dashboard
         html = f"""
@@ -324,7 +326,9 @@ def dashboard():
 
             <div class="section">
                 <h2>Prices</h2>
+                <p class="time">Last updated: <b>{last_prices}</b></p>
                 <p>Total cached prices: {len(prices)}</p>
+                <button onclick="refresh('prices')">Refresh Prices</button>
                 <table>
                     <tr><th>Symbol</th><th>Price</th></tr>
                     {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in list(prices.items())[:30])}
@@ -334,14 +338,55 @@ def dashboard():
 
             <script>
                 async function refresh(type) {{
-                    const key = "{ADMIN_API_KEY}";
-                    const resp = await fetch(`/cache/refresh/${{type}}`, {{
-                        method: "POST",
-                        headers: {{ "X-Admin-Key": key }}
-                    }});
-                    const data = await resp.json();
-                    alert(data.message || data.error);
-                    location.reload();
+                    const params = new URLSearchParams(window.location.search);
+                    const key = params.get('key'); // read ?key=... from URL
+
+                    let url = "";
+                    if (type === "balances") {{
+                        url = "/cache/refresh/balances";
+                    }} else if (type === "filters") {{
+                        url = "/cache/refresh/filters";
+                    }} else if (type === "prices") {{
+                        // Prices is a GET that just returns cached prices
+                        url = "/cache/prices";
+                    }} else {{
+                        alert("Unknown refresh type");
+                        return;
+                    }}
+
+                    // Build fetch options depending on endpoint
+                    const opts = (type === "prices")
+                        ? {{ method: "GET" }}
+                        : {{
+                            method: "POST",
+                            headers: key ? {{ "X-Admin-Key": key }} : {{}}  // only send header if key present
+                        }};
+
+                    try {{
+                        const resp = await fetch(url, opts);
+                        // /cache/prices returns a JSON object of prices (not {{message}}),
+                        // so handle both shapes gracefully:
+                        const text = await resp.text();
+                        let data;
+                        try {{ data = JSON.parse(text); }} catch (e) {{ data = {{ raw: text }}; }}
+
+                        if (!resp.ok) {{
+                            alert((data && (data.error || data.message)) || `HTTP {{resp.status}}`);
+                            return;
+                        }}
+
+                        // Friendly messages per type
+                        if (type === "prices") {{
+                            alert("Prices fetched from cache.");
+                        }} else {{
+                            alert((data && (data.message || data.error)) || "Done");
+                        }}
+
+                        // Reload to reflect new data
+                        location.reload();
+                    }} catch (err) {{
+                        alert("Refresh failed: " + err);
+                    }}
                 }}
             </script>
         </body>

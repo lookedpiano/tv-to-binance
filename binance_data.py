@@ -150,6 +150,7 @@ def _on_ws_message(_, message):
         mid_price = (Decimal(str(bid)) + Decimal(str(ask))) / 2
         set_cached_price(symbol, mid_price)
         _last_update[symbol] = time.time()
+        _get_redis().set("last_refresh_prices", time.time())
 
         # Log occasionally (every 10s per symbol)
         now = time.time()
