@@ -232,6 +232,11 @@ def cache_summary():
 # ==========================================================
 @routes.route("/dashboard", methods=["GET"])
 def dashboard():
+    provided_key = request.headers.get("X-Admin-Key") or request.args.get("key")
+    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
+        logging.warning("[SECURITY] Unauthorized attempt to access the dashboard")
+        return jsonify({"error": "Unauthorized"}), 401
+
     try:
         r = _get_redis()
 
@@ -253,15 +258,25 @@ def dashboard():
         <html>
         <head>
             <title>TV → Binance Cache Dashboard</title>
+            <link rel="icon" type="image/png" href="/static/bitcoin_fav.png">
             <style>
-                body {{ font-family: sans-serif; background: #111; color: #eee; margin: 40px; }}
-                h1 {{ color: #0f0; }}
-                .section {{ margin-bottom: 2rem; }}
-                button {{ background: #0f0; color: #111; border: none; padding: 10px 20px; cursor: pointer; font-weight: bold; border-radius: 8px; }}
-                button:hover {{ background: #6f6; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-                th, td {{ padding: 6px 10px; border-bottom: 1px solid #333; text-align: left; }}
-                .time {{ color: #999; }}
+                body { font-family: sans-serif; background: #111; color: #eee; margin: 40px; }
+                h1 { color: #ff6600; }
+                .section { margin-bottom: 2rem; }
+                button {
+                    background: #ff6600;
+                    color: #111;
+                    border: none;
+                    padding: 10px 20px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    border-radius: 8px;
+                    transition: background 0.2s ease;
+                }
+                button:hover { background: #ff8533; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                th, td { padding: 6px 10px; border-bottom: 1px solid #333; text-align: left; }
+                .time { color: #999; }
             </style>
         </head>
         <body>
