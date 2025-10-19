@@ -260,8 +260,23 @@ def dashboard():
             <title>TV → Binance Cache Dashboard</title>
             <link rel="icon" type="image/png" href="/static/bitcoin_fav.png">
             <style>
-                body { font-family: sans-serif; background: #111; color: #eee; margin: 40px; }
-                h1 { color: #ff6600; }
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+                body {
+                    font-family: 'Inter', sans-serif;
+                    background: #111;
+                    color: #eee;
+                    margin: 40px;
+                }
+                h1 {
+                    color: #ff6600;
+                    font-size: 2.8rem;
+                    font-weight: 700;
+                    letter-spacing: 1px;
+                    text-transform: uppercase;
+                    text-align: center;
+                    margin-bottom: 40px;
+                }
                 .section { margin-bottom: 2rem; }
                 button {
                     background: #ff6600;
