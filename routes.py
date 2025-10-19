@@ -371,8 +371,8 @@ def dashboard():
             </head>
             <body>
                 <h1>
-                    <span class="white-part">21 Mio&nbsp;|&nbsp;</span>
-                    <span class="orange-part">Friedrich Bitcoin Consulting</span>
+                    <span class="white-part">Binance</span>
+                    <span class="orange-part">Cache Dashboard</span>
                 </h1>
 
                 <div class="tables-row">
@@ -384,7 +384,6 @@ def dashboard():
                             <tr><th>Asset</th><th>Free</th></tr>
                             {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in balances.items())}
                         </table>
-                        <br/>
                         <button onclick="refresh('balances')">Refresh Balances</button>
                         <p class="time">Last refreshed: <b>{last_balances}</b></p>
                     </div>
@@ -397,13 +396,13 @@ def dashboard():
                             <tr><th>Symbol</th><th>Price</th></tr>
                             {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in prices.items())}
                         </table>
-                        <br/>
                         <button onclick="refresh('prices')">Refresh Prices</button>
                         <p class="time">Last updated: <b>{last_prices}</b></p>
                     </div>
                 </div>
 
-                <div class="section">
+                <!-- Filters in a card -->
+                <div class="table-card">
                     <h2>Filters</h2>
                     <p>Total cached filters: {filters_count}</p>
                     <button onclick="refresh('filters')">Refresh Filters</button>
