@@ -80,6 +80,10 @@ try:
     start_ws_price_cache(ALLOWED_SYMBOLS)
     start_background_cache(ALLOWED_SYMBOLS)
     logging.info("[INIT] Background caches initialized successfully.")
+    logging.info("─────────────────────────────────────────────")
+    logging.info("Visit the dashboard for live cache info:")
+    logging.info("👉 https://tv-to-binance.onrender.com/dashboard")
+    logging.info("─────────────────────────────────────────────")
 except Exception as e:
     logging.exception(f"[INIT] Failed to initialize background caches: {e}")
 
