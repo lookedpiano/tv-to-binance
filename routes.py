@@ -257,7 +257,7 @@ def dashboard():
         html = f"""
         <html>
         <head>
-            <title>TV → Binance Cache Dashboard</title>
+            <title>Binance Cache Dashboard</title>
             <link rel="icon" type="image/png" href="/static/bitcoin_fav.png">
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -269,13 +269,18 @@ def dashboard():
                     margin: 40px;
                 }}
                 h1 {{
-                    color: #ff6600;
-                    font-size: 2.8rem;
+                    font-size: 2.6rem;
                     font-weight: 700;
-                    letter-spacing: 1px;
+                    letter-spacing: 0.5px;
                     text-transform: uppercase;
                     text-align: center;
                     margin-bottom: 40px;
+                }}
+                .white-part {{
+                    color: #fff;
+                }}
+                .orange-part {{
+                    color: #ff6600;
                 }}
                 .section {{ margin-bottom: 2rem; }}
                 button {{
@@ -295,7 +300,10 @@ def dashboard():
             </style>
         </head>
         <body>
-            <h1>Binance Cache Dashboard</h1>
+            <h1>
+                <span class="white-part">21 Mio&nbsp;|&nbsp;</span>
+                <span class="orange-part">Friedrich Bitcoin Consulting</span>
+            </h1>
 
             <div class="section">
                 <h2>Balances</h2>
