@@ -282,25 +282,6 @@ def dashboard():
 
                     .section {{ margin-bottom: 2rem; }}
 
-                    /* ---- Shared glowing animation ---- */
-                    @keyframes glowPulse {{
-                        0% {{
-                            box-shadow: 0 0 10px rgba(255,102,0,0.08),
-                                        0 0 20px rgba(255,102,0,0.05);
-                            border-color: rgba(255,102,0,0.5);
-                        }}
-                        50% {{
-                            box-shadow: 0 0 15px rgba(255,140,0,0.25),
-                                        0 0 30px rgba(255,102,0,0.15);
-                            border-color: rgba(255,102,0,0.7);
-                        }}
-                        100% {{
-                            box-shadow: 0 0 10px rgba(255,102,0,0.08),
-                                        0 0 20px rgba(255,102,0,0.05);
-                            border-color: rgba(255,102,0,0.5);
-                        }}
-                    }}
-
                     /* ---- Buttons ---- */
                     button {{
                         background: #ff6600;
@@ -310,19 +291,14 @@ def dashboard():
                         cursor: pointer;
                         font-weight: bold;
                         border-radius: 8px;
-                        transition: all 0.25s ease;
-                        box-shadow: 0 0 10px rgba(255,102,0,0.2);
-                        animation: glowPulse 4s ease-in-out infinite;
+                        transition: background 0.2s ease;
                     }}
                     button:hover {{
                         background: #ff8533;
-                        transform: scale(1.07);
-                        box-shadow: 0 0 20px rgba(255,140,0,0.4),
-                                    0 0 40px rgba(255,102,0,0.25);
                     }}
                     button:focus-visible {{
                         outline: none;
-                        box-shadow: 0 0 0 3px rgba(255,102,0,0.5);
+                        box-shadow: 0 0 0 2px rgba(255,102,0,0.5);
                     }}
 
                     /* ---- Table styling ---- */
@@ -339,13 +315,6 @@ def dashboard():
                         padding: 20px;
                         flex: 1;
                         margin: 10px;
-                        box-shadow: 0 0 15px rgba(255,102,0,0.1);
-                        transition: transform 0.3s ease, box-shadow 0.3s ease;
-                        animation: glowPulse 4s ease-in-out infinite;
-                    }}
-                    .table-card:hover {{
-                        transform: translateY(-3px);
-                        box-shadow: 0 0 25px rgba(255,102,0,0.2);
                     }}
 
                     /* ---- Layout for side-by-side ---- */
@@ -377,15 +346,13 @@ def dashboard():
                         border-radius: 16px;
                         text-align: center;
                         border: 1px solid rgba(255,102,0,0.4);
-                        box-shadow: 0 0 25px rgba(255,102,0,0.2);
-                        animation: glowPulse 4s ease-in-out infinite;
+                        box-shadow: 0 0 20px rgba(0,0,0,0.4);
                     }}
                     #overlay-text {{
                         color: #ff6600;
                         font-weight: 600;
                         margin-top: 14px;
                         font-size: 1.1rem;
-                        text-shadow: 0 0 8px rgba(255,102,0,0.4);
                     }}
                     .spinner {{
                         border: 4px solid #444;
@@ -393,9 +360,8 @@ def dashboard():
                         border-radius: 50%;
                         width: 50px;
                         height: 50px;
-                        animation: spin 1s linear infinite, glowPulse 4s ease-in-out infinite;
+                        animation: spin 1s linear infinite;
                         margin: 0 auto;
-                        box-shadow: 0 0 15px rgba(255,102,0,0.2);
                     }}
                     @keyframes spin {{
                         0%   {{ transform: rotate(0deg); }}
@@ -418,6 +384,7 @@ def dashboard():
                             <tr><th>Asset</th><th>Free</th></tr>
                             {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in balances.items())}
                         </table>
+                        <br/>
                         <button onclick="refresh('balances')">Refresh Balances</button>
                         <p class="time">Last refreshed: <b>{last_balances}</b></p>
                     </div>
@@ -430,6 +397,7 @@ def dashboard():
                             <tr><th>Symbol</th><th>Price</th></tr>
                             {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in prices.items())}
                         </table>
+                        <br/>
                         <button onclick="refresh('prices')">Refresh Prices</button>
                         <p class="time">Last updated: <b>{last_prices}</b></p>
                     </div>
