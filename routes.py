@@ -298,6 +298,44 @@ def dashboard():
                 table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
                 th, td {{ padding: 6px 10px; border-bottom: 1px solid #333; text-align: left; }}
                 .time {{ color: #999; }}
+
+                /* ---- Overlay / Loading ---- */
+                #overlay {{
+                    position: fixed;
+                    top: 0; left: 0;
+                    width: 100%; height: 100%;
+                    background: rgba(0, 0, 0, 0.75);
+                    display: none;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 9999;
+                }}
+                #overlay-box {{
+                    background: #222;
+                    padding: 30px 40px;
+                    border-radius: 12px;
+                    text-align: center;
+                    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+                }}
+                #overlay-text {{
+                    color: #ff6600;
+                    font-weight: 600;
+                    margin-top: 12px;
+                    font-size: 1.1rem;
+                }}
+                .spinner {{
+                    border: 4px solid #444;
+                    border-top: 4px solid #ff6600;
+                    border-radius: 50%;
+                    width: 40px;
+                    height: 40px;
+                    animation: spin 1s linear infinite;
+                    margin: 0 auto;
+                }}
+                @keyframes spin {{
+                    0%   {{ transform: rotate(0deg); }}
+                    100% {{ transform: rotate(360deg); }}
+                }}
             </style>
         </head>
         <body>
@@ -335,55 +373,62 @@ def dashboard():
                 <p style="color:#666">(Showing up to 30 symbols)</p>
             </div>
 
+            <!-- Overlay -->
+            <div id="overlay">
+                <div id="overlay-box">
+                    <div class="spinner"></div>
+                    <p id="overlay-text">Please wait…</p>
+                </div>
+            </div>
+
             <script>
                 async function refresh(type) {{
-                    const params = new URLSearchParams(window.location.search);
-                    const key = params.get('key'); // read ?key=... from URL
+                    const overlay = document.getElementById('overlay');
+                    const overlayText = document.getElementById('overlay-text');
+                    overlayText.textContent = `Refreshing ${{type}}…`;
+                    overlay.style.display = 'flex'; // Show overlay immediately
 
+                    const params = new URLSearchParams(window.location.search);
+                    const key = params.get('key');
                     let url = "";
+
                     if (type === "balances") {{
                         url = "/cache/refresh/balances";
                     }} else if (type === "filters") {{
                         url = "/cache/refresh/filters";
                     }} else if (type === "prices") {{
-                        // Prices is a GET that just returns cached prices
                         url = "/cache/prices";
                     }} else {{
                         alert("Unknown refresh type");
+                        overlay.style.display = 'none';
                         return;
                     }}
 
-                    // Build fetch options depending on endpoint
                     const opts = (type === "prices")
                         ? {{ method: "GET" }}
-                        : {{
-                            method: "POST",
-                            headers: key ? {{ "X-Admin-Key": key }} : {{}}  // only send header if key present
-                        }};
+                        : {{ method: "POST", headers: key ? {{ "X-Admin-Key": key }} : {{}} }};
 
                     try {{
                         const resp = await fetch(url, opts);
-                        // /cache/prices returns a JSON object of prices (not {{message}}),
-                        // so handle both shapes gracefully:
                         const text = await resp.text();
                         let data;
                         try {{ data = JSON.parse(text); }} catch (e) {{ data = {{ raw: text }}; }}
+
+                        overlay.style.display = 'none';  // Hide overlay after fetch completes
 
                         if (!resp.ok) {{
                             alert((data && (data.error || data.message)) || `HTTP {{resp.status}}`);
                             return;
                         }}
 
-                        // Friendly messages per type
                         if (type === "prices") {{
                             alert("Prices fetched from cache.");
                         }} else {{
-                            alert((data && (data.message || data.error)) || "Done");
+                            alert(data.message || data.error || "Done");
                         }}
-
-                        // Reload to reflect new data
                         location.reload();
                     }} catch (err) {{
+                        overlay.style.display = 'none';
                         alert("Refresh failed: " + err);
                     }}
                 }}
