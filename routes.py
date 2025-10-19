@@ -384,6 +384,7 @@ def dashboard():
                             <tr><th>Asset</th><th>Free</th></tr>
                             {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in balances.items())}
                         </table>
+                        <br/>
                         <button onclick="refresh('balances')">Refresh Balances</button>
                         <p class="time">Last refreshed: <b>{last_balances}</b></p>
                     </div>
@@ -396,6 +397,7 @@ def dashboard():
                             <tr><th>Symbol</th><th>Price</th></tr>
                             {''.join(f'<tr><td>{k}</td><td>{v}</td></tr>' for k,v in prices.items())}
                         </table>
+                        <br/>
                         <button onclick="refresh('prices')">Refresh Prices</button>
                         <p class="time">Last updated: <b>{last_prices}</b></p>
                     </div>
