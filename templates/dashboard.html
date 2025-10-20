@@ -15,6 +15,25 @@
 
         <div class="tables-row">
             <div class="table-card">
+                <h2>System Status</h2>
+                <div id="system-status-content"></div>
+                <div class="card-footer">
+                    <button onclick="refreshSystemStatus()">Refresh Status</button>
+                </div>
+            </div>
+            
+            <div class="table-card">
+                <h2>Filters</h2>
+                <p>Total cached filters: {{ filters_count }}</p>
+                <div class="card-footer">
+                    <p class="time">Last refreshed: <b>{{ last_filters }}</b></p>
+                    <button onclick="refresh('filters')">Refresh Filters</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="tables-row">
+            <div class="table-card">
                 <h2>Balances</h2>
                 <p>Total cached balances: {{ balances|length }}</p>
                 <table>
@@ -41,25 +60,6 @@
                 <div class="card-footer">
                     <p class="time">Last updated: <b>{{ last_prices }}</b></p>
                     <button onclick="refresh('prices')">Refresh Prices</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="tables-row">
-            <div class="table-card">
-                <h2>Filters</h2>
-                <p>Total cached filters: {{ filters_count }}</p>
-                <div class="card-footer">
-                    <p class="time">Last refreshed: <b>{{ last_filters }}</b></p>
-                    <button onclick="refresh('filters')">Refresh Filters</button>
-                </div>
-            </div>
-
-            <div class="table-card">
-                <h2>System Status</h2>
-                <div id="system-status-content"></div>
-                <div class="card-footer">
-                    <button onclick="refreshSystemStatus()">Refresh Status</button>
                 </div>
             </div>
         </div>
