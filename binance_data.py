@@ -69,8 +69,8 @@ threading.excepthook = _suppress_thread_exceptions
 # ========== CONFIG CONSTANTS ==============================
 # ==========================================================
 WS_LOG_INTERVAL = 42                    # Interval for logging price snapshots (seconds)
+UPDATE_THROTTLE_SECONDS = 3             # 3 seconds
 LAST_SEEN_UPDATE_INTERVAL = 5           # 5 seconds
-UPDATE_THROTTLE_SECONDS = 15            # 15 seconds
 BALANCE_REFRESH_INTERVAL = 3600         # 1 hour
 FILTER_REFRESH_INTERVAL = 1 * 24 * 3600 # 1 day
 WS_RECONNECT_GRACE = 60                 # Restart stale WS streams if no update for 60s
@@ -220,7 +220,7 @@ def _ws_health_monitor(symbols: List[str]):
         for sym in symbols:
             last_seen = _last_seen.get(sym, 0)
             if now - last_seen > WS_RECONNECT_GRACE:
-                logging.debug(f"[WS MONITOR] {sym} stale for >{WS_RECONNECT_GRACE}s — restarting...")
+                logging.info(f"[WS MONITOR] {sym} stale for >{WS_RECONNECT_GRACE}s — restarting...")
                 client = _ws_clients.pop(sym, None)
                 if client:
                     try:
