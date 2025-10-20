@@ -2,11 +2,17 @@ import json
 import logging
 from flask import Blueprint, render_template, jsonify, request
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from binance_data import _get_redis, get_client, fetch_and_cache_balances, fetch_and_cache_filters
 from utils import should_log_request, load_ip_file
 from config._settings import WEBHOOK_REQUEST_PATH, ADMIN_API_KEY, ALLOWED_SYMBOLS
 
 routes = Blueprint("routes", __name__)
+
+# ==========================================================
+# ========== TIMEZONE CONFIG ===============================
+# ==========================================================
+TZ = ZoneInfo("Europe/Zurich")
 
 # ==========================================================
 # ========== REQUEST HOOKS =================================
@@ -250,9 +256,9 @@ def dashboard():
         ts_filt = r.get("last_refresh_filters")
         ts_prices = r.get("last_refresh_prices")
 
-        last_balances = datetime.fromtimestamp(float(ts_bal)).strftime("%Y-%m-%d %H:%M:%S") if ts_bal else "Never"
-        last_filters = datetime.fromtimestamp(float(ts_filt)).strftime("%Y-%m-%d %H:%M:%S") if ts_filt else "Never"
-        last_prices = datetime.fromtimestamp(float(ts_prices)).strftime("%Y-%m-%d %H:%M:%S") if ts_prices else "Never"
+        last_balances = (datetime.fromtimestamp(float(ts_bal), TZ).strftime("%Y-%m-%d %H:%M:%S") if ts_bal else "Never")
+        last_filters = (datetime.fromtimestamp(float(ts_filt), TZ).strftime("%Y-%m-%d %H:%M:%S") if ts_filt else "Never")
+        last_prices = (datetime.fromtimestamp(float(ts_prices), TZ).strftime("%Y-%m-%d %H:%M:%S") if ts_prices else "Never")
 
         return render_template(
             "dashboard.html",
