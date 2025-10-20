@@ -298,6 +298,8 @@ def fetch_and_cache_balances(client: Client):
         logging.error(f"[CACHE] Binance error fetching balances: {e.error_message}")
     except Exception as e:
         logging.exception(f"[CACHE] Unexpected error fetching balances: {e}")
+    finally:
+        _get_redis().set("last_refresh_balances", now_local_ts())  # Always bump timestamp, even if no data changed
 
 def _balance_updater(client: Client):
     """Thread loop: updates balances every hour."""
@@ -341,6 +343,8 @@ def fetch_and_cache_filters(client: Client, symbols: List[str]):
     """Fetch filters for all allowed symbols from Binance, sanitize, and cache."""
     logging.info(f"[CACHE] Fetching filters for {len(symbols)} symbols...")
     r = _get_redis()
+    ts = now_local_ts()
+
     for symbol in symbols:
         try:
             info = client.exchange_info(symbol=symbol)
@@ -355,19 +359,16 @@ def fetch_and_cache_filters(client: Client, symbols: List[str]):
                     raw_filters["min_notional"] = f.get("minNotional")
 
             filters = sanitize_filters(raw_filters)
-            ts = now_local_ts()
-
             r.set(
                 f"filters:{symbol.upper()}",
                 json.dumps({"filters": {k: str(v) for k, v in filters.items()}, "ts": ts}),
             )
-            r.set("last_refresh_filters", ts)
             logging.debug(f"[CACHE] Filters cached for {symbol}")
 
         except Exception as e:
             logging.warning(f"[CACHE] Failed to cache filters for {symbol}: {e}")
 
-    logging.info("[CACHE] All filters updated successfully.")
+    r.set("last_refresh_filters", now_local_ts())  # Always record that a refresh attempt happened
 
 def _filter_updater(client: Client, symbols: List[str]):
     """Thread loop: refreshes filters daily."""
