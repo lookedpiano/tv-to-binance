@@ -101,4 +101,4 @@ async function refreshSystemStatus() {
 }
 
 // Auto-load system status when page opens
-window.addEventListener('DOMContentLoaded', refreshSystemStatus);
+// window.addEventListener('DOMContentLoaded', refreshSystemStatus);
