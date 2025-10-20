@@ -90,7 +90,10 @@ async function refreshSystemStatus() {
         spinner.style.display = 'none';
         overlayText.textContent = "✓ System status updated";
         overlayText.style.color = "#00cc66";
-        setTimeout(() => overlay.style.display = 'none', 1500);
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            location.reload();
+        }, 1500);
     } catch (err) {
         console.error(err);
         spinner.style.display = 'none';
