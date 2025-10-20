@@ -46,6 +46,15 @@ WEBHOOK_REQUEST_PATH = "/to-the-moon"
 MAX_CROSS_LEVERAGE = 3
 
 # -------------------------
+# Helper
+# -------------------------
+def _get_bool_env(var_name: str, default: bool = False) -> bool:
+    val = os.getenv(var_name)
+    if val is None:
+        return default
+    return str(val).strip().lower() in ("1", "true", "yes", "on")
+
+# -------------------------
 # Environment variables
 # -------------------------
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
@@ -54,6 +63,7 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 REDIS_URL = os.getenv("REDIS_URL")
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
+SKIP_INITIAL_FETCH = _get_bool_env("SKIP_INITIAL_FETCH", default=False)
 PORT = os.getenv("PORT", "4747")
 
 if not ADMIN_API_KEY:

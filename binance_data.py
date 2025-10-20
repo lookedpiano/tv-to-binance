@@ -17,6 +17,13 @@ from utils import sanitize_filters
 
 import websocket
 
+# -------------------------
+# Configuration
+# -------------------------
+from config._settings import (
+    SKIP_INITIAL_FETCH,
+)
+
 # ==========================================================
 # ========== LOGGING NOISE SUPPRESSION =====================
 # ==========================================================
@@ -419,8 +426,14 @@ def start_background_cache(symbols: List[str]):
     """Start background threads to keep balances and filters fresh."""
     logging.info("[CACHE] Starting background threads...")
     client = get_client()
-    fetch_and_cache_balances(client)
-    fetch_and_cache_filters(client, symbols)
+
+    if not SKIP_INITIAL_FETCH:
+        logging.info("[CACHE] Not skipping initial REST fetch (SKIP_INITIAL_FETCH=0).")
+        fetch_and_cache_balances(client)
+        fetch_and_cache_filters(client, symbols)
+    else:
+        logging.info("[CACHE] Skipping initial REST fetch (SKIP_INITIAL_FETCH=1).")
+
     threading.Thread(target=_balance_updater, args=(client,), daemon=True, name="BalanceCache").start()
     threading.Thread(target=_filter_updater, args=(client, symbols), daemon=True, name="FilterCache").start()
     logging.info("[CACHE] Background threads started")
