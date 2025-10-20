@@ -61,13 +61,7 @@ async function fetchJson(url) {
     return await resp.json();
 }
 
-/**
- * Refresh the System Status card.
- * @param {{ triggerReload?: boolean }} options
- *  - triggerReload: when true (button click), set a one-time flag and reload.
- *                   when false/omitted (auto after reload), just render and STOP.
- */
-async function refreshSystemStatus({ triggerReload = false } = {}) {
+async function refreshSystemStatus() {
     const overlay = document.getElementById('overlay');
     const overlayText = document.getElementById('overlay-text');
     const spinner = document.querySelector('.spinner');
@@ -90,22 +84,14 @@ async function refreshSystemStatus({ triggerReload = false } = {}) {
                 <li>Filters: ${summary.filters.count}</li>
             </ul>
         `;
-
         document.getElementById('system-status-content').innerHTML = content;
 
         spinner.style.display = 'none';
         overlayText.textContent = "✓ System status updated";
         overlayText.style.color = "#00cc66";
 
-        setTimeout(() => {
-            overlay.style.display = 'none';
-            if (triggerReload) {
-                // Clear old flags, mark for one-time reload
-                sessionStorage.removeItem('refreshStatusOnce');
-                sessionStorage.setItem('refreshStatusOnce', '1');
-                setTimeout(() => location.reload(), 100);
-            }
-        }, 1500);
+        // Just hide overlay — no reload.
+        setTimeout(() => overlay.style.display = 'none', 1500);
     } catch (err) {
         console.error(err);
         spinner.style.display = 'none';
@@ -114,12 +100,3 @@ async function refreshSystemStatus({ triggerReload = false } = {}) {
         setTimeout(() => overlay.style.display = 'none', 2500);
     }
 }
-
-// Auto-refresh System Status ONCE after reload triggered by “Refresh Status”
-window.addEventListener('DOMContentLoaded', () => {
-    const once = sessionStorage.getItem('refreshStatusOnce');
-    if (once === '1') {
-        sessionStorage.setItem('refreshStatusOnce', 'done'); // prevent further loops
-        refreshSystemStatus({ triggerReload: false });
-    }
-});
