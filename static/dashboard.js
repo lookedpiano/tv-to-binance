@@ -92,6 +92,7 @@ async function refreshSystemStatus() {
         overlayText.style.color = "#00cc66";
         setTimeout(() => {
             overlay.style.display = 'none';
+            sessionStorage.setItem('refreshStatusOnce', '1');  // mark reload trigger
             location.reload();
         }, 1500);
     } catch (err) {
@@ -103,5 +104,10 @@ async function refreshSystemStatus() {
     }
 }
 
-// Auto-load system status when page opens
-// window.addEventListener('DOMContentLoaded', refreshSystemStatus);
+// Only auto-refresh system status ONCE after a reload triggered by “Refresh Status”
+window.addEventListener('DOMContentLoaded', () => {
+    if (sessionStorage.getItem('refreshStatusOnce')) {
+        sessionStorage.removeItem('refreshStatusOnce');
+        refreshSystemStatus();
+    }
+});
