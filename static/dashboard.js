@@ -71,18 +71,12 @@ async function refreshSystemStatus() {
     overlay.style.display = 'flex';
 
     try {
-        const [health, summary] = await Promise.all([
-            fetchJson('/health-check'),
-            fetchJson('/cache/summary')
+        const [health] = await Promise.all([
+            fetchJson('/health-check')
         ]);
 
         const content = `
             <p><b>Health:</b> ${health.status}</p>
-            <h4>Cache Summary</h4>
-            <ul>
-                <li>Balances cached: ${summary.balances.exists}</li>
-                <li>Filters: ${summary.filters.count}</li>
-            </ul>
         `;
         document.getElementById('system-status-content').innerHTML = content;
 
