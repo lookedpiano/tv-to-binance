@@ -6,6 +6,7 @@ body {
     color: #eee;
     margin: 40px;
 }
+
 h1 {
     font-size: 2.6rem;
     font-weight: 700;
@@ -13,6 +14,7 @@ h1 {
     text-align: center;
     margin-bottom: 40px;
 }
+
 .white-part { color: #fff; }
 .orange-part { color: #ff6600; }
 .section { margin-bottom: 2rem; }
@@ -29,10 +31,29 @@ button {
 }
 button:hover { background: #ff8533; }
 
-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-th, td { padding: 8px 12px; border-bottom: 1px solid #333; text-align: left; }
-th { color: #ff6600; text-transform: uppercase; font-size: 0.9rem; }
-.time { color: #999; }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+th, td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #333;
+    text-align: left;
+}
+th {
+    color: #ff6600;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+}
+.time {
+    color: #999;
+    font-size: 0.4em;
+}
+
+/* ==========================================================
+   TABLE CARD LAYOUT
+   ========================================================== */
 
 .table-card {
     background: linear-gradient(to bottom right, rgba(255,102,0,0.08), rgba(255,102,0,0.02));
@@ -41,6 +62,10 @@ th { color: #ff6600; text-transform: uppercase; font-size: 0.9rem; }
     padding: 20px;
     flex: 1;
     margin: 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
 }
 
 .tables-row {
@@ -48,9 +73,39 @@ th { color: #ff6600; text-transform: uppercase; font-size: 0.9rem; }
     flex-wrap: wrap;
     justify-content: space-between;
 }
+
 @media (max-width: 900px) {
-    .tables-row { flex-direction: column; }
+    .tables-row {
+        flex-direction: column;
+    }
 }
+
+/* ==========================================================
+   CARD FOOTER (time above button)
+   ========================================================== */
+
+.card-footer {
+    display: flex;
+    flex-direction: column; /* stack vertically */
+    align-items: flex-start; /* align left */
+    gap: 0.5rem;
+    margin-top: auto;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.card-footer button {
+    margin: 0;
+}
+
+.card-footer .time {
+    color: #aaa;
+    font-size: 0.9em;
+}
+
+/* ==========================================================
+   OVERLAY & LOADING SPINNER
+   ========================================================== */
 
 #overlay {
     position: fixed;
@@ -62,6 +117,7 @@ th { color: #ff6600; text-transform: uppercase; font-size: 0.9rem; }
     align-items: center;
     z-index: 9999;
 }
+
 #overlay-box {
     background: #222;
     padding: 40px 50px;
@@ -70,12 +126,14 @@ th { color: #ff6600; text-transform: uppercase; font-size: 0.9rem; }
     border: 1px solid rgba(255,102,0,0.4);
     box-shadow: 0 0 20px rgba(0,0,0,0.4);
 }
+
 #overlay-text {
     color: #ff6600;
     font-weight: 600;
     margin-top: 14px;
     font-size: 1.1rem;
 }
+
 .spinner {
     border: 4px solid #444;
     border-top: 4px solid #ff6600;
@@ -85,6 +143,7 @@ th { color: #ff6600; text-transform: uppercase; font-size: 0.9rem; }
     animation: spin 1s linear infinite;
     margin: 0 auto;
 }
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }

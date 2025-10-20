@@ -23,9 +23,10 @@
                         <tr><td>{{ asset }}</td><td>{{ amount }}</td></tr>
                     {% endfor %}
                 </table>
-                <br/>
-                <button onclick="refresh('balances')">Refresh Balances</button>
-                <p class="time">Last refreshed: <b>{{ last_balances }}</b></p>
+                <div class="card-footer">
+                    <p class="time">Last refreshed: <b>{{ last_balances }}</b></p>
+                    <button onclick="refresh('balances')">Refresh Balances</button>
+                </div>
             </div>
 
             <div class="table-card">
@@ -37,26 +38,32 @@
                         <tr><td>{{ symbol }}</td><td>{{ price }}</td></tr>
                     {% endfor %}
                 </table>
-                <br/>
-                <button onclick="refresh('prices')">Refresh Prices</button>
-                <p class="time">Last updated: <b>{{ last_prices }}</b></p>
+                <div class="card-footer">
+                    <p class="time">Last updated: <b>{{ last_prices }}</b></p>
+                    <button onclick="refresh('prices')">Refresh Prices</button>
+                </div>
             </div>
         </div>
 
-        <div class="table-card">
-            <h2>Filters</h2>
-            <p>Total cached filters: {{ filters_count }}</p>
-            <button onclick="refresh('filters')">Refresh Filters</button>
-            <p class="time">Last refreshed: <b>{{ last_filters }}</b></p>
-        </div>
-
-        <div class="table-card">
-            <h2>System Status</h2>
-            <div id="system-status-content">
-                <p>Loading system info…</p>
+        <div class="tables-row">
+            <div class="table-card">
+                <h2>Filters</h2>
+                <p>Total cached filters: {{ filters_count }}</p>
+                <div class="card-footer">
+                    <p class="time">Last refreshed: <b>{{ last_filters }}</b></p>
+                    <button onclick="refresh('filters')">Refresh Filters</button>
+                </div>
             </div>
-            <br/>
-            <button onclick="refreshSystemStatus()">Refresh Status</button>
+
+            <div class="table-card">
+                <h2>System Status</h2>
+                <div id="system-status-content">
+                    <p>Loading system info…</p>
+                </div>
+                <div class="card-footer">
+                    <button onclick="refreshSystemStatus()">Refresh Status</button>
+                </div>
+            </div>
         </div>
 
         <div id="overlay">
