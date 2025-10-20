@@ -8,6 +8,8 @@ import redis
 from decimal import Decimal
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 from binance.spot import Spot as Client
 from binance.error import ClientError
@@ -75,6 +77,16 @@ BALANCE_REFRESH_INTERVAL = 3600         # 1 hour
 FILTER_REFRESH_INTERVAL = 1 * 24 * 3600 # 1 day
 WS_RECONNECT_GRACE = 60                 # Restart stale WS streams if no update for 60s
 WS_CHECK_INTERVAL = 30                  # Health monitor check interval (seconds)
+
+
+# ==========================================================
+# ========== TIMEZONE CONFIG ===============================
+# ==========================================================
+TZ = ZoneInfo("Europe/Zurich")
+
+def now_local_ts() -> float:
+    """Return the current local timestamp (Europe/Zurich)."""
+    return datetime.now(TZ).timestamp()
 
 
 # ==========================================================
@@ -164,9 +176,9 @@ def _on_ws_message(_, message):
             return
 
         now = time.time()
-        
+
         if symbol not in _last_seen or now - _last_seen[symbol] > LAST_SEEN_UPDATE_INTERVAL:
-            _last_seen[symbol] = now # only mark as seen occasionally
+            _last_seen[symbol] = now  # only mark as seen occasionally
 
         last_saved = _last_saved.get(symbol, 0)
         if now - last_saved < UPDATE_THROTTLE_SECONDS:
@@ -176,7 +188,7 @@ def _on_ws_message(_, message):
         set_cached_price(symbol, mid_price)
         _last_saved[symbol] = now
 
-        _get_redis().set("last_refresh_prices", now)
+        _get_redis().set("last_refresh_prices", now_local_ts())
 
         if symbol not in _last_logged or now - _last_logged[symbol] > 10:
             logging.debug(f"[WS UPDATE] {symbol}: {mid_price}")
@@ -213,7 +225,7 @@ def _ws_loop(symbols: List[str]):
     logging.info("[WS] All dedicated WebSocket clients started successfully.")
 
 def _ws_health_monitor(symbols: List[str]):
-    """Monitor each WebSocket stream and restart if stale (>WS_RECONNECT_GRACE seconds without any message)."""
+    """Monitor each WebSocket stream and restart if stale (>WS_RECONNECT_GRACE seconds without updates)."""
     while True:
         time.sleep(WS_CHECK_INTERVAL)
         now = time.time()
@@ -228,8 +240,7 @@ def _ws_health_monitor(symbols: List[str]):
                     except Exception:
                         pass
                 threading.Thread(target=_start_ws_for_symbol, args=(sym,), daemon=True).start()
-                _last_seen[sym] = now  # reset to prevent immediate retrigger
-
+                _last_seen[sym] = now
 
 def _log_price_snapshot():
     """Periodically log snapshot of all cached prices."""
@@ -277,9 +288,11 @@ def fetch_and_cache_balances(client: Client):
             for b in account["balances"]
             if Decimal(str(b["free"])) > 0
         }
-        data = {"balances": {k: str(v) for k, v in balances.items()}, "ts": time.time()}
-        _get_redis().set("account_balances", json.dumps(data))
-        _get_redis().set("last_refresh_balances", time.time())
+        ts = now_local_ts()
+        data = {"balances": {k: str(v) for k, v in balances.items()}, "ts": ts}
+        r = _get_redis()
+        r.set("account_balances", json.dumps(data))
+        r.set("last_refresh_balances", ts)
         logging.info(f"[CACHE] Balances updated ({len(balances)} assets).")
     except ClientError as e:
         logging.error(f"[CACHE] Binance error fetching balances: {e.error_message}")
@@ -311,7 +324,7 @@ def refresh_balances_for_assets(client: Client, assets: List[str]):
             if asset in all_balances:
                 cached["balances"][asset] = str(all_balances[asset])
                 logging.info(f"[CACHE] Updated {asset} balance after trade.")
-        cached["ts"] = time.time()
+        cached["ts"] = now_local_ts()
         r.set("account_balances", json.dumps(cached))
     except Exception as e:
         logging.warning(f"[CACHE] Failed to refresh balances for {assets}: {e}")
@@ -325,18 +338,14 @@ This section fetches trading filters (LOT_SIZE, NOTIONAL, etc.) from Binance
 and caches them in Redis for efficient reuse when placing trades.
 """
 def fetch_and_cache_filters(client: Client, symbols: List[str]):
-    """
-    Fetch filters for all allowed symbols from Binance,
-    sanitize them, and cache the result in Redis.
-    """
+    """Fetch filters for all allowed symbols from Binance, sanitize, and cache."""
     logging.info(f"[CACHE] Fetching filters for {len(symbols)} symbols...")
-
+    r = _get_redis()
     for symbol in symbols:
         try:
             info = client.exchange_info(symbol=symbol)
             s = info["symbols"][0]
 
-            # Extract LOT_SIZE and NOTIONAL filters
             raw_filters = {}
             for f in s["filters"]:
                 if f["filterType"] == "LOT_SIZE":
@@ -345,15 +354,14 @@ def fetch_and_cache_filters(client: Client, symbols: List[str]):
                 elif f["filterType"] == "NOTIONAL":
                     raw_filters["min_notional"] = f.get("minNotional")
 
-            # Sanitize invalid or missing fields before caching
             filters = sanitize_filters(raw_filters)
+            ts = now_local_ts()
 
-            _get_redis().set(
+            r.set(
                 f"filters:{symbol.upper()}",
-                json.dumps({"filters": {k: str(v) for k, v in filters.items()}, "ts": time.time()}),
+                json.dumps({"filters": {k: str(v) for k, v in filters.items()}, "ts": ts}),
             )
-            _get_redis().set("last_refresh_filters", time.time())
-
+            r.set("last_refresh_filters", ts)
             logging.debug(f"[CACHE] Filters cached for {symbol}")
 
         except Exception as e:
@@ -362,7 +370,7 @@ def fetch_and_cache_filters(client: Client, symbols: List[str]):
     logging.info("[CACHE] All filters updated successfully.")
 
 def _filter_updater(client: Client, symbols: List[str]):
-    """Thread loop: refreshes filters weekly."""
+    """Thread loop: refreshes filters daily."""
     while True:
         fetch_and_cache_filters(client, symbols)
         time.sleep(FILTER_REFRESH_INTERVAL)
@@ -384,7 +392,6 @@ Called once at server startup to begin background caching threads:
 - Live WebSocket price updates
 - Periodic balance + filter refresh
 """
-
 def start_background_cache(symbols: List[str]):
     """Start background threads to keep balances and filters fresh."""
     logging.info("[CACHE] Starting background threads...")
