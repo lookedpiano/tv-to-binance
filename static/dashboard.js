@@ -75,9 +75,12 @@ async function refreshSystemStatus() {
             fetchJson('/health-check')
         ]);
 
+        const isHealthy = health.status?.toLowerCase() === 'healthy';
+        const color = isHealthy ? '#00cc66' : '#ff3333';
         const content = `
-            <p><b>Health:</b> ${health.status}</p>
+            <p><b>Health:</b> <span style="color:${color};">${health.status}</span></p>
         `;
+
         document.getElementById('system-status-content').innerHTML = content;
 
         // Save to sessionStorage so we can restore it after reload
@@ -98,6 +101,11 @@ async function refreshSystemStatus() {
         overlayText.textContent = "Failed to load system status: " + err.message;
         overlayText.style.color = "#ff3333";
         setTimeout(() => overlay.style.display = 'none', 2500);
+
+        // Optional: show a red “unhealthy” status on failure
+        document.getElementById('system-status-content').innerHTML = `
+            <p><b>Health:</b> <span style="color:#ff3333;">unhealthy</span></p>
+        `;
     }
 }
 
