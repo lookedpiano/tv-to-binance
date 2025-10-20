@@ -86,11 +86,12 @@ async function refreshSystemStatus() {
         `;
         document.getElementById('system-status-content').innerHTML = content;
 
+        // Save to sessionStorage so we can restore it after reload
+        sessionStorage.setItem('systemStatusHTML', content);
+
         spinner.style.display = 'none';
         overlayText.textContent = "✓ System status updated";
         overlayText.style.color = "#00cc66";
-
-        // Just hide overlay — no reload.
         setTimeout(() => overlay.style.display = 'none', 1500);
     } catch (err) {
         console.error(err);
@@ -100,3 +101,11 @@ async function refreshSystemStatus() {
         setTimeout(() => overlay.style.display = 'none', 2500);
     }
 }
+
+// Restore cached System Status after any reload
+window.addEventListener('DOMContentLoaded', () => {
+    const saved = sessionStorage.getItem('systemStatusHTML');
+    if (saved) {
+        document.getElementById('system-status-content').innerHTML = saved;
+    }
+});
