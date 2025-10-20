@@ -85,7 +85,7 @@ th {
     flex-direction: column;
     justify-content: space-between;
     height: auto;
-    min-height: 100%;
+    min-height: 280px;
 }
 
 @media (max-width: 900px) {
