@@ -70,7 +70,7 @@ threading.excepthook = _suppress_thread_exceptions
 # ==========================================================
 WS_LOG_INTERVAL = 42                    # Interval for logging price snapshots (seconds)
 LAST_SEEN_UPDATE_INTERVAL = 5           # 5 seconds
-UPDATE_THROTTLE_SECONDS = 60            # 1 minute
+UPDATE_THROTTLE_SECONDS = 15            # 15 seconds
 BALANCE_REFRESH_INTERVAL = 3600         # 1 hour
 FILTER_REFRESH_INTERVAL = 1 * 24 * 3600 # 1 day
 WS_RECONNECT_GRACE = 60                 # Restart stale WS streams if no update for 60s
