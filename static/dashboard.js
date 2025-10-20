@@ -54,3 +54,54 @@ async function refresh(type) {
         setTimeout(() => overlay.style.display = 'none', 2500);
     }
 }
+
+async function fetchJson(url) {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`${url} returned ${resp.status}`);
+    return await resp.json();
+}
+
+async function refreshSystemStatus() {
+    const overlay = document.getElementById('overlay');
+    const overlayText = document.getElementById('overlay-text');
+    const spinner = document.querySelector('.spinner');
+    overlayText.textContent = "Refreshing system status…";
+    overlayText.style.color = "#ff6600";
+    spinner.style.display = 'block';
+    overlay.style.display = 'flex';
+
+    try {
+        const [health, count, summary] = await Promise.all([
+            fetchJson('/health-check'),
+            fetchJson('/cache/prices/count'),
+            fetchJson('/cache/summary')
+        ]);
+
+        const content = `
+            <p><b>Health:</b> ${health.status}</p>
+            <p><b>Price Entries:</b> ${count.count}</p>
+            <h4>Cache Summary</h4>
+            <ul>
+                <li>Prices: ${summary.prices.count}</li>
+                <li>Balances cached: ${summary.balances.exists}</li>
+                <li>Filters: ${summary.filters.count}</li>
+            </ul>
+        `;
+
+        document.getElementById('system-status-content').innerHTML = content;
+
+        spinner.style.display = 'none';
+        overlayText.textContent = "✓ System status updated";
+        overlayText.style.color = "#00cc66";
+        setTimeout(() => overlay.style.display = 'none', 1500);
+    } catch (err) {
+        console.error(err);
+        spinner.style.display = 'none';
+        overlayText.textContent = "Failed to load system status: " + err.message;
+        overlayText.style.color = "#ff3333";
+        setTimeout(() => overlay.style.display = 'none', 2500);
+    }
+}
+
+// Auto-load system status when page opens
+window.addEventListener('DOMContentLoaded', refreshSystemStatus);

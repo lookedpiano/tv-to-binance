@@ -50,6 +50,15 @@
             <p class="time">Last refreshed: <b>{{ last_filters }}</b></p>
         </div>
 
+        <div class="table-card">
+            <h2>System Status</h2>
+            <div id="system-status-content">
+                <p>Loading system info…</p>
+            </div>
+            <br/>
+            <button onclick="refreshSystemStatus()">Refresh Status</button>
+        </div>
+
         <div id="overlay">
             <div id="overlay-box">
                 <div class="spinner"></div>
