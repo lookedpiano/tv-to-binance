@@ -36,7 +36,7 @@ logging.getLogger("binance.websocket").setLevel(logging.CRITICAL)
 logging.getLogger("binance.websockets").setLevel(logging.CRITICAL)
 
 def _suppress_thread_exceptions(args):
-    """Suppress noisy thread-level exceptions caused by websocket disconnects or Redis overload."""
+    """Suppress noisy thread-level exceptions caused by websocket disconnects, Redis overload, or Binance bans."""
     msg = str(args.exc_value).lower()
 
     harmless_patterns = (
@@ -54,12 +54,23 @@ def _suppress_thread_exceptions(args):
         "too many connections",
     )
 
-    if any(pattern in msg for pattern in harmless_patterns):
+    binance_rate_limit_patterns = (
+        "way too much request weight used",
+        "ip banned until",
+        "api-key ip banned",
+        "too many requests",
+    )
+
+    if any(p in msg for p in harmless_patterns):
         return  # Silently ignore
 
-    if any(pattern in msg for pattern in redis_warning_patterns):
+    if any(p in msg for p in redis_warning_patterns):
         logging.warning("Consider replacing the current Redis caching data store.")
-        return  # Prevent full traceback spam
+        return
+
+    if any(p in msg for p in binance_rate_limit_patterns):
+        logging.warning("[SUPPRESSED] Binance IP banned temporarily due to request weight. Avoid frequent redeploys.")
+        return
 
     # Otherwise, let real errors through
     sys.__excepthook__(args.exc_type, args.exc_value, args.exc_traceback)
@@ -134,6 +145,17 @@ def init_redis(redis_url: str):
     masked_port = "******" if parsed.port else "unknown"
 
     logging.info(f"[REDIS] Connected (host={masked_host}:{masked_port}, db={safe_db})")
+
+
+# ==========================================================
+# ========== HELPER ========== =============================
+# ==========================================================
+def _short_binance_error(e):
+    """Return a compact string for long Binance client errors."""
+    text = str(e)
+    if "{'Content-Type':" in text:
+        text = text.split("{'Content-Type':", 1)[0] + "{...}"
+    return text
 
 
 # ==========================================================
@@ -329,7 +351,7 @@ def refresh_balances_for_assets(client: Client, assets: List[str]):
         cached["ts"] = now_local_ts()
         r.set("account_balances", json.dumps(cached))
     except Exception as e:
-        logging.warning(f"[CACHE] Failed to refresh balances for {assets}: {e}")
+        logging.warning(f"[CACHE] Failed to refresh balances for {assets}: {_short_binance_error(e)}")
 
 
 # ==========================================================
@@ -366,7 +388,7 @@ def fetch_and_cache_filters(client: Client, symbols: List[str]):
             logging.debug(f"[CACHE] Filters cached for {symbol}")
 
         except Exception as e:
-            logging.warning(f"[CACHE] Failed to cache filters for {symbol}: {e}")
+            logging.warning(f"[CACHE] Failed to cache filters for {symbol}: {_short_binance_error(e)}")
 
     r.set("last_refresh_filters", now_local_ts())  # Always record that a refresh attempt happened
 
