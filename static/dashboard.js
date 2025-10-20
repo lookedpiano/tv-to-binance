@@ -71,18 +71,15 @@ async function refreshSystemStatus() {
     overlay.style.display = 'flex';
 
     try {
-        const [health, count, summary] = await Promise.all([
+        const [health, summary] = await Promise.all([
             fetchJson('/health-check'),
-            fetchJson('/cache/prices/count'),
             fetchJson('/cache/summary')
         ]);
 
         const content = `
             <p><b>Health:</b> ${health.status}</p>
-            <p><b>Price Entries:</b> ${count.count}</p>
             <h4>Cache Summary</h4>
             <ul>
-                <li>Prices: ${summary.prices.count}</li>
                 <li>Balances cached: ${summary.balances.exists}</li>
                 <li>Filters: ${summary.filters.count}</li>
             </ul>
