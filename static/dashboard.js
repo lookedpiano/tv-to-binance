@@ -100,11 +100,11 @@ async function refreshSystemStatus({ triggerReload = false } = {}) {
         setTimeout(() => {
             overlay.style.display = 'none';
             if (triggerReload) {
-                // Mark that *after* this reload we should auto-refresh ONCE, then stop.
+                // Clear old flags, mark for one-time reload
+                sessionStorage.removeItem('refreshStatusOnce');
                 sessionStorage.setItem('refreshStatusOnce', '1');
-                location.reload();
+                setTimeout(() => location.reload(), 100);
             }
-            // If not triggerReload, do nothing more — we were the post-reload auto-fill.
         }, 1500);
     } catch (err) {
         console.error(err);
@@ -115,11 +115,11 @@ async function refreshSystemStatus({ triggerReload = false } = {}) {
     }
 }
 
-// Only auto-refresh system status ONCE after a reload triggered by “Refresh Status”
+// Auto-refresh System Status ONCE after reload triggered by “Refresh Status”
 window.addEventListener('DOMContentLoaded', () => {
-    if (sessionStorage.getItem('refreshStatusOnce')) {
-        sessionStorage.removeItem('refreshStatusOnce'); // use it only once
-        // Auto-fill the card, but DO NOT reload again.
+    const once = sessionStorage.getItem('refreshStatusOnce');
+    if (once === '1') {
+        sessionStorage.setItem('refreshStatusOnce', 'done'); // prevent further loops
         refreshSystemStatus({ triggerReload: false });
     }
 });
