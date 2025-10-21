@@ -465,11 +465,11 @@ def start_background_cache(symbols: List[str]):
         logging.info("[CACHE] Not skipping initial REST fetch (SKIP_INITIAL_FETCH=0).")
         fetch_and_cache_balances(client)
         fetch_and_cache_filters(client, symbols)
-        fetch_and_cache_stablecoin_prices(client)
+        #fetch_and_cache_stablecoin_prices(client)
     else:
         logging.info("[CACHE] Skipping initial REST fetch (SKIP_INITIAL_FETCH=1).")
 
     threading.Thread(target=_balance_updater, args=(client,), daemon=True, name="BalanceCache").start()
     threading.Thread(target=_filter_updater, args=(client, symbols), daemon=True, name="FilterCache").start()
-    threading.Thread(target=_stablecoin_price_updater, args=(client,), daemon=True, name="StablecoinCache").start()
+    #threading.Thread(target=_stablecoin_price_updater, args=(client,), daemon=True, name="StablecoinCache").start()
     logging.info("[CACHE] Background threads started (balances, filters, stablecoins)")
