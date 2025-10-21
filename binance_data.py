@@ -92,6 +92,7 @@ WS_LOG_INTERVAL = 42                    # Interval for logging price snapshots (
 UPDATE_THROTTLE_SECONDS = 3             # 3 seconds
 LAST_SEEN_UPDATE_INTERVAL = 5           # 5 seconds
 BALANCE_REFRESH_INTERVAL = 3600         # 1 hour
+STABLECOIN_REFRESH_INTERVAL = 3600      # 1 hour
 FILTER_REFRESH_INTERVAL = 1 * 24 * 3600 # 1 day
 WS_RECONNECT_GRACE = 60                 # Restart stale WS streams if no update for 60s
 WS_CHECK_INTERVAL = 30                  # Health monitor check interval (seconds)
@@ -415,6 +416,39 @@ def get_cached_symbol_filters(symbol: str) -> Optional[Dict[str, str]]:
 
 
 # ==========================================================
+# ========== STABLECOIN PRICE REFRESHER ====================
+# ==========================================================
+def fetch_and_cache_stablecoin_prices(client: Client):
+    """Fetch USDT/USDC pair prices from Binance and store in Redis cache."""
+    try:
+        logging.info("[CACHE] Fetching stablecoin prices from Binance...")
+
+        # Binance provides tickers only for pairs, not standalone assets.
+        usdt_usdc = client.ticker_price("USDTUSDC")
+        usdc_usdt = client.ticker_price("USDCUSDT")
+
+        usdt_usdc_price = Decimal(usdt_usdc.get("price", "1"))
+        usdc_usdt_price = Decimal(usdc_usdt.get("price", "1"))
+
+        # Store both stablecoins as cached prices
+        set_cached_price("USDT", usdt_usdc_price)
+        set_cached_price("USDC", usdc_usdt_price)
+
+        logging.info(f"[CACHE] Stablecoin prices updated: USDT={usdt_usdc_price}, USDC={usdc_usdt_price}")
+
+    except Exception as e:
+        logging.warning(f"[CACHE] Failed to fetch stablecoin prices: {_short_binance_error(e)}")
+
+
+def _stablecoin_price_updater(client: Client):
+    """Thread loop: updates stablecoin prices every hour."""
+    while True:
+        fetch_and_cache_stablecoin_prices(client)
+        time.sleep(STABLECOIN_REFRESH_INTERVAL)
+
+
+
+# ==========================================================
 # ========== STARTUP ENTRYPOINT =============================
 # ==========================================================
 """
@@ -423,7 +457,7 @@ Called once at server startup to begin background caching threads:
 - Periodic balance + filter refresh
 """
 def start_background_cache(symbols: List[str]):
-    """Start background threads to keep balances and filters fresh."""
+    """Start background threads to keep balances, filters, and prices fresh."""
     logging.info("[CACHE] Starting background threads...")
     client = get_client()
 
@@ -431,9 +465,11 @@ def start_background_cache(symbols: List[str]):
         logging.info("[CACHE] Not skipping initial REST fetch (SKIP_INITIAL_FETCH=0).")
         fetch_and_cache_balances(client)
         fetch_and_cache_filters(client, symbols)
+        fetch_and_cache_stablecoin_prices(client)
     else:
         logging.info("[CACHE] Skipping initial REST fetch (SKIP_INITIAL_FETCH=1).")
 
     threading.Thread(target=_balance_updater, args=(client,), daemon=True, name="BalanceCache").start()
     threading.Thread(target=_filter_updater, args=(client, symbols), daemon=True, name="FilterCache").start()
-    logging.info("[CACHE] Background threads started")
+    threading.Thread(target=_stablecoin_price_updater, args=(client,), daemon=True, name="StablecoinCache").start()
+    logging.info("[CACHE] Background threads started (balances, filters, stablecoins)")
