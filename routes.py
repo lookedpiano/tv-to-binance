@@ -74,6 +74,10 @@ def ping():
 @routes.route("/healthz", methods=["GET", "HEAD"])
 def health_check():
     """General health probe endpoints."""
+    provided_key = request.headers.get("X-Admin-Key")
+    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
+        logging.warning("[SECURITY] Unauthorized attempt to access /health")
+        return jsonify({"error": "Unauthorized"}), 401
     return jsonify({"status": "healthy"}), 200
 
 
@@ -128,7 +132,6 @@ def cache_price_symbol(symbol):
 @routes.route("/cache/balances", methods=["GET"])
 def cache_balances():
     provided_key = request.headers.get("X-Admin-Key")
-
     if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
         logging.warning("[SECURITY] Unauthorized attempt to access /cache/balances")
         return jsonify({"error": "Unauthorized"}), 401
