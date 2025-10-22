@@ -397,18 +397,68 @@ def resolve_trade_amount(
     amt: Decimal | None,
     pct: Decimal | None,
     side: str,
+    price: Decimal | None = None,
+    amt_in_crypto: bool = False,
+    amt_in_funds: bool = False,
 ) -> tuple[Decimal | None, str | None]:
-    if amt is not None:
-        if amt > free_balance:
-            logging.warning(f"[INVEST:{side}-AMOUNT] Balance insufficient: requested={amt}, available={free_balance}")
-            return None, f"Balance insufficient: requested={amt}, available={free_balance}"
-        logging.info(f"[INVEST:{side}-AMOUNT] Using explicit amount={amt}")
-        return amt, None
+    """
+    Resolves the target trade amount based on the provided parameters and context.
 
-    # pct path
-    resolved_amt = quantize_down(free_balance * pct, "0.00000001")
-    logging.info(f"[INVEST:{side}-PERCENTAGE] Using pct={float(pct)}, resolved_amt={resolved_amt}")
-    return resolved_amt, None
+    - BUY:
+        * amt_in_crypto=True  → buy this many base units (e.g. 5 ADA)
+        * amt_in_funds=True   → spend this much quote (e.g. 10 USDT)
+    - SELL:
+        * amt_in_crypto=True  → sell this many base units (e.g. 0.001 BTC)
+        * amt_in_funds=True   → sell enough base to get this much quote (e.g. 6 USDT)
+
+    Returns: (target_amount_in_relevant_units, error_msg)
+    """
+
+    # --- Explicit amount path ---
+    if amt is not None:
+        if side == "BUY":
+            if amt_in_crypto:
+                # e.g. buy 5 ADA
+                target = amt
+                logging.info(f"[INVEST:BUY-CRYPTO-AMOUNT] Buying {target} base units")
+            elif amt_in_funds:
+                # e.g. spend 10 USDT to buy base
+                target = amt  # still in quote, handled later in execute_trade()
+                logging.info(f"[INVEST:BUY-FUNDS-AMOUNT] Spending {target} quote")
+            else:
+                target = amt  # fallback
+        else:  # SELL
+            if amt_in_crypto:
+                # e.g. sell 0.001 BTC
+                if amt > free_balance:
+                    msg = f"Balance insufficient: requested={amt}, available={free_balance}"
+                    logging.warning(f"[INVEST:SELL-CRYPTO-AMOUNT] {msg}")
+                    return None, msg
+                target = amt
+                logging.info(f"[INVEST:SELL-CRYPTO-AMOUNT] Selling {target} base units")
+            elif amt_in_funds:
+                # e.g. sell BTC worth 6 USDT
+                if not price:
+                    return None, "Missing price for funds-based sell"
+                crypto_equiv = amt / price
+                if crypto_equiv > free_balance:
+                    msg = f"Balance insufficient: requested={crypto_equiv}, available={free_balance}"
+                    logging.warning(f"[INVEST:SELL-FUNDS-AMOUNT] {msg}")
+                    return None, msg
+                target = crypto_equiv
+                logging.info(f"[INVEST:SELL-FUNDS-AMOUNT] Selling {crypto_equiv} base (≈{amt} quote)")
+            else:
+                target = amt  # fallback
+
+        return target, None
+
+    # --- Percentage path ---
+    if pct is not None:
+        resolved_amt = quantize_down(free_balance * pct, "0.00000001")
+        logging.info(f"[INVEST:{side}-PERCENTAGE] Using pct={float(pct)}, resolved_amt={resolved_amt}")
+        return resolved_amt, None
+
+    return None, "Neither amount nor percentage provided"
 
 def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decimal, place_order_fn):
     """
@@ -552,7 +602,15 @@ def execute_trade(
             return {"warning": message}, 200
 
         # Resolve amount
-        target_amount, error_msg = resolve_trade_amount(free_balance, amt, pct, side=side)
+        target_amount, error_msg = resolve_trade_amount(
+            free_balance,
+            amt,
+            pct,
+            side,
+            price,
+            amt_in_crypto,
+            amt_in_funds
+        )
         if error_msg:
             logging.warning(f"[EXECUTE] {error_msg}")
             try:
