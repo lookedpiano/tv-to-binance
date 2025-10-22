@@ -416,6 +416,55 @@ def get_cached_symbol_filters(symbol: str) -> Optional[Dict[str, str]]:
 
 
 # ==========================================================
+# ========== ORDERS CACHE ==================================
+# ==========================================================
+
+def log_order_to_cache(symbol, side, qty, price, status, message):
+    """Store executed or failed order info in Redis for monitoring."""
+    try:
+        r = _get_redis()
+        ts = now_local_ts()
+        entry = {
+            "timestamp": ts,
+            "symbol": symbol,
+            "side": side,
+            "qty": str(qty),
+            "price": str(price),
+            "status": status,
+            "message": message,
+        }
+
+        # Store detailed order data
+        key = f"order:{ts}:{symbol}"
+        r.set(key, json.dumps(entry))
+
+        # Add reference to sorted set for easy listing (by timestamp)
+        r.zadd("orders_index", {key: ts})
+
+        # Optional: Keep the list trimmed (e.g. last 500 orders)
+        r.zremrangebyrank("orders_index", 0, -501)
+
+        logging.info(f"[CACHE] Logged order → {symbol} {side} {status}")
+    except Exception as e:
+        logging.warning(f"[CACHE] Failed to log order: {e}")
+
+def get_cached_orders(limit: int = 100):
+    """Return up to 'limit' recent orders from Redis, sorted by timestamp descending."""
+    try:
+        r = _get_redis()
+        keys = r.zrevrange("orders_index", 0, limit - 1)
+        orders = []
+        for k in keys:
+            raw = r.get(k)
+            if raw:
+                orders.append(json.loads(raw))
+        return orders
+    except Exception as e:
+        logging.error(f"[CACHE] Failed to fetch cached orders: {e}")
+        return []
+
+
+# ==========================================================
 # ========== STARTUP ENTRYPOINT =============================
 # ==========================================================
 """

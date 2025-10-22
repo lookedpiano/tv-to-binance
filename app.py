@@ -13,13 +13,13 @@ from binance.error import ClientError, ServerError
 from binance_data import (
     init_redis,
     init_client,
-    get_client,
     start_ws_price_cache,
     start_background_cache,
     get_cached_price,
     get_cached_balances,
     get_cached_symbol_filters,
-    refresh_balances_for_assets
+    refresh_balances_for_assets,
+    log_order_to_cache,
 )
 
 from routes import routes
@@ -549,21 +549,32 @@ def execute_trade(
         logging.debug(f"[DETAILS] step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
 
         # === 7. Validate filters ===
-        is_valid, resp_dict, status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
+        is_valid, resp_dict, http_status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
         if not is_valid:
-            return resp_dict, status
+            return resp_dict, http_status
 
         # === 8. Place order ===
-        result, status_code = place_order_with_handling(symbol, side, qty, price, place_order_fn)
+        result, order_http_status = place_order_with_handling(symbol, side, qty, price, place_order_fn)
 
-        # === 9. Refresh balances if trade succeeded ===
-        if status_code == 200 and result and "error" not in result:
+        # === 9. Determine outcome and refresh balances if trade succeeded ===
+        if order_http_status == 200 and result and "error" not in result:
+            order_status = "success"
+            message = f"Order executed successfully ({symbol} {side})"
             try:
                 refresh_balances_for_assets(client, [base_asset, quote_asset])
             except Exception as e:
                 logging.warning(f"[CACHE] Post-trade balance refresh failed: {e}")
+        else:
+            order_status = "error"
+            message = result.get("error", "Unknown failure") if isinstance(result, dict) else str(result)
 
-        return result, status_code
+        # === 10. Log order attempt ===
+        try:
+            log_order_to_cache(symbol, side, qty, price, order_status, message)
+        except Exception as e:
+            logging.warning(f"[ORDER LOG] Failed to log order: {e}")
+
+        return result, order_http_status
 
     except Exception as e:
         logging.exception(f"[EXECUTE] Trade execution failed for {symbol}")

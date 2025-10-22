@@ -3,7 +3,7 @@ import logging
 from flask import Blueprint, render_template, jsonify, request
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from binance_data import _get_redis, get_client, fetch_and_cache_balances, fetch_and_cache_filters
+from binance_data import _get_redis, get_client, fetch_and_cache_balances, fetch_and_cache_filters, get_cached_orders
 from utils import should_log_request, load_ip_file
 from config._settings import WEBHOOK_REQUEST_PATH, ADMIN_API_KEY, ALLOWED_SYMBOLS
 
@@ -122,7 +122,7 @@ def cache_price_symbol(symbol):
 
 
 # ==========================================================
-# ========== BALANCE & FILTER CACHE ENDPOINTS ===============
+# ========== BALANCE & FILTER & ORDERS CACHE ENDPOINTS =====
 # ==========================================================
 
 @routes.route("/cache/balances", methods=["GET"])
@@ -199,6 +199,23 @@ def refresh_filters():
     except Exception as e:
         logging.exception("[ROUTE] /cache/refresh/filters failed")
         return jsonify({"error": f"Failed to refresh filters: {e}"}), 500
+
+
+@routes.route("/cache/orders", methods=["GET"])
+def cache_orders():
+    """Return recent cached order logs."""
+    provided_key = request.headers.get("X-Admin-Key")
+    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
+        logging.warning("[SECURITY] Unauthorized attempt to access /cache/orders")
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        limit = int(request.args.get("limit", 100))
+        orders = get_cached_orders(limit)
+        return jsonify({"count": len(orders), "orders": orders}), 200
+    except Exception as e:
+        logging.exception("[ROUTE] /cache/orders failed")
+        return jsonify({"error": f"Failed to fetch cached orders: {e}"}), 500
 
 
 # ==========================================================
