@@ -438,6 +438,20 @@ def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decim
     logging.info(f"[ORDER] {side} successfully executed: qty={qty} {symbol} at price={price}")
     return {"status": f"spot_{side.lower()}_executed", "order": resp}, 200
 
+def safe_log_webhook_error(symbol, side, message):
+    """Helper to safely log webhook-level failures before execute_trade() runs."""
+    try:
+        log_order_to_cache(
+            symbol or "?",
+            side or "?",
+            qty="?",
+            price="?",
+            status="error",
+            message=message
+        )
+    except Exception as e:
+        logging.warning(f"[ORDER LOG] Failed to log webhook-level error: {e}")
+
 # ---------------------------------
 # Unified trade execution
 # ---------------------------------
@@ -464,47 +478,78 @@ def execute_trade(
             time.sleep(3)
             price = get_current_price(symbol)
         if price is None:
-            logging.warning(f"[EXECUTE] No price available for {symbol}. Aborting trade.")
-            return {"error": f"Price not available for {symbol}"}, 200
+            message = f"No price available for {symbol}. Aborting trade."
+            logging.warning(f"[EXECUTE] {message}")
+            try:
+                log_order_to_cache(symbol, side or "?", "?", "?",status="error", message=message)
+            except Exception as e:
+                logging.warning(f"[ORDER LOG] Failed to log missing price error: {e}")
+            return {"error": message}, 200
 
         # === 2. Fetch filters ===
         filters = get_cached_symbol_filters(symbol)
         if not filters:
-            logging.warning(f"[EXECUTE] Filters unavailable for {symbol}")
-            return {"error": f"Filters unavailable for {symbol}"}, 200
-        
+            message = f"Filters unavailable for {symbol}"
+            logging.warning(f"[EXECUTE] {message}")
+            try:
+                log_order_to_cache(symbol, side or "?", "?", price,status="error", message=message)
+            except Exception as e:
+                logging.warning(f"[ORDER LOG] Failed to log missing filters error: {e}")
+            return {"error": message}, 200
+
         filters = sanitize_filters(filters)
 
         step_size = Decimal(filters.get("step_size", "0"))
         min_qty = Decimal(filters.get("min_qty", "0"))
         min_notional = Decimal(filters.get("min_notional", "0"))
         if not all([step_size, min_qty, min_notional]):
-            logging.warning(
-                f"[EXECUTE] Incomplete filters for {symbol}: "
+            message = (
+                f"Incomplete filters for {symbol}: "
                 f"step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}"
             )
-            return {"error": f"Incomplete filters for {symbol}"}, 200
+            logging.warning(f"[EXECUTE] {message}")
+            try:
+                log_order_to_cache(symbol, side or "?", "?", price,status="error", message=message)
+            except Exception as e:
+                logging.warning(f"[ORDER LOG] Failed to log incomplete filters error: {e}")
+            return {"error": message}, 200
 
         # === 3. Determine assets ===
         try:
             base_asset, quote_asset = split_symbol(symbol)
         except ValueError as e:
-            logging.error(f"[EXECUTE] Failed to parse base/quote assets for {symbol}: {e}")
-            return {"error": f"Failed to parse base/quote assets: {e}"}, 400
+            message = f"Failed to parse base/quote assets for {symbol}: {e}"
+            logging.error(f"[EXECUTE] {message}")
+            try:
+                log_order_to_cache(symbol, side or "?", "?", price,status="error", message=message)
+            except Exception as log_err:
+                logging.warning(f"[ORDER LOG] Failed to log symbol-parse error: {log_err}")
+            return {"error": message}, 400
 
         # === 4. Determine balance and target amount ===
-        balances = get_cached_balances() or {}
         if side == "BUY":
             balance_asset = quote_asset
         elif side == "SELL":
             balance_asset = base_asset
         else:
-            return {"error": f"Unknown side {side}. Must be BUY or SELL."}, 400
-
+            message = f"Unknown side {side}. Must be BUY or SELL."
+            logging.error(f"[EXECUTE] {message}")
+            try:
+                log_order_to_cache(symbol, side or "?", "?", price,status="error", message=message)
+            except Exception as e:
+                logging.warning(f"[ORDER LOG] Failed to log invalid side error: {e}")
+            return {"error": message}, 400
+        
+        balances = get_cached_balances() or {}
         free_balance = balances.get(balance_asset, Decimal("0"))
         if free_balance <= 0:
-            logging.warning(f"[EXECUTE] No available {balance_asset} balance to {side.lower()}.")
-            return {"warning": f"No available {balance_asset} balance to {side.lower()}."}, 200
+            message = f"No available {balance_asset} balance to {side.lower()}."
+            logging.warning(f"[EXECUTE] {message}")
+            try:
+                log_order_to_cache(symbol, side, "?", price,status="error", message=message)
+            except Exception as e:
+                logging.warning(f"[ORDER LOG] Failed to log balance error: {e}")
+            return {"warning": message}, 200
 
         # Resolve amount
         target_amount, error_msg = resolve_trade_amount(free_balance, amt, pct, side=side)
@@ -615,7 +660,9 @@ def webhook():
             trade_type = data.get("type", "SPOT").strip().upper()
         except Exception:
             logging.exception("Failed to extract fields")
-            return jsonify({"error": "Invalid fields"}), 400
+            message = "Failed to extract fields from webhook payload"
+            safe_log_webhook_error(symbol=None, side=None, message=message)
+            return jsonify({"error": message}), 400
 
         log_parsed_payload(
             action,
@@ -634,14 +681,20 @@ def webhook():
             return resp
 
         if action not in {"BUY", "SELL"}:
-            logging.error(f"Invalid action: {action}")
-            return jsonify({"error": "Invalid action"}), 400
+            message = f"Invalid action: {action}"
+            logging.error(message)
+            safe_log_webhook_error(symbol, action, message)
+            return jsonify({"error": message}), 400
         if trade_type not in ALLOWED_TRADE_TYPES:
-            logging.error(f"Invalid trade_type: {trade_type}")
-            return jsonify({"error": f"Invalid trade_type: {trade_type}"}), 400
+            message = f"Invalid trade_type: {trade_type}"
+            logging.error(message)
+            safe_log_webhook_error(symbol, action, message)
+            return jsonify({"error": message}), 400
         if symbol not in ALLOWED_SYMBOLS:
-            logging.error(f"Symbol not allowed: {symbol}")
-            return jsonify({"error": "Symbol not allowed"}), 400
+            message = f"Symbol not allowed: {symbol}"
+            logging.error(message)
+            safe_log_webhook_error(symbol, action, message)
+            return jsonify({"error": message}), 400
 
         is_buy = action == "BUY"
         pct, amt, amt_in_crypto, amt_in_funds, error_response = validate_and_normalize_trade_fields(
@@ -650,6 +703,8 @@ def webhook():
             sell_crypto_pct_raw, sell_crypto_amount_raw, sell_funds_amount_raw
         )
         if error_response:
+            message = error_response[0].get("error", "Invalid trade field")
+            safe_log_webhook_error(symbol, action, message)
             return error_response
 
         result, status_code = execute_trade(
