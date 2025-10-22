@@ -510,6 +510,10 @@ def execute_trade(
         target_amount, error_msg = resolve_trade_amount(free_balance, amt, pct, side=side)
         if error_msg:
             logging.warning(f"[EXECUTE] {error_msg}")
+            try:
+                log_order_to_cache(symbol, side, "?", price,status="error", message=error_msg)
+            except Exception as e:
+                logging.warning(f"[ORDER LOG] Failed to log resolve_trade_amount error: {e}")
             return {"error": error_msg}, 200
 
         # === 5. Compute quantity ===
