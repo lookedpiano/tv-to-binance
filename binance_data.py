@@ -424,8 +424,8 @@ def fetch_and_cache_stablecoin_prices(client: Client):
         logging.info("[CACHE] Fetching stablecoin prices from Binance...")
 
         # Binance provides tickers only for pairs, not standalone assets.
-        usdt_usdc = client.ticker_price("USDTUSDC")
-        usdc_usdt = client.ticker_price("USDCUSDT")
+        usdt_usdc = client.ticker_price("USDT")
+        usdc_usdt = client.ticker_price("USDC")
 
         usdt_usdc_price = Decimal(usdt_usdc.get("price", "1"))
         usdc_usdt_price = Decimal(usdc_usdt.get("price", "1"))
@@ -437,7 +437,8 @@ def fetch_and_cache_stablecoin_prices(client: Client):
         logging.info(f"[CACHE] Stablecoin prices updated: USDT={usdt_usdc_price}, USDC={usdc_usdt_price}")
 
     except Exception as e:
-        logging.warning(f"[CACHE] Failed to fetch stablecoin prices: {_short_binance_error(e)}")
+        #logging.warning(f"[CACHE] Failed to fetch stablecoin prices: {_short_binance_error(e)}")
+        logging.warning(f"[CACHE] Failed to fetch stablecoin prices: {e}")
 
 
 def _stablecoin_price_updater(client: Client):
@@ -465,7 +466,7 @@ def start_background_cache(symbols: List[str]):
         logging.info("[CACHE] Not skipping initial REST fetch (SKIP_INITIAL_FETCH=0).")
         fetch_and_cache_balances(client)
         fetch_and_cache_filters(client, symbols)
-        #fetch_and_cache_stablecoin_prices(client)
+        fetch_and_cache_stablecoin_prices(client)
     else:
         logging.info("[CACHE] Skipping initial REST fetch (SKIP_INITIAL_FETCH=1).")
 
