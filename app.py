@@ -551,6 +551,10 @@ def execute_trade(
         # === 7. Validate filters ===
         is_valid, resp_dict, http_status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
         if not is_valid:
+            try:
+                log_order_to_cache(symbol, side, qty, price,status="error", message=resp_dict.get("error", "Validation failed"))
+            except Exception as e:
+                logging.warning(f"[ORDER LOG] Failed to log validation error: {e}")
             return resp_dict, http_status
 
         # === 8. Place order ===
