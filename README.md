@@ -105,11 +105,17 @@ Endpoint                  Method  Description
 /cache/prices/<symbol>    GET     Returns the cached mid-price for a specific symbol.
 /cache/filters            GET     Returns cached symbol filters (minQty, minNotional, etc.) for all pairs.
 /cache/filters/<symbol>   GET     Returns cached filters for a specific symbol.
-/cache/summary            GET     Returns a structured summary of cache state:
+/cache/summary            GET     Returns a structured summary of cache state.
 
 🔐 Admin-Protected Endpoint
 Endpoint                  Method  Description
 /cache/balances           GET     Returns cached Binance account balances (from account_balances key).
+/health-check             GET     General health probe endpoint.
+/cache/balances           GET     Fetch balances from cache.
+/cache/refresh/balances   POST    Fetch and cache balances from Binance via REST.
+/cache/refresh/filters    POST    Fetch and cache trading filters from Binance via REST.
+/cache/orders             GET     Return recent cached order logs.
+/dashboard                GET     Render the dashboard (deprecated resp. fallback).
 
-To access this endpoint securely, you must include your admin key in the request header:
+To securely access these endpoints, simply **visit the 21mio dashboard** or include your admin key in the request header. For example:
 curl -H "X-Admin-Key: <ADMIN_API_KEY>" https://<your-web-service-name>.onrender.com/cache/balances
