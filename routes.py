@@ -4,8 +4,8 @@ from flask import Blueprint, render_template, jsonify, request
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from binance_data import _get_redis, get_client, fetch_and_cache_balances, fetch_and_cache_filters, get_cached_orders
-from utils import should_log_request, load_ip_file
-from config._settings import WEBHOOK_REQUEST_PATH, ADMIN_API_KEY, ALLOWED_SYMBOLS
+from utils import should_log_request, load_ip_file, require_admin_key
+from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS
 
 routes = Blueprint("routes", __name__)
 
@@ -74,10 +74,8 @@ def ping():
 @routes.route("/healthz", methods=["GET", "HEAD"])
 def health_check():
     """General health probe endpoints."""
-    provided_key = request.headers.get("X-Admin-Key")
-    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
-        logging.warning("[SECURITY] Unauthorized attempt to access /health")
-        return jsonify({"error": "Unauthorized"}), 401
+    if (unauthorized := require_admin_key()):
+        return unauthorized
     return jsonify({"status": "healthy"}), 200
 
 
@@ -131,11 +129,8 @@ def cache_price_symbol(symbol):
 
 @routes.route("/cache/balances", methods=["GET"])
 def cache_balances():
-    provided_key = request.headers.get("X-Admin-Key")
-    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
-        logging.warning("[SECURITY] Unauthorized attempt to access /cache/balances")
-        return jsonify({"error": "Unauthorized"}), 401
-
+    if (unauthorized := require_admin_key()):
+        return unauthorized
     try:
         r = _get_redis()
         raw = r.get("account_balances")
@@ -174,11 +169,8 @@ def cache_filters(symbol):
 
 @routes.route("/cache/refresh/balances", methods=["POST"])
 def refresh_balances():
-    provided_key = request.headers.get("X-Admin-Key")
-    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
-        logging.warning("[SECURITY] Unauthorized attempt to refresh balances")
-        return jsonify({"error": "Unauthorized"}), 401
-
+    if (unauthorized := require_admin_key()):
+        return unauthorized
     try:
         client = get_client()
         fetch_and_cache_balances(client)
@@ -190,11 +182,8 @@ def refresh_balances():
 
 @routes.route("/cache/refresh/filters", methods=["POST"])
 def refresh_filters():
-    provided_key = request.headers.get("X-Admin-Key")
-    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
-        logging.warning("[SECURITY] Unauthorized attempt to refresh filters")
-        return jsonify({"error": "Unauthorized"}), 401
-
+    if (unauthorized := require_admin_key()):
+        return unauthorized
     try:
         client = get_client()
         fetch_and_cache_filters(client, ALLOWED_SYMBOLS)
@@ -207,11 +196,8 @@ def refresh_filters():
 @routes.route("/cache/orders", methods=["GET"])
 def cache_orders():
     """Return recent cached order logs."""
-    provided_key = request.headers.get("X-Admin-Key")
-    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
-        logging.warning("[SECURITY] Unauthorized attempt to access /cache/orders")
-        return jsonify({"error": "Unauthorized"}), 401
-
+    if (unauthorized := require_admin_key()):
+        return unauthorized
     try:
         limit = int(request.args.get("limit", 100))
         orders = get_cached_orders(limit)
@@ -258,11 +244,8 @@ def cache_summary():
 # ==========================================================
 @routes.route("/dashboard", methods=["GET"])
 def dashboard():
-    provided_key = request.headers.get("X-Admin-Key") or request.args.get("key")
-    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
-        logging.warning("[SECURITY] Unauthorized attempt to access the dashboard")
-        return jsonify({"error": "Unauthorized"}), 401
-
+    if (unauthorized := require_admin_key()):
+        return unauthorized
     try:
         r = _get_redis()
 

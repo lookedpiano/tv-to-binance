@@ -62,7 +62,6 @@ BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 REDIS_URL = os.getenv("REDIS_URL")
-RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 SKIP_INITIAL_FETCH = _get_bool_env("SKIP_INITIAL_FETCH", default=False)
 PORT = os.getenv("PORT", "4747")
 
@@ -76,8 +75,6 @@ if not WEBHOOK_SECRET:
     raise RuntimeError("Missing required environment variable: WEBHOOK_SECRET")
 if not REDIS_URL:
     raise RuntimeError("Missing required environment variable: REDIS_URL")
-if not RENDER_EXTERNAL_URL:
-    raise RuntimeError("Missing required environment variable: RENDER_EXTERNAL_URL")
 if not PORT:
     raise RuntimeError(
         "Missing required environment variable: PORT.\n"

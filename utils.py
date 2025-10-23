@@ -1,6 +1,7 @@
 import logging
 from decimal import Decimal, ROUND_DOWN, InvalidOperation
-from flask import request
+from flask import request, jsonify
+from config._settings import ADMIN_API_KEY
 
 
 # ==========================================================
@@ -91,6 +92,16 @@ def log_parsed_payload(
         base_msg += f", {k}={v}"
 
     logging.info(base_msg)
+
+def require_admin_key():
+    """Validate admin key from header or query string."""
+    provided_key = (
+        request.headers.get("X-Admin-Key")
+    )
+    if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
+        logging.warning(f"[SECURITY] Unauthorized access attempt to {request.path}")
+        return jsonify({"error": "Unauthorized"}), 401
+    return None
 
 
 # ==========================================================
