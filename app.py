@@ -100,15 +100,31 @@ def run_webhook_validations():
 
         valid_fields, error_response = validate_fields(data)
         if not valid_fields:
-            symbol = data.get("symbol") if isinstance(data, dict) else None
-            action = data.get("action") if isinstance(data, dict) else None
+            symbol = (
+                str(data.get("symbol", "")).strip().upper()
+                if isinstance(data, dict)
+                else None
+            )
+            action = (
+                str(data.get("action", "")).strip().upper()
+                if isinstance(data, dict)
+                else None
+            )
             safe_log_webhook_error(symbol, action, message="Invalid or missing fields in payload")
             return None, error_response
 
         valid_secret, error_response = validate_secret(data)
         if not valid_secret:
-            symbol = data.get("symbol") if isinstance(data, dict) else None
-            action = data.get("action") if isinstance(data, dict) else None
+            symbol = (
+                str(data.get("symbol", "")).strip().upper()
+                if isinstance(data, dict)
+                else None
+            )
+            action = (
+                str(data.get("action", "")).strip().upper()
+                if isinstance(data, dict)
+                else None
+            )
             safe_log_webhook_error(symbol, action, message="Invalid or missing secret")
             return None, error_response
 
