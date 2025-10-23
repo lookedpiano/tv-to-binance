@@ -500,8 +500,8 @@ def safe_log_webhook_error(symbol, side, message):
         log_order_to_cache(
             symbol or "?",
             side or "?",
-            qty="?",
-            price="?",
+            qty=None,
+            price=None,
             status="error",
             message=message
         )
