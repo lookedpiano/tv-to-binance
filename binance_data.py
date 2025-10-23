@@ -92,7 +92,6 @@ WS_LOG_INTERVAL = 42                    # Interval for logging price snapshots (
 UPDATE_THROTTLE_SECONDS = 3             # 3 seconds
 LAST_SEEN_UPDATE_INTERVAL = 5           # 5 seconds
 BALANCE_REFRESH_INTERVAL = 3600         # 1 hour
-STABLECOIN_REFRESH_INTERVAL = 3600      # 1 hour
 FILTER_REFRESH_INTERVAL = 1 * 24 * 3600 # 1 day
 WS_RECONNECT_GRACE = 60                 # Restart stale WS streams if no update for 60s
 WS_CHECK_INTERVAL = 30                  # Health monitor check interval (seconds)
