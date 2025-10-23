@@ -15,6 +15,28 @@
 
         <div class="tables-row">
             <div class="table-card">
+                <h2>Orders</h2>
+                <p>Total cached orders: <span id="orders-count">—</span></p>
+                <table id="orders-table">
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Symbol</th>
+                        <th>Side</th>
+                        <th>Price</th>
+                        <th>Quantity</th>
+                        <th>Status</th>
+                        <th>Message</th>
+                    </tr>
+                </table>
+                <div class="card-footer">
+                    <p class="time">Last fetched: <b id="orders-last">—</b></p>
+                    <button onclick="refresh('orders')">Refresh Orders</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="tables-row">
+            <div class="table-card">
                 <h2>System Status</h2>
                 <div id="system-status-content"></div>
                 <div class="card-footer">
