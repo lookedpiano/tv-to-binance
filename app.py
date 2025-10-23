@@ -165,23 +165,34 @@ def validate_order_qty(
     price: Decimal | None,
     min_qty: Decimal,
     min_notional: Decimal,
+    side: str = "?",
 ) -> tuple[bool, dict, int]:
     """
     Validate order quantity and notional against exchange filters.
     """
     logging.info(f"[SAFEGUARDS] Validate order qty for {symbol}: {qty}")
 
-    if qty <= Decimal("0"):
-        logging.warning("Trade qty is zero or negative after rounding. Aborting.")
-        return False, {"warning": "Calculated trade size too small after rounding"}, 200
+    try:
+        if qty <= Decimal("0"):
+            message = "Trade qty is zero or negative after rounding. Aborting."
+            logging.warning(message)
+            log_order_to_cache(symbol, side, qty, price, status="error", message=message)
+            return False, {"warning": message}, 200
 
-    if qty < min_qty:
-        logging.warning(f"Trade qty {qty} is below min_qty {min_qty}. Aborting.")
-        return False, {"warning": f"Trade qty {qty} is below min_qty {min_qty}"}, 200
+        if qty < min_qty:
+            message = f"Trade qty {qty} is below min_qty {min_qty}. Aborting."
+            logging.warning(message)
+            log_order_to_cache(symbol, side, qty, price, status="error", message=message)
+            return False, {"warning": message}, 200
 
-    if (qty * price) < min_notional:
-        logging.warning(f"Trade notional {qty*price} is below min_notional {min_notional}. Aborting.")
-        return False, {"warning": f"Trade notional {qty*price} is below min_notional {min_notional}"}, 200
+        if (qty * price) < min_notional:
+            message = f"Trade notional {qty * price} is below min_notional {min_notional}. Aborting."
+            logging.warning(message)
+            log_order_to_cache(symbol, side, qty, price, status="error", message=message)
+            return False, {"warning": message}, 200
+
+    except Exception as e:
+        logging.warning(f"[ORDER LOG] Failed to log validation error: {e}")
 
     # Successfully validated
     return True, {}, 200
@@ -678,12 +689,8 @@ def execute_trade(
         logging.debug(f"[DETAILS] step_size={step_size}, min_qty={min_qty}, min_notional={min_notional}")
 
         # === 7. Validate filters ===
-        is_valid, resp_dict, http_status = validate_order_qty(symbol, qty, price, min_qty, min_notional)
+        is_valid, resp_dict, http_status = validate_order_qty(symbol, qty, price, min_qty, min_notional, side)
         if not is_valid:
-            try:
-                log_order_to_cache(symbol, side, qty, price,status="error", message=resp_dict.get("error", "Validation failed"))
-            except Exception as e:
-                logging.warning(f"[ORDER LOG] Failed to log validation error: {e}")
             return resp_dict, http_status
 
         # === 8. Place order ===
