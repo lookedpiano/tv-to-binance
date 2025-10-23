@@ -86,7 +86,7 @@ Rules:
 
 
 
-## ⚙️ Quick summary table
+## ⚙️ Six trading input types
 Type	              Direction Meaning	                                    Example
 buy_funds_amount	  Buy	      Spend a fixed amount of funds	              Buy BTC with 100 USDT
 buy_funds_pct	      Buy	      Spend a % of available funds	              Buy BTC with 50 % of USDT
