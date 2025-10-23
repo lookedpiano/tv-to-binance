@@ -87,13 +87,13 @@ Rules:
 
 
 ## ⚙️ Six trading input types
-Type                  Direction Meaning	                                    Example
-buy_funds_amount      Buy	      Spend a fixed amount of funds	              Buy BTC with 100 USDT
-buy_funds_pct         Buy	      Spend a % of available funds	              Buy BTC with 50 % of USDT
-buy_crypto_amount     Buy	      Acquire a fixed number of coins	            Buy 5 ADA
-sell_crypto_amount    Sell	    Sell a fixed number of coins	              Sell 0.05 BTC
-sell_crypto_pct       Sell	    Sell a % of your holdings	                  Sell 80 % of ADA
-sell_funds_amount     Sell      Sell enough to get a fixed amount of funds	Sell BTC worth 20 USDT
+Type                  Direction   Meaning	                                    Example
+buy_funds_amount      Buy         Spend a fixed amount of funds	              Buy BTC with 100 USDT
+buy_funds_pct         Buy         Spend a % of available funds	              Buy BTC with 50 % of USDT
+buy_crypto_amount     Buy         Acquire a fixed number of coins	            Buy 5 ADA
+sell_crypto_amount    Sell        Sell a fixed number of coins	              Sell 0.05 BTC
+sell_crypto_pct       Sell        Sell a % of your holdings	                  Sell 80 % of ADA
+sell_funds_amount     Sell        Sell enough to get a fixed amount of funds	Sell BTC worth 20 USDT
 
 
 
