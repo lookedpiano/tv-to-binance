@@ -166,8 +166,23 @@ function renderOrders(data) {
 
 function formatTimestamp(ts) {
     if (!ts) return '-';
-    const date = new Date(Number(ts));
-    return isNaN(date.getTime()) ? ts : date.toLocaleString();
+    let t = Number(ts);
+
+    // Convert seconds → milliseconds if needed
+    if (t < 1e12) t *= 1000;
+
+    const date = new Date(t);
+    if (isNaN(date.getTime())) return ts;
+
+    const pad = n => n.toString().padStart(2, '0');
+    const day = pad(date.getDate());
+    const month = pad(date.getMonth() + 1);
+    const year = date.getFullYear();
+    const hours = pad(date.getHours());
+    const minutes = pad(date.getMinutes());
+    const seconds = pad(date.getSeconds());
+
+    return `${day}.${month}.${year}, ${hours}:${minutes}:${seconds}`;
 }
 
 // Restore cached System Status after any reload
