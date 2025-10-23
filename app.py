@@ -87,23 +87,37 @@ except Exception as e:
 # Validation functions
 # -----------------------
 def run_webhook_validations():
-    valid_ip, error_response = validate_outbound_ip_address()
-    if not valid_ip:
-        return None, error_response
+    try:
+        valid_ip, error_response = validate_outbound_ip_address()
+        if not valid_ip:
+            safe_log_webhook_error(symbol=None, side=None, message="Outbound IP not allowed")
+            return None, error_response
 
-    data, error_response = validate_json()
-    if not data:
-        return None, error_response
+        data, error_response = validate_json()
+        if not data:
+            safe_log_webhook_error(symbol=None, side=None, message="Invalid JSON payload")
+            return None, error_response
 
-    valid_fields, error_response = validate_fields(data)
-    if not valid_fields:
-        return None, error_response
+        valid_fields, error_response = validate_fields(data)
+        if not valid_fields:
+            symbol = data.get("symbol") if isinstance(data, dict) else None
+            action = data.get("action") if isinstance(data, dict) else None
+            safe_log_webhook_error(symbol, action, message="Invalid or missing fields in payload")
+            return None, error_response
 
-    valid_secret, error_response = validate_secret(data)
-    if not valid_secret:
-        return None, error_response
+        valid_secret, error_response = validate_secret(data)
+        if not valid_secret:
+            symbol = data.get("symbol") if isinstance(data, dict) else None
+            action = data.get("action") if isinstance(data, dict) else None
+            safe_log_webhook_error(symbol, action, message="Invalid or missing secret")
+            return None, error_response
 
-    return data, None
+        return data, None
+
+    except Exception as e:
+        safe_log_webhook_error(symbol=None, side=None, message=f"Validation exception: {e}")
+        logging.exception("[VALIDATION] Unexpected error during webhook validation")
+        return None, (jsonify({"error": "Unexpected validation error"}), 500)
 
 def validate_json():
     try:
