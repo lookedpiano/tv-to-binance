@@ -22,12 +22,9 @@ async function refresh(type) {
         return;
     }
 
-    const opts = (type === "prices")
-        ? { method: "GET" }
-        : { 
-            method: "GET",  // orders also uses GET
-            headers: key ? { "X-Admin-Key": key } : {}
-          };
+    const opts = (type === "prices" || type === "orders")
+    ? { method: "GET", headers: key ? { "X-Admin-Key": key } : {} }
+    : { method: "POST", headers: key ? { "X-Admin-Key": key } : {} };
 
     try {
         const resp = await fetch(url, opts);
