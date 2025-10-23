@@ -71,8 +71,12 @@ async function refreshSystemStatus() {
     overlay.style.display = 'flex';
 
     try {
+        const params = new URLSearchParams(window.location.search);
+        const key = params.get('key');
+        const headers = key ? { "X-Admin-Key": key } : {};
+
         const [health] = await Promise.all([
-            fetchJson('/health-check')
+            fetchJsonWithHeaders('/health-check', headers)
         ]);
 
         const isHealthy = health.status?.toLowerCase() === 'healthy';
@@ -82,15 +86,12 @@ async function refreshSystemStatus() {
         `;
 
         document.getElementById('system-status-content').innerHTML = content;
-
-        // Save to sessionStorage so we can restore it after reload
         sessionStorage.setItem('systemStatusHTML', content);
 
         spinner.style.display = 'none';
         overlayText.textContent = "✓ System status updated";
         overlayText.style.color = "#00cc66";
 
-        // Trigger a reload like other refreshes
         setTimeout(() => {
             overlay.style.display = 'none';
             location.reload();
@@ -102,11 +103,16 @@ async function refreshSystemStatus() {
         overlayText.style.color = "#ff3333";
         setTimeout(() => overlay.style.display = 'none', 2500);
 
-        // Optional: show a red “unhealthy” status on failure
         document.getElementById('system-status-content').innerHTML = `
             <p><b>Health:</b> <span style="color:#ff3333;">unhealthy</span></p>
         `;
     }
+}
+
+async function fetchJsonWithHeaders(url, headers = {}) {
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) throw new Error(`${url} returned ${resp.status}`);
+    return await resp.json();
 }
 
 // Restore cached System Status after any reload
