@@ -307,9 +307,8 @@ def start_ws_price_cache(symbols: List[str]):
 This section periodically fetches wallet balances via Binance REST API
 and caches them in Redis for quick access.
 """
-def fetch_and_cache_balances(client: Client, is_init: bool):
+def fetch_and_cache_balances(client: Client, log_context: str):
     """Fetch balances via REST and write them to Redis."""
-    log_context = "INIT" if is_init else "PERIODIC"
     try:
         logging.info(f"[CACHE:{log_context}] Fetching account balances from REST...")
         account = client.account()
@@ -335,7 +334,7 @@ def _balance_updater(client: Client):
     """Thread loop: updates balances every hour."""
     while True:
         time.sleep(BALANCE_REFRESH_INTERVAL)
-        fetch_and_cache_balances(client, False)
+        fetch_and_cache_balances(client, "PERIODIC")
 
 def get_cached_balances() -> Optional[Dict[str, Decimal]]:
     """Return cached balances from Redis."""
@@ -369,9 +368,8 @@ def refresh_balances_for_assets(client: Client, assets: List[str]):
 This section fetches trading filters (LOT_SIZE, NOTIONAL, etc.) from Binance
 and caches them in Redis for efficient reuse when placing trades.
 """
-def fetch_and_cache_filters(client: Client, symbols: List[str], is_init: bool):
+def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str):
     """Fetch filters for all allowed symbols from Binance, sanitize, and cache."""
-    log_context = "INIT" if is_init else "PERIODIC"
     logging.info(f"[CACHE:{log_context}] Fetching filters for {len(symbols)} symbols...")
     r = _get_redis()
     ts = now_local_ts()
@@ -405,7 +403,7 @@ def _filter_updater(client: Client, symbols: List[str]):
     """Thread loop: refreshes filters daily."""
     while True:
         time.sleep(FILTER_REFRESH_INTERVAL)
-        fetch_and_cache_filters(client, symbols, False)
+        fetch_and_cache_filters(client, symbols, "PERIODIC")
 
 def get_cached_symbol_filters(symbol: str) -> Optional[Dict[str, str]]:
     """Return cached filters for one symbol."""
@@ -480,8 +478,8 @@ def start_background_cache(symbols: List[str]):
 
     if not SKIP_INITIAL_FETCH:
         logging.info("[CACHE] Not skipping initial REST fetch (SKIP_INITIAL_FETCH=0).")
-        fetch_and_cache_balances(client, True)
-        fetch_and_cache_filters(client, symbols, True)
+        fetch_and_cache_balances(client, "INIT")
+        fetch_and_cache_filters(client, symbols, "INIT")
     else:
         logging.info("[CACHE] Skipping initial REST fetch (SKIP_INITIAL_FETCH=1).")
 

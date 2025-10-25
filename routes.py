@@ -173,7 +173,7 @@ def refresh_balances():
         return unauthorized
     try:
         client = get_client()
-        fetch_and_cache_balances(client)
+        fetch_and_cache_balances(client, "API")
         return jsonify({"message": "Balances refreshed successfully"}), 200
     except Exception as e:
         logging.exception("[ROUTE] /cache/refresh/balances failed")
@@ -186,7 +186,7 @@ def refresh_filters():
         return unauthorized
     try:
         client = get_client()
-        fetch_and_cache_filters(client, ALLOWED_SYMBOLS)
+        fetch_and_cache_filters(client, ALLOWED_SYMBOLS, "API")
         return jsonify({"message": "Filters refreshed successfully"}), 200
     except Exception as e:
         logging.exception("[ROUTE] /cache/refresh/filters failed")
