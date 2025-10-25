@@ -92,9 +92,13 @@ WS_LOG_INTERVAL = 42                    # Interval for logging price snapshots (
 UPDATE_THROTTLE_SECONDS = 3             # 3 seconds
 LAST_SEEN_UPDATE_INTERVAL = 5           # 5 seconds
 BALANCE_REFRESH_INTERVAL = 3600         # 1 hour
-FILTER_REFRESH_INTERVAL = 1 * 24 * 3600 # 1 day
+FILTER_REFRESH_INTERVAL = 24 * 3600     # 1 day
+DAILY_SNAPSHOT_INTERVAL = 24 * 3600     # 1 day
 WS_RECONNECT_GRACE = 60                 # Restart stale WS streams if no update for 60s
 WS_CHECK_INTERVAL = 30                  # Health monitor check interval (seconds)
+STABLECOINS = {"USDT", "USDC"}
+
+DAILY_BALANCE_SNAPSHOT_KEY = "balance_snapshots"
 
 
 # ==========================================================
@@ -415,6 +419,53 @@ def get_cached_symbol_filters(symbol: str) -> Optional[Dict[str, str]]:
 
 
 # ==========================================================
+# ========== DAILY SNAPSHOT CACHE ==========================
+# ==========================================================
+def _daily_balance_snapshot_updater(client: Client):
+    """Thread loop: takes a daily snapshot of total balance value."""
+    while True:
+        try:
+            take_daily_balance_snapshot(client)
+        except Exception as e:
+            logging.exception(f"[SNAPSHOT] Daily balance snapshot failed: {e}")
+
+        time.sleep(DAILY_SNAPSHOT_INTERVAL)
+
+def take_daily_balance_snapshot(client: Client):
+    """Fetch balances and save a daily total snapshot in Redis."""
+    logging.info("[SNAPSHOT] Taking daily balance snapshot...")
+    r = _get_redis()
+
+    account = client.account()
+    balances = {
+        b["asset"]: Decimal(str(b["free"]))
+        for b in account["balances"]
+        if Decimal(str(b["free"])) > 0
+    }
+
+    # Compute total account value in USDT-equivalent (using cached prices)
+    total_usdt = Decimal("0")
+    for asset, amount in balances.items():
+        if asset in STABLECOINS:
+            total_usdt += amount
+        else:
+            price = get_cached_price(f"{asset}USDT")
+            if price:
+                total_usdt += amount * Decimal(str(price))
+
+    date_str = datetime.now(TZ).strftime("%Y-%m-%d")
+    snapshot = {
+        "date": date_str,
+        "total_usdt": str(total_usdt),
+        "timestamp": now_local_ts()
+    }
+
+    # Append to a list or store in a hash keyed by date
+    r.hset(DAILY_BALANCE_SNAPSHOT_KEY, date_str, json.dumps(snapshot))
+    logging.info(f"[SNAPSHOT] Stored balance snapshot for {date_str}: {total_usdt:.2f} USDT")
+
+
+# ==========================================================
 # ========== ORDERS CACHE ==================================
 # ==========================================================
 
@@ -485,4 +536,5 @@ def start_background_cache(symbols: List[str]):
 
     threading.Thread(target=_balance_updater, args=(client,), daemon=True, name="BalanceCache").start()
     threading.Thread(target=_filter_updater, args=(client, symbols), daemon=True, name="FilterCache").start()
+    threading.Thread(target=_daily_balance_snapshot_updater, args=(client,), daemon=True, name="BalanceSnapshot").start()
     logging.info("[CACHE] Background threads started (balances and filters)")

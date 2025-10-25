@@ -3,7 +3,14 @@ import logging
 from flask import Blueprint, render_template, jsonify, request
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from binance_data import _get_redis, get_client, fetch_and_cache_balances, fetch_and_cache_filters, get_cached_orders
+from binance_data import (
+    _get_redis,
+    get_client,
+    fetch_and_cache_balances,
+    fetch_and_cache_filters,
+    get_cached_orders,
+    DAILY_BALANCE_SNAPSHOT_KEY,
+)
 from utils import should_log_request, load_ip_file, require_admin_key
 from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS
 
@@ -205,6 +212,28 @@ def cache_orders():
     except Exception as e:
         logging.exception("[ROUTE] /cache/orders failed")
         return jsonify({"error": f"Failed to fetch cached orders: {e}"}), 500
+
+
+# ==========================================================
+# ========== DAILY BALANCE SNAPSHOT ========================
+# ==========================================================
+
+@routes.route("/cache/balance-snapshots", methods=["GET"])
+def get_balance_snapshots():
+    """Return all stored daily balance snapshots."""
+    if (unauthorized := require_admin_key()):
+        return unauthorized
+    try:
+        r = _get_redis()
+        snapshots = r.hgetall(DAILY_BALANCE_SNAPSHOT_KEY)
+        parsed = sorted(
+            [json.loads(v) for v in snapshots.values()],
+            key=lambda s: s["date"]
+        )
+        return jsonify({"count": len(parsed), "snapshots": parsed}), 200
+    except Exception as e:
+        logging.exception("[ROUTE] /cache/balance-snapshots failed")
+        return jsonify({"error": f"Failed to fetch balance snapshots: {e}"}), 500
 
 
 # ==========================================================
