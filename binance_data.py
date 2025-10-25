@@ -468,14 +468,11 @@ def take_daily_balance_snapshot(client: Client):
 
 def generate_fake_balance_snapshots():
     """Generate 100 fake daily balance snapshots for frontend testing."""
-    logging.info("in generate_fake_balance_snapshots...")
     r = _get_redis()
     today = datetime.now(TZ)
-    logging.info("in generate_fake_balance_snapshots, part 2...")
 
     base = 20000
     for i in reversed(range(100)):
-        logging.info("in generate_fake_balance_snapshots, looping...")
         change = random.uniform(-500, 700)
         base = max(10000, base + change)
 

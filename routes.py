@@ -235,6 +235,19 @@ def get_balance_snapshots():
         logging.exception("[ROUTE] /cache/balance-snapshots failed")
         return jsonify({"error": f"Failed to fetch balance snapshots: {e}"}), 500
 
+@routes.route("/cache/balance-snapshots/count", methods=["GET"])
+def cache_balance_snapshots_count():
+    """Return number of cached balance-snapshots entries."""
+    if (unauthorized := require_admin_key()):
+        return unauthorized
+    try:
+        r = _get_redis()
+        count = r.hlen(DAILY_BALANCE_SNAPSHOT_KEY)
+        return jsonify({"count": count}), 200
+    except Exception as e:
+        logging.error(f"[ROUTE] /cache/balance-snapshots/count failed: {e}")
+        return jsonify({"error": "Failed to count cached balance-snapshots"}), 500
+
 
 # ==========================================================
 # ========== CACHE SUMMARY ENDPOINT =========================
