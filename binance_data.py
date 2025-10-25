@@ -473,7 +473,7 @@ def generate_fake_balance_snapshots():
 
     base = 20000
     for i in reversed(range(100)):
-        change = random.uniform(-500, 700)
+        change = random.uniform(-5000, 7000)
         base = max(10000, base + change)
 
         date = today - timedelta(days=i)
