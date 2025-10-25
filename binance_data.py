@@ -487,4 +487,4 @@ def start_background_cache(symbols: List[str]):
 
     threading.Thread(target=_balance_updater, args=(client,), daemon=True, name="BalanceCache").start()
     threading.Thread(target=_filter_updater, args=(client, symbols), daemon=True, name="FilterCache").start()
-    logging.info("[CACHE] Background threads started (balances, filters, stablecoins)")
+    logging.info("[CACHE] Background threads started (balances and filters)")
