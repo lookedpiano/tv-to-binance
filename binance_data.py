@@ -1,6 +1,7 @@
 import json
 import sys
 import os
+import random
 import logging
 import threading
 import time
@@ -8,7 +9,7 @@ import redis
 from decimal import Decimal
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 from binance.spot import Spot as Client
@@ -460,15 +461,38 @@ def take_daily_balance_snapshot(client: Client):
         "timestamp": now_local_ts()
     }
 
-    # Append to a list or store in a hash keyed by date
+    generate_fake_balance_snapshots()
+
     r.hset(DAILY_BALANCE_SNAPSHOT_KEY, date_str, json.dumps(snapshot))
     logging.info(f"[SNAPSHOT] Stored balance snapshot for {date_str}: {total_usdt:.2f} USDT")
+
+def generate_fake_balance_snapshots():
+    """Generate 100 fake daily balance snapshots for frontend testing."""
+    r = _get_redis()
+    today = datetime.now(TZ)
+
+    base = 20000
+    for i in range(100):
+        change = random.uniform(-500, 700)
+        base = max(10000, base + change)
+
+        date = today - timedelta(days=i)
+        date_str = date.strftime("%Y-%m-%d")
+
+        snapshot = {
+            "date": date_str,
+            "total_usdt": str(round(base, 2)),
+            "timestamp": date.timestamp()
+        }
+
+        r.hset(DAILY_BALANCE_SNAPSHOT_KEY, date_str, json.dumps(snapshot))
+
+    print(f"[FAKE DATA] Inserted 100 fake balance snapshots into {DAILY_BALANCE_SNAPSHOT_KEY}")
 
 
 # ==========================================================
 # ========== ORDERS CACHE ==================================
 # ==========================================================
-
 def log_order_to_cache(symbol, side, qty, price, status, message):
     """Store executed or failed order info in Redis for monitoring."""
     try:
