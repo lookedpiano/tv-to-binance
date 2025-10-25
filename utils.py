@@ -94,7 +94,7 @@ def log_parsed_payload(
     logging.info(base_msg)
 
 def require_admin_key():
-    """Validate admin key from header or query string."""
+    """Validate admin key from header."""
     provided_key = (
         request.headers.get("X-Admin-Key")
     )
