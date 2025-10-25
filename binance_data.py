@@ -468,6 +468,7 @@ def take_daily_balance_snapshot(client: Client):
 
 def generate_fake_balance_snapshots():
     """Generate 100 fake daily balance snapshots for frontend testing."""
+    print(f"[FAKE DATA] in generate_fake_balance_snapshots...")
     r = _get_redis()
     today = datetime.now(TZ)
 
@@ -486,6 +487,7 @@ def generate_fake_balance_snapshots():
         }
 
         r.hset(DAILY_BALANCE_SNAPSHOT_KEY, date_str, json.dumps(snapshot))
+    print(f"[FAKE DATA] end...")
 
     print(f"[FAKE DATA] Inserted 100 fake balance snapshots into {DAILY_BALANCE_SNAPSHOT_KEY}")
 
