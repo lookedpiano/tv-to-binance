@@ -307,10 +307,11 @@ def start_ws_price_cache(symbols: List[str]):
 This section periodically fetches wallet balances via Binance REST API
 and caches them in Redis for quick access.
 """
-def fetch_and_cache_balances(client: Client):
+def fetch_and_cache_balances(client: Client, is_init: bool):
     """Fetch balances via REST and write them to Redis."""
+    log_context = "INIT" if is_init else "PERIODIC"
     try:
-        logging.info("[CACHE] Fetching account balances from REST...")
+        logging.info(f"[CACHE:{log_context}] Fetching account balances from REST...")
         account = client.account()
         balances = {
             b["asset"]: Decimal(str(b["free"]))
@@ -322,19 +323,19 @@ def fetch_and_cache_balances(client: Client):
         r = _get_redis()
         r.set("account_balances", json.dumps(data))
         r.set("last_refresh_balances", ts)
-        logging.info(f"[CACHE] Balances updated ({len(balances)} assets).")
+        logging.info(f"[CACHE:{log_context}] Balances updated ({len(balances)} assets).")
     except ClientError as e:
-        logging.error(f"[CACHE] Binance error fetching balances: {e.error_message}")
+        logging.error(f"[CACHE:{log_context}] Binance error fetching balances: {e.error_message}")
     except Exception as e:
-        logging.exception(f"[CACHE] Unexpected error fetching balances: {e}")
+        logging.exception(f"[CACHE:{log_context}] Unexpected error fetching balances: {e}")
     finally:
         _get_redis().set("last_refresh_balances", now_local_ts())  # Always bump timestamp, even if no data changed
 
 def _balance_updater(client: Client):
     """Thread loop: updates balances every hour."""
     while True:
-        fetch_and_cache_balances(client)
         time.sleep(BALANCE_REFRESH_INTERVAL)
+        fetch_and_cache_balances(client, False)
 
 def get_cached_balances() -> Optional[Dict[str, Decimal]]:
     """Return cached balances from Redis."""
@@ -368,9 +369,10 @@ def refresh_balances_for_assets(client: Client, assets: List[str]):
 This section fetches trading filters (LOT_SIZE, NOTIONAL, etc.) from Binance
 and caches them in Redis for efficient reuse when placing trades.
 """
-def fetch_and_cache_filters(client: Client, symbols: List[str]):
+def fetch_and_cache_filters(client: Client, symbols: List[str], is_init: bool):
     """Fetch filters for all allowed symbols from Binance, sanitize, and cache."""
-    logging.info(f"[CACHE] Fetching filters for {len(symbols)} symbols...")
+    log_context = "INIT" if is_init else "PERIODIC"
+    logging.info(f"[CACHE:{log_context}] Fetching filters for {len(symbols)} symbols...")
     r = _get_redis()
     ts = now_local_ts()
 
@@ -392,18 +394,18 @@ def fetch_and_cache_filters(client: Client, symbols: List[str]):
                 f"filters:{symbol.upper()}",
                 json.dumps({"filters": {k: str(v) for k, v in filters.items()}, "ts": ts}),
             )
-            logging.debug(f"[CACHE] Filters cached for {symbol}")
+            logging.debug(f"[CACHE:{log_context}] Filters cached for {symbol}")
 
         except Exception as e:
-            logging.warning(f"[CACHE] Failed to cache filters for {symbol}: {_short_binance_error(e)}")
+            logging.warning(f"[CACHE:{log_context}] Failed to cache filters for {symbol}: {_short_binance_error(e)}")
 
     r.set("last_refresh_filters", now_local_ts())  # Always record that a refresh attempt happened
 
 def _filter_updater(client: Client, symbols: List[str]):
     """Thread loop: refreshes filters daily."""
     while True:
-        fetch_and_cache_filters(client, symbols)
         time.sleep(FILTER_REFRESH_INTERVAL)
+        fetch_and_cache_filters(client, symbols, False)
 
 def get_cached_symbol_filters(symbol: str) -> Optional[Dict[str, str]]:
     """Return cached filters for one symbol."""
@@ -478,8 +480,8 @@ def start_background_cache(symbols: List[str]):
 
     if not SKIP_INITIAL_FETCH:
         logging.info("[CACHE] Not skipping initial REST fetch (SKIP_INITIAL_FETCH=0).")
-        fetch_and_cache_balances(client)
-        fetch_and_cache_filters(client, symbols)
+        fetch_and_cache_balances(client, True)
+        fetch_and_cache_filters(client, symbols, True)
     else:
         logging.info("[CACHE] Skipping initial REST fetch (SKIP_INITIAL_FETCH=1).")
 
