@@ -195,7 +195,7 @@ def get_cached_price(symbol: str) -> Optional[Decimal]:
         logging.info(f"[WS CACHE] No cached price yet for {symbol}")
         return None
 
-    logging.info(f"[WS CACHE] Returning cached price for {symbol}: {price}")
+    logging.debug(f"[WS CACHE] Returning cached price for {symbol}: {price}")
     return Decimal(price)
 
 def _on_ws_message(_, message):
