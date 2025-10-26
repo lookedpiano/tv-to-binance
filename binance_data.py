@@ -332,7 +332,7 @@ def fetch_and_cache_balances(client: Client, log_context: str):
         # Only refresh the daily snapshot if triggered manually via frontend
         if log_context == "API":
             logging.info("[CACHE:API] Triggering manual daily snapshot...")
-            take_daily_balance_snapshot(client)
+            take_daily_balance_snapshot(balances=balances)
     except ClientError as e:
         logging.error(f"[CACHE:{log_context}] Binance error fetching balances: {e.error_message}")
     except Exception as e:
@@ -431,23 +431,30 @@ def _daily_balance_snapshot_updater(client: Client):
     """Thread loop: takes a daily snapshot of total balance value."""
     while True:
         try:
-            take_daily_balance_snapshot(client)
+            take_daily_balance_snapshot(client=client)
         except Exception as e:
             logging.exception(f"[SNAPSHOT] Daily balance snapshot failed: {e}")
 
         time.sleep(DAILY_SNAPSHOT_INTERVAL)
 
-def take_daily_balance_snapshot(client: Client):
-    """Fetch balances and save a daily total snapshot in Redis."""
+def take_daily_balance_snapshot(
+    balances: dict[str, Decimal] | None = None,
+    client: Client | None = None
+):
+    """Fetch balances (if not provided) and save a daily total snapshot in Redis."""
     logging.info("[SNAPSHOT] Taking daily balance snapshot...")
     r = _get_redis()
 
-    account = client.account()
-    balances = {
-        b["asset"]: Decimal(str(b["free"]))
-        for b in account["balances"]
-        if Decimal(str(b["free"])) > 0
-    }
+    if balances is None:
+        if not client:
+            raise ValueError("Either balances or client must be provided")
+        logging.info("[SNAPSHOT] No balances provided, fetching from Binance...")
+        account = client.account()
+        balances = {
+            b["asset"]: Decimal(str(b["free"]))
+            for b in account["balances"]
+            if Decimal(str(b["free"])) > 0
+        }
 
     # Compute total account value in USDT-equivalent (using cached prices)
     total_usdt = Decimal("0")
