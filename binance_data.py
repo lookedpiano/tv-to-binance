@@ -328,6 +328,11 @@ def fetch_and_cache_balances(client: Client, log_context: str):
         r.set("account_balances", json.dumps(data))
         r.set("last_refresh_balances", ts)
         logging.info(f"[CACHE:{log_context}] Balances updated ({len(balances)} assets).")
+
+        # Only refresh the daily snapshot if triggered manually via frontend
+        if log_context == "API":
+            logging.info("[CACHE:API] Triggering manual daily snapshot...")
+            take_daily_balance_snapshot(client)
     except ClientError as e:
         logging.error(f"[CACHE:{log_context}] Binance error fetching balances: {e.error_message}")
     except Exception as e:
