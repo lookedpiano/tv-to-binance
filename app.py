@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import hmac
+import ipaddress
 import requests
 import time
 import logging
@@ -94,6 +95,7 @@ def run_webhook_validations():
             safe_log_webhook_error(symbol=None, side=None, message="Outbound IP not allowed")
             return None, error_response
         '''
+        validate_outbound_ip_address_new()
 
         data, error_response = validate_json()
         if not data:
@@ -318,6 +320,44 @@ def validate_outbound_ip_address() -> tuple[bool, tuple | None]:
             logging.warning(f"[SECURITY] Outbound IP {current_ip} not in allowed list")
             return False, (jsonify({"error": f"Outbound IP {current_ip} not allowed"}), 403)
         return True, None
+    except Exception as e:
+        logging.exception(f"Failed to validate outbound IP: {e}")
+        return False, (jsonify({"error": "Could not validate outbound IP"}), 500)
+
+def validate_outbound_ip_address_new() -> tuple[bool, tuple | None]:
+    try:
+        current_ip = requests.get("https://api.ipify.org", timeout=21).text.strip()
+        logging.info(f"[OUTBOUND_IP] Validate current outbound IP for Binance calls: {current_ip}")
+
+        ALLOWED_OUTBOUND_IPS = load_ip_file("config/outbound_ips.txt")
+
+        # Convert current IP to an ipaddress object
+        ip_obj = ipaddress.ip_address(current_ip)
+
+        allowed = False
+        for entry in ALLOWED_OUTBOUND_IPS:
+            entry = entry.strip()
+            if not entry:
+                continue
+
+            try:
+                # Try to interpret entry as a network (CIDR range)
+                network = ipaddress.ip_network(entry, strict=False)
+                if ip_obj in network:
+                    allowed = True
+                    break
+            except ValueError:
+                # If not a valid CIDR, treat as single IP
+                if current_ip == entry:
+                    allowed = True
+                    break
+
+        if not allowed:
+            logging.warning(f"[SECURITY] Outbound IP {current_ip} not in allowed list/ranges")
+            return False, (jsonify({"error": f"Outbound IP {current_ip} not allowed"}), 403)
+
+        return True, None
+
     except Exception as e:
         logging.exception(f"Failed to validate outbound IP: {e}")
         return False, (jsonify({"error": "Could not validate outbound IP"}), 500)
