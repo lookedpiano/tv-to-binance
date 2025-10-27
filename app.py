@@ -88,10 +88,12 @@ except Exception as e:
 # -----------------------
 def run_webhook_validations():
     try:
+        '''
         valid_ip, error_response = validate_outbound_ip_address()
         if not valid_ip:
             safe_log_webhook_error(symbol=None, side=None, message="Outbound IP not allowed")
             return None, error_response
+        '''
 
         data, error_response = validate_json()
         if not data:
