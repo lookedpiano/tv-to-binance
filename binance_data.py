@@ -91,6 +91,7 @@ threading.excepthook = _suppress_thread_exceptions
 # ==========================================================
 WS_LOG_INTERVAL = 42                    # Interval for logging price snapshots (seconds)
 UPDATE_THROTTLE_SECONDS = 3             # 3 seconds
+FILTER_FETCH_THROTTLE_SEC = 3           # 3 seconds
 LAST_SEEN_UPDATE_INTERVAL = 5           # 5 seconds
 BALANCE_REFRESH_INTERVAL = 3600         # 1 hour
 FILTER_REFRESH_INTERVAL = 24 * 3600     # 1 day
@@ -384,7 +385,7 @@ def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str
     r = _get_redis()
     ts = now_local_ts()
 
-    for symbol in symbols:
+    for idx, symbol in enumerate(symbols, 1):
         try:
             info = client.exchange_info(symbol=symbol)
             s = info["symbols"][0]
@@ -406,6 +407,10 @@ def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str
 
         except Exception as e:
             logging.warning(f"[CACHE:{log_context}] Failed to cache filters for {symbol}: {_short_binance_error(e)}")
+
+        # --- Throttle between requests ---
+        if idx < len(symbols):  # don't sleep after the last one
+            time.sleep(FILTER_FETCH_THROTTLE_SEC)
 
     r.set("last_refresh_filters", now_local_ts())  # Always record that a refresh attempt happened
 
