@@ -479,7 +479,7 @@ def take_daily_balance_snapshot(
         "timestamp": now_local_ts()
     }
 
-    generate_fake_balance_snapshots()
+    # generate_fake_balance_snapshots()
 
     r.hset(DAILY_BALANCE_SNAPSHOT_KEY, date_str, json.dumps(snapshot))
     logging.info(f"[SNAPSHOT] Stored balance snapshot for {date_str}: {total_usdt:.2f} USDT")
