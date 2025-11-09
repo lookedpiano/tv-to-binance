@@ -314,7 +314,7 @@ def start_ws_price_cache(symbols: List[str]):
 This section periodically fetches wallet balances via Binance REST API
 and caches them in Redis for quick access.
 """
-def fetch_and_cache_balances(client: Client, log_context: str):
+def fetch_and_cache_balances(client: Client, log_context: str, return_balances: bool = False):
     """Fetch balances via REST and write them to Redis."""
     try:
         logging.info(f"[CACHE:{log_context}] Fetching account balances from REST...")
@@ -331,10 +331,9 @@ def fetch_and_cache_balances(client: Client, log_context: str):
         r.set("last_refresh_balances", ts)
         logging.info(f"[CACHE:{log_context}] Balances updated ({len(balances)} assets).")
 
-        # Refresh the daily snapshot if triggered manually via frontend or during initialization
-        if log_context in ("API", "INIT"):
-            logging.info(f"[CACHE:{log_context}] Triggering daily snapshot...")
-            take_daily_balance_snapshot(balances=balances)
+        if return_balances:
+            return balances
+
     except ClientError as e:
         logging.error(f"[CACHE:{log_context}] Binance error fetching balances: {e.error_message}")
     except Exception as e:
@@ -571,7 +570,13 @@ def start_background_cache(symbols: List[str]):
 
     if not SKIP_INITIAL_FETCH:
         logging.info("[CACHE] Not skipping initial REST fetch (SKIP_INITIAL_FETCH=0).")
-        fetch_and_cache_balances(client, "INIT")
+
+        balances = fetch_and_cache_balances(client, "INIT", return_balances=True)
+        if balances:
+            take_daily_balance_snapshot(balances=balances)
+        else:
+            logging.warning("[CACHE:INIT] No balances fetched; skipping snapshot.")
+
         fetch_and_cache_filters(client, symbols, "INIT")
     else:
         logging.info("[CACHE] Skipping initial REST fetch (SKIP_INITIAL_FETCH=1).")
