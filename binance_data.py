@@ -402,7 +402,7 @@ def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str
                 f"filters:{symbol.upper()}",
                 json.dumps({"filters": {k: str(v) for k, v in filters.items()}, "ts": ts}),
             )
-            logging.info(f"[CACHE:{log_context}] Filters cached for {symbol}")
+            logging.debug(f"[CACHE:{log_context}] Filters cached for {symbol}")
 
         except Exception as e:
             logging.warning(f"[CACHE:{log_context}] Failed to cache filters for {symbol}: {_short_binance_error(e)}")
