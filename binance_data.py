@@ -408,9 +408,11 @@ def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str
         except Exception as e:
             logging.warning(f"[CACHE:{log_context}] Failed to cache filters for {symbol}: {_short_binance_error(e)}")
 
+        '''
         # --- Throttle between requests ---
         if idx < len(symbols):  # don't sleep after the last one
             time.sleep(FILTER_FETCH_THROTTLE_SEC)
+        '''
 
     r.set("last_refresh_filters", now_local_ts())  # Always record that a refresh attempt happened
 
