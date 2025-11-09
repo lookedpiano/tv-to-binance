@@ -385,11 +385,15 @@ def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str
     r = _get_redis()
     ts = now_local_ts()
 
-    for idx, symbol in enumerate(symbols, 1):
-        try:
-            info = client.exchange_info(symbol=symbol)
-            s = info["symbols"][0]
+    try:
+        info = client.exchange_info(symbols=symbols)  # Fetch all at once
+    except Exception as e:
+        logging.error(f"[CACHE:{log_context}] Failed to fetch filters batch: {_short_binance_error(e)}")
+        return
 
+    for s in info["symbols"]:
+        symbol = s["symbol"]
+        try:
             raw_filters = {}
             for f in s["filters"]:
                 if f["filterType"] == "LOT_SIZE":
@@ -404,15 +408,8 @@ def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str
                 json.dumps({"filters": {k: str(v) for k, v in filters.items()}, "ts": ts}),
             )
             logging.debug(f"[CACHE:{log_context}] Filters cached for {symbol}")
-
         except Exception as e:
-            logging.warning(f"[CACHE:{log_context}] Failed to cache filters for {symbol}: {_short_binance_error(e)}")
-
-        '''
-        # --- Throttle between requests ---
-        if idx < len(symbols):  # don't sleep after the last one
-            time.sleep(FILTER_FETCH_THROTTLE_SEC)
-        '''
+            logging.warning(f"[CACHE:{log_context}] Failed to process filters for {symbol}: {_short_binance_error(e)}")
 
     r.set("last_refresh_filters", now_local_ts())  # Always record that a refresh attempt happened
 
