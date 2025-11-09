@@ -436,7 +436,14 @@ def get_cached_symbol_filters(symbol: str) -> Optional[Dict[str, str]]:
 # ==========================================================
 def _daily_balance_snapshot_updater(client: Client):
     """Thread loop: takes a daily snapshot of total balance value."""
+    first_run = True
+
     while True:
+        if first_run:
+            # Delay the very first run (avoid duplicate startup snapshot)
+            time.sleep(DAILY_SNAPSHOT_INTERVAL)
+            first_run = False
+
         try:
             take_daily_balance_snapshot(client=client)
         except Exception as e:
