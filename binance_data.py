@@ -67,6 +67,7 @@ def _suppress_thread_exceptions(args):
         "ip banned until",
         "api-key ip banned",
         "too many requests",
+        "daily balance snapshot failed",
     )
 
     if any(p in msg for p in harmless_patterns):
@@ -77,7 +78,7 @@ def _suppress_thread_exceptions(args):
         return
 
     if any(p in msg for p in binance_rate_limit_patterns):
-        logging.warning("[SUPPRESSED] Binance IP banned temporarily due to request weight. Avoid frequent redeploys.")
+        logging.warning("[SUPPRESSED] Binance rate-limit/IP-ban related error encountered. Skipping noisy traceback.")
         return
 
     # Otherwise, let real errors through
