@@ -23,6 +23,7 @@ import websocket
 # -------------------------
 from config._settings import (
     SKIP_INITIAL_FETCH,
+    GENERATE_FAKE_BALANCE_DATA,
 )
 
 # ==========================================================
@@ -484,7 +485,8 @@ def take_daily_balance_snapshot(
         "timestamp": now_local_ts()
     }
 
-    #generate_fake_balance_snapshots()
+    if (GENERATE_FAKE_BALANCE_DATA):
+        generate_fake_balance_snapshots()
 
     r.hset(DAILY_BALANCE_SNAPSHOT_KEY, date_str, json.dumps(snapshot))
     logging.info(f"[SNAPSHOT] Stored balance snapshot for {date_str}: {total_usdt:.2f} USDT")
@@ -496,7 +498,7 @@ def generate_fake_balance_snapshots():
 
     base = 20000
     for i in reversed(range(100)):
-        change = random.uniform(-5000, 7000)
+        change = random.uniform(-5000, 70000)
         base = max(10000, base + change)
 
         date = today - timedelta(days=i)
