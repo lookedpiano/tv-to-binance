@@ -311,6 +311,28 @@ def start_ws_price_cache(symbols: List[str]):
 # ==========================================================
 # ========== BALANCES CACHE ================================
 # ==========================================================
+def fetch_account_balances(client: Client) -> dict[str, Decimal]:
+    """
+    Fetch account balances from Binance REST and return a dict of {asset: Decimal(free)}.
+    Only includes assets with a nonzero free balance.
+    """
+    try:
+        account = client.account()
+        balances = {
+            b["asset"]: Decimal(str(b["free"]))
+            for b in account.get("balances", [])
+            if Decimal(str(b["free"])) > 0 or Decimal(str(b["locked"])) > 0
+        }
+        logging.debug(f"[BINANCE] Retrieved {len(balances)} balances from REST.")
+        return balances
+    except ClientError as e:
+        logging.error(f"[BINANCE] ClientError fetching account balances: {e.error_message}")
+        return {}
+    except Exception as e:
+        logging.exception(f"[BINANCE] Unexpected error fetching account balances: {e}")
+        return {}
+
+
 """
 This section periodically fetches wallet balances via Binance REST API
 and caches them in Redis for quick access.
@@ -319,12 +341,11 @@ def fetch_and_cache_balances(client: Client, log_context: str, return_balances: 
     """Fetch balances via REST and write them to Redis."""
     try:
         logging.info(f"[CACHE:{log_context}] Fetching account balances from REST...")
-        account = client.account()
-        balances = {
-            b["asset"]: Decimal(str(b["free"]))
-            for b in account["balances"]
-            if Decimal(str(b["free"])) > 0
-        }
+        balances = fetch_account_balances(client)
+        if not balances:
+            logging.warning(f"[CACHE:{log_context}] No balances fetched; skipping cache update.")
+            return {}
+
         ts = now_local_ts()
         data = {"balances": {k: str(v) for k, v in balances.items()}, "ts": ts}
         r = _get_redis()
@@ -335,10 +356,8 @@ def fetch_and_cache_balances(client: Client, log_context: str, return_balances: 
         if return_balances:
             return balances
 
-    except ClientError as e:
-        logging.error(f"[CACHE:{log_context}] Binance error fetching balances: {e.error_message}")
     except Exception as e:
-        logging.exception(f"[CACHE:{log_context}] Unexpected error fetching balances: {e}")
+        logging.exception(f"[CACHE:{log_context}] Unexpected error caching balances: {e}")
     finally:
         _get_redis().set("last_refresh_balances", now_local_ts())  # Always bump timestamp, even if no data changed
 
@@ -356,11 +375,14 @@ def get_cached_balances() -> Optional[Dict[str, Decimal]]:
     parsed = json.loads(data)
     return {k: Decimal(v) for k, v in parsed["balances"].items()}
 
-def refresh_balances_for_assets(client: Client, assets: List[str]):
+def refresh_balances_for_assets(client: Client, assets: list[str]):
     """Fetch balances for specific assets and update Redis cache incrementally."""
     try:
-        account = client.account()
-        all_balances = {b["asset"]: Decimal(str(b["free"])) for b in account["balances"]}
+        all_balances = fetch_account_balances(client)
+        if not all_balances:
+            logging.warning(f"[CACHE] Could not refresh balances — fetch failed.")
+            return
+
         r = _get_redis()
         cached = json.loads(r.get("account_balances") or '{"balances": {}, "ts": 0}')
         for asset in assets:
@@ -461,12 +483,7 @@ def take_daily_balance_snapshot(
         if not client:
             raise ValueError("Either balances or client must be provided")
         logging.info("[SNAPSHOT] No balances provided, fetching from Binance...")
-        account = client.account()
-        balances = {
-            b["asset"]: Decimal(str(b["free"]))
-            for b in account["balances"]
-            if Decimal(str(b["free"])) > 0
-        }
+        balances = fetch_account_balances(client)
 
     # Compute total account value in USDT-equivalent (using cached prices)
     total_usdt = Decimal("0")
@@ -485,7 +502,7 @@ def take_daily_balance_snapshot(
         "timestamp": now_local_ts()
     }
 
-    if (GENERATE_FAKE_BALANCE_DATA):
+    if GENERATE_FAKE_BALANCE_DATA:
         generate_fake_balance_snapshots()
 
     r.hset(DAILY_BALANCE_SNAPSHOT_KEY, date_str, json.dumps(snapshot))
