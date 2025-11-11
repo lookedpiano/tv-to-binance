@@ -21,6 +21,8 @@ from binance_data import (
     get_cached_symbol_filters,
     refresh_balances_for_assets,
     log_order_to_cache,
+    fetch_and_cache_balances,
+    fetch_and_cache_filters,
 )
 
 from routes import routes
@@ -32,7 +34,6 @@ from utils import (
     split_symbol,
     quantize_quantity,
     quantize_down,
-    get_filter_value,
     sanitize_filters,
 )
 
@@ -367,47 +368,30 @@ def validate_outbound_ip_address_new() -> tuple[bool, tuple | None]:
 # -------------------------
 def get_symbol_filters(symbol: str):
     """
-    Fetch symbol filters (lot size, min notional, etc.) for a given symbol.
-    Using exchange_info(symbol=...) → info["symbols"][0]["filters"]
+    Get symbol trading filters from Redis cache; fallback to REST
     """
-    try:
-        info = client.exchange_info(symbol=symbol)
-        if not info or "symbols" not in info or not info["symbols"]:
-            return []
-        filters = info["symbols"][0].get("filters", [])
+    # 1) Try cache first
+    filters = get_cached_symbol_filters(symbol)
+    if filters:
+        logging.info(f"[FILTER:CACHE] Found cached filters for {symbol}")
         return filters
-    except ClientError as e:
-        logging.error(f"Binance API error while fetching filters for {symbol}: {e.error_message}")
-        return []
-    except Exception as e:
-        logging.exception(f"Failed to fetch exchangeInfo for {symbol}: {e}")
-        return []
 
-def get_min_notional(filters):
-    min_notional = next((f['minNotional'] for f in filters if f['filterType'] == 'MIN_NOTIONAL'), None)
-    if min_notional:
-        return Decimal(min_notional)
-    notional_filter = next((f for f in filters if f['filterType'] == 'NOTIONAL'), None)
-    if not notional_filter:
-        return Decimal('0.0')
-    return Decimal(notional_filter['minNotional'])
-
-def get_trade_filters(symbol):
-    filters = get_symbol_filters(symbol)
-    if not filters:
-        logging.warning(f"No filters found for {symbol}")
-        return None, None, None
+    # 2) Fallback: call existing REST
     try:
-        step_size_val = get_filter_value(filters, "LOT_SIZE", "stepSize")
-        min_qty_val = get_filter_value(filters, "LOT_SIZE", "minQty")
-        min_notional = get_min_notional(filters)
-        step_size = Decimal(step_size_val)
-        min_qty = Decimal(min_qty_val)
-        logging.info(f"[FILTERS] step_size={step_size}, min_notional={min_notional}, min_qty={min_qty}")
-        return step_size, min_qty, min_notional
+        fetch_and_cache_filters(client, [symbol], log_context="FALLBACK")
+
+        # Try to load again after caching
+        filters = get_cached_symbol_filters(symbol)
+        if filters:
+            logging.info(f"[FILTER:REST] Successfully fetched and cached filters for {symbol}")
+            return filters
+        else:
+            logging.warning(f"[FILTER:REST] Fallback fetched but filters still unavailable for {symbol}")
+            return None
+
     except Exception as e:
-        logging.exception(f"Error parsing filters for {symbol}: {e}")
-        return None, None, None
+        logging.exception(f"[FILTER:REST] Fallback error while fetching filters for {symbol}: {e}")
+        return None
 
 # -------- Price (connector) --------
 def get_current_price(symbol: str):
@@ -437,29 +421,33 @@ def get_current_price(symbol: str):
         logging.exception(f"[PRICE:REST] Unexpected error fetching price for {symbol}: {e}")
         return None
 
+def get_balances():
+    """
+    Get account balances from Redis cache; fallback to REST if missing or incomplete.
+    """
+    # 1) Try cached balances first
+    cached = get_cached_balances()
+    if cached and len(cached) > 0:
+        logging.info(f"[BALANCE:CACHE] Returning cached balances ({len(cached)} assets).")
+        return cached
+
+    # 2) Fallback: call the existing REST fetcher
+    logging.warning("[BALANCE:CACHE] Cache empty or incomplete, fetching from Binance REST...")
+    try:
+        balances = fetch_and_cache_balances(client, log_context="FALLBACK", return_balances=True)
+        if balances:
+            logging.info(f"[BALANCE:REST] Successfully fetched and cached balances ({len(balances)} assets).")
+            return balances
+        else:
+            logging.warning("[BALANCE:REST] Fallback returned no balances.")
+            return {}
+    except Exception as e:
+        logging.exception(f"[BALANCE:REST] Fallback error while fetching balances: {e}")
+        return {}
+
 # -------------------------
 # Spot functions (connector)
 # -------------------------
-def get_spot_asset_free(asset: str) -> Decimal:
-    """
-    Return free balance for asset from spot account as Decimal.
-    """
-    try:
-        account_info = client.account()
-        balances = account_info.get("balances", [])
-        for b in balances:
-            if b.get("asset") == asset:
-                free = Decimal(str(b.get("free", "0")))
-                logging.info(f"[SPOT BALANCE] {asset} free={free}")
-                return free
-        return Decimal("0")
-    except ClientError as e:
-        logging.error(f"Binance API error while fetching {asset} balance: {e.error_message}")
-        raise
-    except Exception as e:
-        logging.exception(f"Failed to fetch spot asset balance for {asset}: {e}")
-        raise
-
 def place_spot_market_order(symbol, side, quantity):
     """
     Place a MARKET order. Quantity must be base asset amount.
@@ -617,7 +605,7 @@ def execute_trade(
             return {"error": message}, 200
 
         # === 2. Fetch filters ===
-        filters = get_cached_symbol_filters(symbol)
+        filters = get_symbol_filters(symbol)
         if not filters:
             message = f"Filters unavailable for {symbol}"
             logging.warning(f"[EXECUTE] {message}")
@@ -670,7 +658,7 @@ def execute_trade(
                 logging.warning(f"[ORDER LOG] Failed to log invalid side error: {e}")
             return {"error": message}, 400
         
-        balances = get_cached_balances() or {}
+        balances = get_balances() or {}
         free_balance = balances.get(balance_asset, Decimal("0"))
         if free_balance <= 0:
             message = f"No available {balance_asset} balance to {side.lower()}."

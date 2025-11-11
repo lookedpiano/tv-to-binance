@@ -120,16 +120,6 @@ def split_symbol(symbol: str) -> tuple[str, str]:
     raise ValueError(f"Unknown quote asset in symbol: {symbol}")
 
 
-def get_filter_value(filters: list[dict], filter_type: str, key: str):
-    """
-    Extract a specific value from Binance symbol filters.
-    """
-    for f in filters:
-        if f.get("filterType") == filter_type:
-            return f.get(key)
-    raise ValueError(f"Filter '{filter_type}' or key '{key}' not found in filters.")
-
-
 # ==========================================================
 # ========== DECIMAL & QUANTIZATION HELPERS ================
 # ==========================================================
