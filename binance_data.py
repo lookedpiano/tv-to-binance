@@ -91,15 +91,14 @@ threading.excepthook = _suppress_thread_exceptions
 # ==========================================================
 # ========== CONFIG CONSTANTS ==============================
 # ==========================================================
-WS_LOG_INTERVAL = 42                    # Interval for logging price snapshots (seconds)
-UPDATE_THROTTLE_SECONDS = 3             # 3 seconds
-FILTER_FETCH_THROTTLE_SEC = 3           # 3 seconds
-LAST_SEEN_UPDATE_INTERVAL = 5           # 5 seconds
-BALANCE_REFRESH_INTERVAL = 3600 * 6     # 6 hour
-FILTER_REFRESH_INTERVAL = 24 * 3600     # 1 day
-DAILY_SNAPSHOT_INTERVAL = 24 * 3600     # 1 day
-WS_RECONNECT_GRACE = 60                 # Restart stale WS streams if no update for 60s
-WS_CHECK_INTERVAL = 30                  # Health monitor check interval (seconds)
+WS_LOG_INTERVAL = 47                      # Interval for logging price snapshots (seconds)
+UPDATE_THROTTLE_SECONDS = 3               # 3 seconds
+LAST_SEEN_UPDATE_INTERVAL = 5             # 5 seconds
+BALANCE_REFRESH_INTERVAL = 3600 * 7       # 7 hour
+FILTER_REFRESH_INTERVAL = 24 * 3600 * 11  # 11 day
+DAILY_SNAPSHOT_INTERVAL = 24 * 3600       # 1 day
+WS_RECONNECT_GRACE = 127                  # Restart stale WS streams if no update for 127s
+WS_CHECK_INTERVAL = 83                    # Health monitor check interval (seconds)
 STABLECOINS = {"USDT", "USDC"}
 
 DAILY_BALANCE_SNAPSHOT_KEY = "balance_snapshots"
@@ -437,7 +436,7 @@ def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str
     r.set("last_refresh_filters", now_local_ts())  # Always record that a refresh attempt happened
 
 def _filter_updater(client: Client, symbols: List[str]):
-    """Thread loop: refreshes filters daily."""
+    """Thread loop: refreshes filters."""
     while True:
         time.sleep(FILTER_REFRESH_INTERVAL)
         fetch_and_cache_filters(client, symbols, "PERIODIC")
