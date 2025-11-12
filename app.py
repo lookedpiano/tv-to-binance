@@ -7,7 +7,6 @@ import logging
 from decimal import Decimal
 
 # binance-connector imports (official SDK)
-from binance.spot import Spot as Client
 from binance.error import ClientError, ServerError
 
 # Redis and WebSocket price cache and background_cache
