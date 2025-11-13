@@ -168,24 +168,6 @@ def webhook():
         log_webhook_delimiter(f"END (elapsed: {elapsed:.4f} seconds)")
 
 # -------------------------
-# maybe useful in future
-# -------------------------
-def log_filters(symbol, filters):
-    logging.info(f"Filters for {symbol}:")
-    for f in filters:
-        logging.info(f"  - {f['filterType']}: {f}")
-
-def log_balances(balances):
-    logging.info("Listing all balances returned by Binance with a Total greater than 0:")
-    for b in balances:
-        current_asset = b["asset"]
-        free = float(b.get("free", 0))
-        locked = float(b.get("locked", 0))
-        total = free + locked
-        if total > 0:
-            logging.info(f"[BALANCE] {current_asset} - Total: {total}, Free: {free}, Locked: {locked}")
-
-# -------------------------
 # easter egg
 # -------------------------
 def detect_tradingview_placeholder(action: str):
