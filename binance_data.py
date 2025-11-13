@@ -24,7 +24,25 @@ import websocket
 from config._settings import (
     SKIP_INITIAL_FETCH,
     GENERATE_FAKE_BALANCE_DATA,
+    BINANCE_API_KEY,
+    BINANCE_SECRET_KEY,
+    ALLOWED_SYMBOLS,
+    REDIS_URL,
 )
+
+# -------------------------
+# REDIS + WS INIT
+# -------------------------
+def init_all():
+    """
+    Initialize Binance client, Redis, WS price cache, and background
+    balance/filter/snapshot caches, using config settings.
+    """
+    init_client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
+    init_redis(REDIS_URL)
+    start_ws_price_cache(ALLOWED_SYMBOLS)
+    start_background_cache(ALLOWED_SYMBOLS)
+    logging.info("[INIT] Binance client, Redis, WS price cache, and background caches initialized successfully.")
 
 # ==========================================================
 # ========== LOGGING NOISE SUPPRESSION =====================
@@ -119,18 +137,28 @@ def now_local_ts() -> float:
 # ==========================================================
 _client: Optional[Client] = None
 
-def init_client(api_key: str, api_secret: str):
-    """Initialize global Binance Spot client."""
+def init_client(api_key: str | None = None, api_secret: str | None = None):
+    """
+    Initialize global Binance Spot client.
+
+    If api_key / api_secret are not provided, fall back to config._settings.
+    """
     global _client
-    if _client is None:
-        _client = Client(api_key=api_key, api_secret=api_secret)
-        logging.info("[INIT] Binance client initialized.")
+    if _client is not None:
+        return _client
+
+    if api_key is None or api_secret is None:
+        api_key = BINANCE_API_KEY
+        api_secret = BINANCE_SECRET_KEY
+
+    _client = Client(api_key=api_key, api_secret=api_secret)
+    logging.info("[INIT] Binance client initialized.")
     return _client
 
 def get_client() -> Client:
-    """Return initialized Binance client or raise."""
+    """Return initialized Binance client, initializing lazily if needed."""
     if _client is None:
-        raise RuntimeError("Binance client not initialized. Call init_client() first.")
+        return init_client()
     return _client
 
 

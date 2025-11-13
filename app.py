@@ -3,10 +3,7 @@ import logging
 
 # Redis and WebSocket price cache and background_cache
 from binance_data import (
-    init_redis,
-    init_client,
-    start_ws_price_cache,
-    start_background_cache,
+    init_all,
 )
 
 from routes import routes
@@ -16,11 +13,7 @@ from webhook import webhook
 # Configuration
 # -------------------------
 from config._settings import (
-    ALLOWED_SYMBOLS,
-    BINANCE_API_KEY,
-    BINANCE_SECRET_KEY,
     PORT,
-    REDIS_URL,
 )
 
 # -------------------------
@@ -36,20 +29,12 @@ app.register_blueprint(routes)
 app.register_blueprint(webhook)
 
 # -------------------------
-# CLIENT INIT
-# -------------------------
-client = init_client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
-
-# -------------------------
-# REDIS + WS INIT
+# INIT
 # -------------------------
 try:
-    init_redis(REDIS_URL)
-    start_ws_price_cache(ALLOWED_SYMBOLS)
-    start_background_cache(ALLOWED_SYMBOLS)
-    logging.info("[INIT] Background caches initialized successfully.")
+    init_all()
 except Exception as e:
-    logging.exception(f"[INIT] Failed to initialize background caches: {e}")
+    logging.exception(f"[INIT] Failed to initialize background services: {e}")
 
 # -------------------------
 # Run app
