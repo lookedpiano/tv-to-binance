@@ -563,6 +563,20 @@ def log_order_to_cache(symbol, side, qty, price, status, message):
     except Exception as e:
         logging.warning(f"[CACHE] Failed to log order: {e}")
 
+def safe_log_webhook_error(symbol, side, message):
+    """Helper to safely log webhook-level failures before execute_trade() runs."""
+    try:
+        log_order_to_cache(
+            symbol or "?",
+            side or "?",
+            qty=None,
+            price=None,
+            status="error",
+            message=message
+        )
+    except Exception as e:
+        logging.warning(f"[ORDER LOG] Failed to log webhook-level error: {e}")
+
 def get_cached_orders(limit: int = 100):
     """Return up to 'limit' recent orders from Redis, sorted by timestamp descending."""
     try:
