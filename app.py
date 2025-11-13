@@ -1,24 +1,11 @@
 from flask import Flask
 import logging
 
-# Redis and WebSocket price cache and background_cache
-from binance_data import (
-    init_all,
-)
-
+from binance_data import init_all
 from routes import routes
 from webhook import webhook
+from config._settings import PORT
 
-# -------------------------
-# Configuration
-# -------------------------
-from config._settings import (
-    PORT,
-)
-
-# -------------------------
-# Logging configuration
-# -------------------------
 logging.basicConfig(
     level=logging.INFO,
     format='[%(levelname)s] %(message)s'
