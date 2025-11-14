@@ -1,5 +1,4 @@
 import json
-import sys
 import os
 import random
 import logging
@@ -15,8 +14,6 @@ from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 from binance.spot import Spot as Client
 from binance.error import ClientError
 from utils import sanitize_filters
-
-import websocket
 
 # -------------------------
 # Configuration
@@ -45,68 +42,6 @@ def init_all():
     logging.info("[INIT] Binance client, Redis, WS price cache, and background caches initialized successfully.")
 
 # ==========================================================
-# ========== LOGGING NOISE SUPPRESSION =====================
-# ==========================================================
-"""
-This section silences harmless Binance websocket disconnection tracebacks
-and internal library debug spam, keeping logs clean and readable.
-"""
-
-# Disable verbose websocket-client logs
-websocket.enableTrace(False)
-
-# Silence Binance connector's internal websocket error spam
-logging.getLogger("websocket").setLevel(logging.CRITICAL)
-logging.getLogger("websocket._core").setLevel(logging.CRITICAL)
-logging.getLogger("websocket._app").setLevel(logging.CRITICAL)
-logging.getLogger("binance.websocket").setLevel(logging.CRITICAL)
-logging.getLogger("binance.websockets").setLevel(logging.CRITICAL)
-
-def _suppress_thread_exceptions(args):
-    """Suppress noisy thread-level exceptions caused by websocket disconnects, Redis overload, or Binance bans."""
-    msg = str(args.exc_value).lower()
-
-    harmless_patterns = (
-        "connection to remote host was lost",
-        "socket is already closed",
-        "websocketconnectionclosedexception",
-        "connection reset by peer",
-        "close frame received",
-        "broken pipe",
-    )
-
-    redis_warning_patterns = (
-        "max number of clients reached",
-        "connection refused",
-        "too many connections",
-    )
-
-    binance_rate_limit_patterns = (
-        "way too much request weight used",
-        "ip banned until",
-        "api-key ip banned",
-        "too many requests",
-        "daily balance snapshot failed",
-    )
-
-    if any(p in msg for p in harmless_patterns):
-        return  # Silently ignore
-
-    if any(p in msg for p in redis_warning_patterns):
-        logging.warning("Consider replacing the current Redis caching data store.")
-        return
-
-    if any(p in msg for p in binance_rate_limit_patterns):
-        logging.warning("[SUPPRESSED] Binance rate-limit/IP-ban related error encountered. Skipping noisy traceback.")
-        return
-
-    # Otherwise, let real errors through
-    sys.__excepthook__(args.exc_type, args.exc_value, args.exc_traceback)
-
-threading.excepthook = _suppress_thread_exceptions
-
-
-# ==========================================================
 # ========== CONFIG CONSTANTS ==============================
 # ==========================================================
 WS_LOG_INTERVAL = 47                      # Interval for logging price snapshots (seconds)
@@ -121,7 +56,6 @@ STABLECOINS = {"USDT", "USDC"}
 
 DAILY_BALANCE_SNAPSHOT_KEY = "balance_snapshots"
 
-
 # ==========================================================
 # ========== TIMEZONE CONFIG ===============================
 # ==========================================================
@@ -130,7 +64,6 @@ TZ = ZoneInfo("Europe/Zurich")
 def now_local_ts() -> float:
     """Return the current local timestamp (Europe/Zurich)."""
     return datetime.now(TZ).timestamp()
-
 
 # ==========================================================
 # ========== CLIENT ========================================
@@ -161,7 +94,6 @@ def get_client() -> Client:
         return init_client()
     return _client
 
-
 # ==========================================================
 # ========== REDIS SETUP ===================================
 # ==========================================================
@@ -188,7 +120,6 @@ def init_redis(redis_url: str):
 
     logging.info(f"[REDIS] Connected (host={masked_host}:{masked_port}, db={safe_db})")
 
-
 # ==========================================================
 # ========== HELPER ========== =============================
 # ==========================================================
@@ -198,7 +129,6 @@ def _short_binance_error(e):
     if "{'Content-Type':" in text:
         text = text.split("{'Content-Type':", 1)[0] + "{...}"
     return text
-
 
 # ==========================================================
 # ========== PRICE CACHE (WebSocket) ========================
@@ -334,7 +264,6 @@ def start_ws_price_cache(symbols: List[str]):
     threading.Thread(target=_ws_health_monitor, args=(symbols,), name="WSHealthMonitor", daemon=True).start()
     logging.info("[WS] Price cache started")
 
-
 # ==========================================================
 # ========== BALANCES CACHE ================================
 # ==========================================================
@@ -421,7 +350,6 @@ def refresh_balances_for_assets(client: Client, assets: list[str]):
     except Exception as e:
         logging.warning(f"[CACHE] Failed to refresh balances for {assets}: {_short_binance_error(e)}")
 
-
 # ==========================================================
 # ========== FILTERS CACHE =================================
 # ==========================================================
@@ -476,7 +404,6 @@ def get_cached_symbol_filters(symbol: str) -> Optional[Dict[str, str]]:
         return None
     parsed = json.loads(data)
     return parsed.get("filters")
-
 
 # ==========================================================
 # ========== DAILY SNAPSHOT CACHE ==========================
@@ -558,7 +485,6 @@ def generate_fake_balance_snapshots():
 
     logging.info(f"[FAKE DATA] Inserted 100 fake balance snapshots into {DAILY_BALANCE_SNAPSHOT_KEY}")
 
-
 # ==========================================================
 # ========== ORDERS CACHE ==================================
 # ==========================================================
@@ -619,7 +545,6 @@ def get_cached_orders(limit: int = 100):
     except Exception as e:
         logging.error(f"[CACHE] Failed to fetch cached orders: {e}")
         return []
-
 
 # ==========================================================
 # ========== STARTUP ENTRYPOINT =============================
