@@ -167,7 +167,7 @@ def get_client() -> Client:
 # ==========================================================
 _r = None
 
-def _get_redis() -> redis.Redis:
+def get_redis() -> redis.Redis:
     """Return the active Redis client or raise if not initialized."""
     if _r is None:
         raise RuntimeError("Redis not initialized. Call init_redis() first.")
@@ -217,11 +217,11 @@ _last_saved = {}                                         # last time we actually
 
 def set_cached_price(symbol: str, price: Decimal):
     """Store price in Redis hash."""
-    _get_redis().hset("price_cache", symbol.upper(), str(price))
+    get_redis().hset("price_cache", symbol.upper(), str(price))
 
 def get_cached_price(symbol: str) -> Optional[Decimal]:
     """Get cached price from Redis."""
-    price = _get_redis().hget("price_cache", symbol.upper())
+    price = get_redis().hget("price_cache", symbol.upper())
     if price is None:
         logging.info(f"[WS CACHE] No cached price yet for {symbol}")
         return None
@@ -252,7 +252,7 @@ def _on_ws_message(_, message):
         set_cached_price(symbol, mid_price)
         _last_saved[symbol] = now
 
-        _get_redis().set("last_refresh_prices", now_local_ts())
+        get_redis().set("last_refresh_prices", now_local_ts())
 
         if symbol not in _last_logged or now - _last_logged[symbol] > 10:
             logging.debug(f"[WS UPDATE] {symbol}: {mid_price}")
@@ -311,7 +311,7 @@ def _log_price_snapshot():
     while True:
         time.sleep(WS_LOG_INTERVAL)
         try:
-            snapshot = _get_redis().hgetall("price_cache")
+            snapshot = get_redis().hgetall("price_cache")
             if not snapshot:
                 logging.info("[WS SNAPSHOT] Cache empty (not yet populated).")
                 continue
@@ -375,7 +375,7 @@ def fetch_and_cache_balances(client: Client, log_context: str, return_balances: 
 
         ts = now_local_ts()
         data = {"balances": {k: str(v) for k, v in balances.items()}, "ts": ts}
-        r = _get_redis()
+        r = get_redis()
         r.set("account_balances", json.dumps(data))
         r.set("last_refresh_balances", ts)
         logging.info(f"[CACHE:{log_context}] Balances updated ({len(balances)} assets).")
@@ -386,7 +386,7 @@ def fetch_and_cache_balances(client: Client, log_context: str, return_balances: 
     except Exception as e:
         logging.exception(f"[CACHE:{log_context}] Unexpected error caching balances: {e}")
     finally:
-        _get_redis().set("last_refresh_balances", now_local_ts())  # Always bump timestamp, even if no data changed
+        get_redis().set("last_refresh_balances", now_local_ts())  # Always bump timestamp, even if no data changed
 
 def _balance_updater(client: Client):
     """Thread loop: updates balances every hour."""
@@ -396,7 +396,7 @@ def _balance_updater(client: Client):
 
 def get_cached_balances() -> Optional[Dict[str, Decimal]]:
     """Return cached balances from Redis."""
-    data = _get_redis().get("account_balances")
+    data = get_redis().get("account_balances")
     if not data:
         return None
     parsed = json.loads(data)
@@ -410,7 +410,7 @@ def refresh_balances_for_assets(client: Client, assets: list[str]):
             logging.warning(f"[CACHE] Could not refresh balances — fetch failed.")
             return
 
-        r = _get_redis()
+        r = get_redis()
         cached = json.loads(r.get("account_balances") or '{"balances": {}, "ts": 0}')
         for asset in assets:
             if asset in all_balances:
@@ -432,7 +432,7 @@ and caches them in Redis for efficient reuse when placing trades.
 def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str):
     """Fetch filters for all allowed symbols from Binance, sanitize, and cache."""
     logging.info(f"[CACHE:{log_context}] Fetching filters for {len(symbols)} symbols...")
-    r = _get_redis()
+    r = get_redis()
     ts = now_local_ts()
 
     try:
@@ -471,7 +471,7 @@ def _filter_updater(client: Client, symbols: List[str]):
 
 def get_cached_symbol_filters(symbol: str) -> Optional[Dict[str, str]]:
     """Return cached filters for one symbol."""
-    data = _get_redis().get(f"filters:{symbol.upper()}")
+    data = get_redis().get(f"filters:{symbol.upper()}")
     if not data:
         return None
     parsed = json.loads(data)
@@ -504,7 +504,7 @@ def take_daily_balance_snapshot(
 ):
     """Fetch balances (if not provided) and save a daily total snapshot in Redis."""
     logging.info("[SNAPSHOT] Taking daily balance snapshot...")
-    r = _get_redis()
+    r = get_redis()
 
     if balances is None:
         if not client:
@@ -537,7 +537,7 @@ def take_daily_balance_snapshot(
 
 def generate_fake_balance_snapshots():
     """Generate 100 fake daily balance snapshots for frontend testing."""
-    r = _get_redis()
+    r = get_redis()
     today = datetime.now(TZ)
 
     base = 20000
@@ -565,7 +565,7 @@ def generate_fake_balance_snapshots():
 def log_order_to_cache(symbol, side, qty, price, status, message):
     """Store executed or failed order info in Redis for monitoring."""
     try:
-        r = _get_redis()
+        r = get_redis()
         ts = now_local_ts()
         entry = {
             "timestamp": ts,
@@ -608,7 +608,7 @@ def safe_log_webhook_error(symbol, side, message):
 def get_cached_orders(limit: int = 100):
     """Return up to 'limit' recent orders from Redis, sorted by timestamp descending."""
     try:
-        r = _get_redis()
+        r = get_redis()
         keys = r.zrevrange("orders_index", 0, limit - 1)
         orders = []
         for k in keys:

@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, jsonify, request
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from binance_data import (
-    _get_redis,
+    get_redis,
     get_client,
     fetch_and_cache_balances,
     fetch_and_cache_filters,
@@ -94,7 +94,7 @@ def health_check():
 def cache_prices():
     """Return all cached prices."""
     try:
-        r = _get_redis()
+        r = get_redis()
         snapshot = r.hgetall("price_cache")
         if not snapshot:
             return jsonify({"message": "No cached prices available"}), 200
@@ -108,7 +108,7 @@ def cache_prices():
 def cache_prices_count():
     """Return number of cached price entries."""
     try:
-        r = _get_redis()
+        r = get_redis()
         count = r.hlen("price_cache")
         return jsonify({"count": count}), 200
     except Exception as e:
@@ -120,7 +120,7 @@ def cache_prices_count():
 def cache_price_symbol(symbol):
     """Return cached price for a single symbol."""
     try:
-        r = _get_redis()
+        r = get_redis()
         price = r.hget("price_cache", symbol.upper())
         if price is None:
             return jsonify({"error": f"No cached price for {symbol.upper()}"}), 404
@@ -139,7 +139,7 @@ def cache_balances():
     if (unauthorized := require_admin_key()):
         return unauthorized
     try:
-        r = _get_redis()
+        r = get_redis()
         raw = r.get("account_balances")
         return raw or "{}", 200, {"Content-Type": "application/json"}
     except Exception as e:
@@ -151,7 +151,7 @@ def cache_balances():
 def cache_all_filters():
     """Return all cached symbol filters."""
     try:
-        r = _get_redis()
+        r = get_redis()
         keys = r.keys("filters:*")
         if not keys:
             return jsonify({"message": "No cached filters found"}), 200
@@ -166,7 +166,7 @@ def cache_all_filters():
 def cache_filters(symbol):
     """Return cached filters for a specific symbol."""
     try:
-        r = _get_redis()
+        r = get_redis()
         raw = r.get(f"filters:{symbol.upper()}")
         return raw or "{}", 200, {"Content-Type": "application/json"}
     except Exception as e:
@@ -224,7 +224,7 @@ def get_balance_snapshots():
     if (unauthorized := require_admin_key()):
         return unauthorized
     try:
-        r = _get_redis()
+        r = get_redis()
         snapshots = r.hgetall(DAILY_BALANCE_SNAPSHOT_KEY)
         parsed = sorted(
             [json.loads(v) for v in snapshots.values()],
@@ -241,7 +241,7 @@ def cache_balance_snapshots_count():
     if (unauthorized := require_admin_key()):
         return unauthorized
     try:
-        r = _get_redis()
+        r = get_redis()
         count = r.hlen(DAILY_BALANCE_SNAPSHOT_KEY)
         return jsonify({"count": count}), 200
     except Exception as e:
@@ -260,7 +260,7 @@ def cache_summary():
     Useful for monitoring dashboards or health checks.
     """
     try:
-        r = _get_redis()
+        r = get_redis()
 
         summary = {
             "prices": {
@@ -289,7 +289,7 @@ def dashboard():
     if (unauthorized := require_admin_key()):
         return unauthorized
     try:
-        r = _get_redis()
+        r = get_redis()
 
         prices = r.hgetall("price_cache")
         balances_raw = r.get("account_balances")
