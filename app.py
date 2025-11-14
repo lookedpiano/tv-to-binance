@@ -1,5 +1,6 @@
 from flask import Flask
 import logging
+import debug_suppression
 
 from binance_data import init_all
 from routes import routes
