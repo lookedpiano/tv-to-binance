@@ -1,7 +1,7 @@
-from flask import Flask
+import debug_suppression  # modifies logging settings (logging suppression + exception filtering)
 import logging
-import debug_suppression
 
+from flask import Flask
 from binance_data import init_all
 from routes import routes
 from webhook import webhook
