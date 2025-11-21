@@ -5,7 +5,8 @@ import threading
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from email_fetcher import fetch_latest_guru_email, send_to_webhook
+from email_fetcher import fetch_latest_guru_email, extract_alert_payload, send_to_webhook
+from binance_data import get_redis
 
 from config._settings import (
     ENABLE_EMAIL_POLL,
@@ -25,11 +26,17 @@ def _email_poll_loop():
             email_data = fetch_latest_guru_email()
 
             if email_data:
-                logging.info(f"[EMAIL POLL] Email found → From: {email_data.get('from')}")
-                logging.info(f"[EMAIL POLL] Email found → Subject: {email_data.get('subject')}")
-                logging.info(f"[EMAIL POLL] Email found → Date: {email_data.get('date')}")
-                logging.info(f"[EMAIL POLL] Email found → Text: {email_data.get('text')}")
-                logging.info(f"[EMAIL POLL] Email found → Html: {email_data.get('html')}")
+                alert_text = extract_alert_payload(email_data.get("text", ""))
+
+                if alert_text:
+                    r = get_redis()
+                    r.set("larsson_alert_latest", alert_text)
+                    logging.info("[EMAIL POLL] Stored alert in Redis.")
+
+                logging.info("[EMAIL POLL] Extracted alert payload:")
+                logging.info(alert_text)
+
+                # Store to Redis or send to webhook etc.
                 #send_to_webhook(email_data)
             else:
                 logging.info("[EMAIL POLL] No matching email found.")

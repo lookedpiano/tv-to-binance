@@ -109,6 +109,37 @@ def fetch_latest_guru_email():
     return email_data
 
 
+def extract_alert_payload(text: str) -> str:
+    """
+    Extracts everything between:
+        'Hi jimmy,' and '// Larsson Line Pro'
+    Normalizes indentation and removes empty lines.
+    """
+    if not text:
+        return ""
+
+    start_marker = "Hi jimmy,"
+    end_marker = "// Larsson Line Pro"
+
+    start_index = text.find(start_marker)
+    if start_index == -1:
+        return ""
+
+    start_index += len(start_marker)
+
+    end_index = text.find(end_marker, start_index)
+    if end_index == -1:
+        end_index = len(text)
+
+    # Extract and normalize
+    section = text[start_index:end_index]
+
+    # Strip whitespace + remove blank lines
+    lines = [line.strip() for line in section.splitlines() if line.strip()]
+
+    return "\n".join(lines)
+
+
 def send_to_webhook(payload):
     try:
         r = requests.post(WEBHOOK_URL, json=payload, timeout=10)
