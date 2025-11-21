@@ -25,8 +25,12 @@ def _email_poll_loop():
             email_data = fetch_latest_guru_email()
 
             if email_data:
+                logging.info(f"[EMAIL POLL] Email found → From: {email_data.get('from')}")
                 logging.info(f"[EMAIL POLL] Email found → Subject: {email_data.get('subject')}")
-                send_to_webhook(email_data)
+                logging.info(f"[EMAIL POLL] Email found → Date: {email_data.get('date')}")
+                logging.info(f"[EMAIL POLL] Email found → Text: {email_data.get('text')}")
+                logging.info(f"[EMAIL POLL] Email found → Html: {email_data.get('html')}")
+                #send_to_webhook(email_data)
             else:
                 logging.info("[EMAIL POLL] No matching email found.")
 

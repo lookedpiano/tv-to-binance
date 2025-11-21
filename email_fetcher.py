@@ -10,8 +10,10 @@ import logging
 IMAP_SERVER = "imap.gmail.com"
 IMAP_PORT = 993
 
-EMAIL_USER = "blackwhalevoices@gmail.com"
-EMAIL_PASS = os.environ.get("GMAIL_APP_PASSWORD")
+GMAIL_USER = os.environ.get("GMAIL_USER")
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
+OUTLOOK_USER = os.environ.get("OUTLOOK_USER")
+LL_PRO_3_ALERT_SUBJECT = os.environ.get("LL_PRO_3_ALERT_SUBJECT")
 WEBHOOK_URL = "https://yourserver.com/webhooks/from-outlook"
 
 
@@ -38,8 +40,8 @@ def fetch_latest_guru_email():
     since = (today - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
 
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
-    logging.info(f"[DEBUG] EMAIL_PASS length = {len(EMAIL_PASS) if EMAIL_PASS else 'None'}")
-    mail.login(EMAIL_USER, EMAIL_PASS)
+    logging.info(f"[DEBUG] GMAIL_APP_PASSWORD length = {len(GMAIL_APP_PASSWORD) if GMAIL_APP_PASSWORD else 'None'}")
+    mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
     mail.select("INBOX")
 
     # This matches:
@@ -47,7 +49,7 @@ def fetch_latest_guru_email():
     #  - subject contains "Pro 3 Alert"
     #  - received SINCE yesterday
     #search_criteria = f'(FROM "guru@ctolarsson.com" SUBJECT "Pro 3 Alert" SINCE "{since}")'
-    search_criteria = f'(FROM "jimmy.friedrich@hotmail.ch" SUBJECT "Larsson Line Pro 3 Alert" SINCE "{since}")'
+    search_criteria = f'(FROM "{OUTLOOK_USER}" SUBJECT "{LL_PRO_3_ALERT_SUBJECT}" SINCE "{since}")'
     status, data = mail.search(None, search_criteria)
 
     if status != "OK":
