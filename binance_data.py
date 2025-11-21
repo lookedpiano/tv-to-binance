@@ -14,6 +14,7 @@ from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 from binance.spot import Spot as Client
 from binance.error import ClientError
 from utils import sanitize_filters
+from email_poll import start_email_polling_thread
 
 # -------------------------
 # Configuration
@@ -39,6 +40,7 @@ def init_all():
     init_redis(REDIS_URL)
     start_ws_price_cache(ALLOWED_SYMBOLS)
     start_background_cache(ALLOWED_SYMBOLS)
+    start_email_polling_thread()
     logging.info("[INIT] Binance client, Redis, WS price cache, and background caches initialized successfully.")
 
 # ==========================================================
