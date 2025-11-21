@@ -7,11 +7,11 @@ import requests
 import os
 import logging
 
-IMAP_SERVER = "outlook.office365.com"
+IMAP_SERVER = "imap.gmail.com"
 IMAP_PORT = 993
 
-EMAIL_USER = "jimmy.friedrich@hotmail.ch"
-EMAIL_PASS = os.environ.get("OUTLOOK_APP_PASSWORD")
+EMAIL_USER = "blackwhalevoices@gmail.com"
+EMAIL_PASS = os.environ.get("GMAIL_APP_PASSWORD")
 WEBHOOK_URL = "https://yourserver.com/webhooks/from-outlook"
 
 
@@ -46,7 +46,8 @@ def fetch_latest_guru_email():
     #  - from guru@ctolarsson.com
     #  - subject contains "Pro 3 Alert"
     #  - received SINCE yesterday
-    search_criteria = f'(FROM "guru@ctolarsson.com" SUBJECT "Pro 3 Alert" SINCE "{since}")'
+    #search_criteria = f'(FROM "guru@ctolarsson.com" SUBJECT "Pro 3 Alert" SINCE "{since}")'
+    search_criteria = f'(FROM "jimmy.friedrich@hotmail.ch" SUBJECT "Larsson Line Pro 3 Alert" SINCE "{since}")'
     status, data = mail.search(None, search_criteria)
 
     if status != "OK":
