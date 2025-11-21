@@ -12,6 +12,7 @@ from binance_data import (
     DAILY_BALANCE_SNAPSHOT_KEY,
 )
 from utils import should_log_request, load_ip_file, require_admin_key
+from security import verify_before_request_secret
 from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS
 
 routes = Blueprint("routes", __name__)
@@ -53,6 +54,23 @@ def log_request():
     """Log all incoming requests (if enabled)."""
     if should_log_request():
         logging.info(f"[REQUEST] {request.method} {request.path}")
+
+
+@routes.before_request
+def enforce_before_request_secret():
+    """
+    Enforces that this server instance is authorized by verifying
+    BEFORE_REQUEST_SECRET matches BEFORE_REQUEST_SECRET_HASH.
+    """
+    if verify_before_request_secret():
+        return  # Authorized -> allow request
+
+    logging.warning(
+        f"[SECURITY] Blocked unauthorized request to {request.path} "
+        "(invalid BEFORE_REQUEST_SECRET)"
+    )
+
+    return jsonify({"error": "Unauthorized server instance"}), 401
 
 
 @routes.after_request

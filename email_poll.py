@@ -8,12 +8,10 @@ import email
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from email_fetcher import fetch_all_matching_emails, extract_alert_payload
+from security import verify_server
 
 TZ = ZoneInfo("Europe/Zurich")
 POLL_INTERVAL = 3593 * 5   # approx. 5 hours
-
-EMAIL_POLL_SERVER_SECRET = os.environ.get("EMAIL_POLL_SERVER_SECRET")
-EXPECTED_SHA256 = "6f4d51761cebdf73fece9c0f7e3b3d7aff75ba6812421a551eb8b082227d112e"
 
 
 def _email_poll_loop():
@@ -69,19 +67,10 @@ def _email_poll_loop():
 
 
 def start_email_polling_thread():
-    if not should_start_email_poll():
-        logging.debug("[EMAIL POLL] Skipped — not the main server.")
+    if not verify_server():
+        logging.debug("[EMAIL POLL] Skipped — this is not the main server.")
         return
 
     t = threading.Thread(target=_email_poll_loop, daemon=True, name="EmailPollingThread")
     t.start()
-    logging.info("[EMAIL POLL] Started email polling thread - authorized as main server.")
-
-
-def should_start_email_poll():
-    secret = EMAIL_POLL_SERVER_SECRET
-    if not secret:
-        return False
-
-    sha256_hash = hashlib.sha256(secret.encode("utf-8")).hexdigest()
-    return sha256_hash == EXPECTED_SHA256
+    logging.info("[EMAIL POLL] Started email polling thread — verified main server.")
