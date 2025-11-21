@@ -7,7 +7,6 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from email_fetcher import fetch_all_matching_emails, extract_alert_payload, send_to_webhook
-from binance_data import get_redis
 
 from config._settings import (
     ENABLE_EMAIL_POLL,
@@ -19,6 +18,9 @@ POLL_INTERVAL = 3593 * 5   # approx. 5 hours
 
 def _email_poll_loop():
     logging.info("[EMAIL POLL] Background email checker started.")
+
+    # Lazy import to avoid circular import
+    from binance_data import get_redis
     r = get_redis()
 
     while True:
