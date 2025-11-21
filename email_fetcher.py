@@ -38,6 +38,7 @@ def fetch_latest_guru_email():
     since = (today - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
 
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+    logging.info(f"[DEBUG] EMAIL_PASS length = {len(EMAIL_PASS) if EMAIL_PASS else 'None'}")
     mail.login(EMAIL_USER, EMAIL_PASS)
     mail.select("INBOX")
 
