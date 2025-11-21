@@ -1,16 +1,19 @@
 import json
+import os
+import hashlib
 import time
 import logging
 import threading
 import email
 from datetime import datetime
 from zoneinfo import ZoneInfo
-
 from email_fetcher import fetch_all_matching_emails, extract_alert_payload
-from config._settings import ENABLE_EMAIL_POLL
 
 TZ = ZoneInfo("Europe/Zurich")
 POLL_INTERVAL = 3593 * 5   # approx. 5 hours
+
+EMAIL_POLL_SERVER_KEY = os.environ.get("EMAIL_POLL_SERVER_KEY")
+EXPECTED_MD5 = "af765d481ea17cb344dfee5f8f273d01"
 
 
 def _email_poll_loop():
@@ -66,9 +69,19 @@ def _email_poll_loop():
 
 
 def start_email_polling_thread():
-    if not ENABLE_EMAIL_POLL:
+    if not should_start_email_poll():
+        logging.info("[EMAIL POLL] Skipped — not the main server.")
         return
 
     t = threading.Thread(target=_email_poll_loop, daemon=True, name="EmailPollingThread")
     t.start()
-    logging.info("[EMAIL POLL] Started email polling thread (ENABLE_EMAIL_POLL active).")
+    logging.info("[EMAIL POLL] Started email polling thread - authorized as main server.")
+
+
+def should_start_email_poll():
+    secret = EMAIL_POLL_SERVER_KEY
+    if not secret:
+        return False
+
+    md5_hash = hashlib.md5(secret.encode("utf-8")).hexdigest()
+    return md5_hash == EXPECTED_MD5

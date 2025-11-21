@@ -64,7 +64,6 @@ WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 REDIS_URL = os.getenv("REDIS_URL")
 SKIP_INITIAL_FETCH = _get_bool_env("SKIP_INITIAL_FETCH", default=False)
 GENERATE_FAKE_BALANCE_DATA = _get_bool_env("GENERATE_FAKE_BALANCE_DATA", default=False)
-ENABLE_EMAIL_POLL = _get_bool_env("ENABLE_EMAIL_POLL", default=False)
 PORT = os.getenv("PORT", "4747")
 
 if not ADMIN_API_KEY:
