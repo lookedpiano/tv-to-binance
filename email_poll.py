@@ -12,8 +12,8 @@ from email_fetcher import fetch_all_matching_emails, extract_alert_payload
 TZ = ZoneInfo("Europe/Zurich")
 POLL_INTERVAL = 3593 * 5   # approx. 5 hours
 
-EMAIL_POLL_SERVER_KEY = os.environ.get("EMAIL_POLL_SERVER_KEY")
-EXPECTED_MD5 = "af765d481ea17cb344dfee5f8f273d01"
+EMAIL_POLL_SERVER_SECRET = os.environ.get("EMAIL_POLL_SERVER_SECRET")
+EXPECTED_SHA256 = "6f4d51761cebdf73fece9c0f7e3b3d7aff75ba6812421a551eb8b082227d112e"
 
 
 def _email_poll_loop():
@@ -79,9 +79,9 @@ def start_email_polling_thread():
 
 
 def should_start_email_poll():
-    secret = EMAIL_POLL_SERVER_KEY
+    secret = EMAIL_POLL_SERVER_SECRET
     if not secret:
         return False
 
-    md5_hash = hashlib.md5(secret.encode("utf-8")).hexdigest()
-    return md5_hash == EXPECTED_MD5
+    sha256_hash = hashlib.sha256(secret.encode("utf-8")).hexdigest()
+    return sha256_hash == EXPECTED_SHA256
