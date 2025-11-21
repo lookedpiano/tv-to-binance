@@ -19,8 +19,7 @@ POLL_INTERVAL = 3593 * 5   # approx. 5 hours
 def _email_poll_loop():
     logging.info("[EMAIL POLL] Background email checker started.")
 
-    # Lazy import to avoid circular import
-    from binance_data import get_redis
+    from binance_data import get_redis  # Lazy import to avoid circular import
     r = get_redis()
 
     while True:
@@ -28,7 +27,8 @@ def _email_poll_loop():
             logging.info("[EMAIL POLL] Fetching all matching emails...")
             emails = fetch_all_matching_emails()
 
-            for email_item in emails:
+            if emails:
+                email_item = emails[-1]   # newest matching email
                 text = email_item.get("text", "")
                 payload = extract_alert_payload(text)
                 if not payload:
@@ -38,12 +38,6 @@ def _email_poll_loop():
                 email_dt = email.utils.parsedate_to_datetime(email_item["date"])
                 date_str = email_dt.strftime("%Y-%m-%d")
 
-                # Check if this day was already processed
-                last_day = r.get("larsson_alert_last_day")
-                if last_day == date_str:
-                    logging.info(f"[EMAIL POLL] Skipping duplicate for {date_str}")
-                    continue
-
                 # Store new daily alert
                 record = {
                     "timestamp": email_dt.timestamp(),
@@ -52,10 +46,11 @@ def _email_poll_loop():
                     "payload": payload
                 }
 
-                r.rpush("larsson_alerts", json.dumps(record))
+                # Always overwrite existing record for that day
+                r.set(f"larsson_alert:{date_str}", json.dumps(record))
                 r.set("larsson_alert_last_day", date_str)
 
-                logging.info(f"[EMAIL POLL] Stored new alert for {date_str}")
+                logging.info(f"[EMAIL POLL] Overwrote alert for {date_str}")
 
         except Exception as e:
             logging.exception(f"[EMAIL POLL] Error during email check: {e}")
