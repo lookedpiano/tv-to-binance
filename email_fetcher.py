@@ -11,7 +11,7 @@ IMAP_SERVER = "outlook.office365.com"
 IMAP_PORT = 993
 
 EMAIL_USER = "jimmy.friedrich@hotmail.ch"
-EMAIL_PASS = os.environ.get("OUTLOOK_APP_PASSWORD")  # use an App Password if you have 2FA
+EMAIL_PASS = os.environ.get("OUTLOOK_APP_PASSWORD")
 WEBHOOK_URL = "https://yourserver.com/webhooks/from-outlook"
 
 
@@ -29,28 +29,41 @@ def _decode(value):
 
 
 def fetch_latest_guru_email():
-    """Fetch today's email from guru@ctolarsson.com via IMAP."""
-    today = datetime.date.today().strftime("%d-%b-%Y")
+    """
+    Fetch the latest email from guru@ctolarsson.com
+    whose subject contains 'Pro 3 Alert'.
+    """
+    # Optional: only look at emails since yesterday to avoid scanning the whole inbox
+    today = datetime.date.today()
+    since = (today - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
 
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
     mail.login(EMAIL_USER, EMAIL_PASS)
     mail.select("INBOX")
 
-    search = f'(FROM "guru@ctolarsson.com" ON "{today}")'
-    status, data = mail.search(None, search)
+    # This matches:
+    #  - from guru@ctolarsson.com
+    #  - subject contains "Pro 3 Alert"
+    #  - received SINCE yesterday
+    search_criteria = f'(FROM "guru@ctolarsson.com" SUBJECT "Pro 3 Alert" SINCE "{since}")'
+    status, data = mail.search(None, search_criteria)
 
     if status != "OK":
+        logging.warning(f"[EMAIL POLL] IMAP search failed: {status} {data}")
         mail.logout()
         return None
 
     ids = data[0].split()
     if not ids:
+        logging.info("[EMAIL POLL] No matching emails found (guru + 'Pro 3 Alert').")
         mail.logout()
         return None
 
+    # Take the newest matching email
     latest_id = ids[-1]
     status, msg_data = mail.fetch(latest_id, "(RFC822)")
     if status != "OK":
+        logging.warning(f"[EMAIL POLL] IMAP fetch failed: {status} {msg_data}")
         mail.logout()
         return None
 
@@ -67,14 +80,26 @@ def fetch_latest_guru_email():
     if msg.is_multipart():
         for part in msg.walk():
             ctype = part.get_content_type()
+            disp = str(part.get("Content-Disposition") or "")
+
+            if "attachment" in disp.lower():
+                continue
+
             if ctype == "text/plain":
-                email_data["text"] += (part.get_payload(decode=True).decode(errors="ignore"))
+                payload = part.get_payload(decode=True)
+                if payload:
+                    email_data["text"] += payload.decode(errors="ignore")
             elif ctype == "text/html":
-                email_data["html"] += (part.get_payload(decode=True).decode(errors="ignore"))
+                payload = part.get_payload(decode=True)
+                if payload:
+                    email_data["html"] += payload.decode(errors="ignore")
     else:
         payload = msg.get_payload(decode=True)
         if payload:
-            email_data["text"] = payload.decode(errors="ignore")
+            if msg.get_content_type() == "text/html":
+                email_data["html"] = payload.decode(errors="ignore")
+            else:
+                email_data["text"] = payload.decode(errors="ignore")
 
     mail.logout()
     return email_data
