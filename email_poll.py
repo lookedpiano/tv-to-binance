@@ -70,7 +70,7 @@ def _email_poll_loop():
 
 def start_email_polling_thread():
     if not should_start_email_poll():
-        logging.info("[EMAIL POLL] Skipped — not the main server.")
+        logging.debug("[EMAIL POLL] Skipped — not the main server.")
         return
 
     t = threading.Thread(target=_email_poll_loop, daemon=True, name="EmailPollingThread")
