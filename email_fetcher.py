@@ -30,83 +30,69 @@ def _decode(value):
     return result
 
 
-def fetch_latest_guru_email():
+def fetch_all_matching_emails():
     """
-    Fetch the latest email from guru@ctolarsson.com
-    whose subject contains 'Pro 3 Alert'.
+    Return ALL emails from the INBOX that match:
+     - FROM = OUTLOOK_USER
+     - SUBJECT = LL_PRO_3_ALERT_SUBJECT
     """
-    # Optional: only look at emails since yesterday to avoid scanning the whole inbox
     today = datetime.date.today()
-    since = (today - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
+    since = (today - datetime.timedelta(days=7)).strftime("%d-%b-%Y")  # look back 1 week
 
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
-    logging.info(f"[DEBUG] GMAIL_APP_PASSWORD length = {len(GMAIL_APP_PASSWORD) if GMAIL_APP_PASSWORD else 'None'}")
     mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
     mail.select("INBOX")
 
-    # This matches:
-    #  - from guru@ctolarsson.com
-    #  - subject contains "Pro 3 Alert"
-    #  - received SINCE yesterday
-    #search_criteria = f'(FROM "guru@ctolarsson.com" SUBJECT "Pro 3 Alert" SINCE "{since}")'
     search_criteria = f'(FROM "{OUTLOOK_USER}" SUBJECT "{LL_PRO_3_ALERT_SUBJECT}" SINCE "{since}")'
     status, data = mail.search(None, search_criteria)
 
     if status != "OK":
         logging.warning(f"[EMAIL POLL] IMAP search failed: {status} {data}")
         mail.logout()
-        return None
+        return []
 
     ids = data[0].split()
-    if not ids:
-        logging.info("[EMAIL POLL] No matching emails found (guru + 'Pro 3 Alert').")
-        mail.logout()
-        return None
+    results = []
 
-    # Take the newest matching email
-    latest_id = ids[-1]
-    status, msg_data = mail.fetch(latest_id, "(RFC822)")
-    if status != "OK":
-        logging.warning(f"[EMAIL POLL] IMAP fetch failed: {status} {msg_data}")
-        mail.logout()
-        return None
+    for msg_id in ids:
+        status, msg_data = mail.fetch(msg_id, "(RFC822)")
+        if status != "OK":
+            continue
 
-    msg = email.message_from_bytes(msg_data[0][1])
+        msg = email.message_from_bytes(msg_data[0][1])
 
-    email_data = {
-        "from": _decode(msg.get("From")),
-        "subject": _decode(msg.get("Subject")),
-        "date": msg.get("Date"),
-        "text": "",
-        "html": "",
-    }
+        item = {
+            "from": _decode(msg.get("From")),
+            "subject": _decode(msg.get("Subject")),
+            "date": msg.get("Date"),
+            "text": "",
+            "html": "",
+        }
 
-    if msg.is_multipart():
-        for part in msg.walk():
-            ctype = part.get_content_type()
-            disp = str(part.get("Content-Disposition") or "")
+        if msg.is_multipart():
+            for part in msg.walk():
+                ctype = part.get_content_type()
+                if ctype == "text/plain":
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        item["text"] += payload.decode(errors="ignore")
+                elif ctype == "text/html":
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        item["html"] += payload.decode(errors="ignore")
+        else:
+            payload = msg.get_payload(decode=True)
+            if payload:
+                ctype = msg.get_content_type()
+                if ctype == "text/plain":
+                    item["text"] = payload.decode(errors="ignore")
+                elif ctype == "text/html":
+                    item["html"] = payload.decode(errors="ignore")
 
-            if "attachment" in disp.lower():
-                continue
-
-            if ctype == "text/plain":
-                payload = part.get_payload(decode=True)
-                if payload:
-                    email_data["text"] += payload.decode(errors="ignore")
-            elif ctype == "text/html":
-                payload = part.get_payload(decode=True)
-                if payload:
-                    email_data["html"] += payload.decode(errors="ignore")
-    else:
-        payload = msg.get_payload(decode=True)
-        if payload:
-            if msg.get_content_type() == "text/html":
-                email_data["html"] = payload.decode(errors="ignore")
-            else:
-                email_data["text"] = payload.decode(errors="ignore")
+        results.append(item)
 
     mail.logout()
-    return email_data
+    return results
 
 
 def extract_alert_payload(text: str) -> str:
