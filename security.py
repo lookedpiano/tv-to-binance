@@ -1,7 +1,5 @@
 import os
 import hashlib
-import logging
-from flask import request, jsonify
 
 SERVER_SECRET = os.environ.get("SERVER_SECRET")
 SERVER_SECRET_HASH = os.environ.get("SERVER_SECRET_HASH")
