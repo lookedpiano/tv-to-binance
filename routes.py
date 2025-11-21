@@ -278,7 +278,27 @@ def cache_summary():
 
     except Exception as e:
         logging.error(f"[ROUTE] /cache/summary failed: {e}")
-        return jsonify({"error": "Failed to fetch cache summary"}), 500    
+        return jsonify({"error": "Failed to fetch cache summary"}), 500
+
+
+# ==========================================================
+# ========== ORIGINAL CACHE ENDPOINT =======================
+# ==========================================================
+@routes.route("/public/alerts", methods=["GET"])
+def public_alerts():
+    """
+    Public endpoint that returns cached Larsson alerts.
+    Other users who clone the repo will call this endpoint
+    to access alert data.
+    """
+    try:
+        r = get_redis()
+        raw_entries = r.lrange("larsson_alerts", 0, -1)
+        alerts = [json.loads(e) for e in raw_entries]
+        return jsonify({"alerts": alerts}), 200
+    except Exception as e:
+        logging.error(f"[ROUTE] /public/alerts failed: {e}")
+        return jsonify({"error": "Failed to fetch alerts"}), 500
 
 
 # ==========================================================
