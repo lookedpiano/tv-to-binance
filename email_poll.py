@@ -39,7 +39,7 @@ def _email_poll_loop():
 
 def start_email_polling_thread():
     """Start background thread for periodic email polling only if ENABLE_EMAIL_POLL is set."""
-    if ENABLE_EMAIL_POLL:
+    if not ENABLE_EMAIL_POLL:
         #logging.info("[EMAIL POLL] Skipping — ENABLE_EMAIL_POLL not set.")
         return
 
