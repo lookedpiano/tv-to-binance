@@ -562,7 +562,7 @@ def start_background_cache(symbols: List[str]):
     client = get_client()
 
     if not SKIP_INITIAL_FETCH:
-        logging.info("[CACHE] Not skipping initial REST fetch (SKIP_INITIAL_FETCH=0).")
+        logging.info("[CACHE] Not skipping initial REST fetch.")
 
         balances = fetch_and_cache_balances(client, "INIT", return_balances=True)
         if balances:
@@ -572,7 +572,7 @@ def start_background_cache(symbols: List[str]):
 
         fetch_and_cache_filters(client, symbols, "INIT")
     else:
-        logging.info("[CACHE] Skipping initial REST fetch (SKIP_INITIAL_FETCH=1).")
+        logging.info("[CACHE] Skipping initial REST fetch.")
 
     threading.Thread(target=_balance_updater, args=(client,), daemon=True, name="BalanceCache").start()
     threading.Thread(target=_filter_updater, args=(client, symbols), daemon=True, name="FilterCache").start()
