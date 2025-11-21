@@ -6,11 +6,8 @@ import email
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from email_fetcher import fetch_all_matching_emails, extract_alert_payload, send_to_webhook
-
-from config._settings import (
-    ENABLE_EMAIL_POLL,
-)
+from email_fetcher import fetch_all_matching_emails, extract_alert_payload
+from config._settings import ENABLE_EMAIL_POLL
 
 TZ = ZoneInfo("Europe/Zurich")
 POLL_INTERVAL = 3593 * 5   # approx. 5 hours
@@ -27,30 +24,39 @@ def _email_poll_loop():
             logging.info("[EMAIL POLL] Fetching all matching emails...")
             emails = fetch_all_matching_emails()
 
-            if emails:
-                email_item = emails[-1]   # newest matching email
-                text = email_item.get("text", "")
-                payload = extract_alert_payload(text)
-                if not payload:
-                    continue
+            if not emails:
+                logging.info("[EMAIL POLL] No matching emails found.")
+                time.sleep(POLL_INTERVAL)
+                continue
 
-                # Extract email date → normalize to YYYY-MM-DD
-                email_dt = email.utils.parsedate_to_datetime(email_item["date"])
-                date_str = email_dt.strftime("%Y-%m-%d")
+            # Process newest matching email only
+            email_item = emails[-1]
 
-                # Store new daily alert
-                record = {
-                    "timestamp": email_dt.timestamp(),
-                    "date": date_str,
-                    "subject": email_item["subject"],
-                    "payload": payload
-                }
+            text = email_item.get("text", "")
+            payload = extract_alert_payload(text)
 
-                # Always overwrite existing record for that day
-                r.set(f"larsson_alert:{date_str}", json.dumps(record))
-                r.set("larsson_alert_last_day", date_str)
+            if not payload:
+                logging.info("[EMAIL POLL] No payload extracted from email.")
+                time.sleep(POLL_INTERVAL)
+                continue
 
-                logging.info(f"[EMAIL POLL] Overwrote alert for {date_str}")
+            # Extract normalized date
+            email_dt = email.utils.parsedate_to_datetime(email_item["date"])
+            date_str = email_dt.strftime("%Y-%m-%d")
+
+            # Build record
+            record = {
+                "timestamp": email_dt.timestamp(),
+                "date": date_str,
+                "subject": email_item["subject"],
+                "payload": payload
+            }
+
+            # Overwrite record for that date
+            r.set(f"larsson_alert:{date_str}", json.dumps(record))
+            r.set("larsson_alert_last_day", date_str)
+
+            logging.info(f"[EMAIL POLL] Overwrote alert for {date_str}")
 
         except Exception as e:
             logging.exception(f"[EMAIL POLL] Error during email check: {e}")
@@ -60,7 +66,6 @@ def _email_poll_loop():
 
 
 def start_email_polling_thread():
-    """Start background thread for periodic email polling only if ENABLE_EMAIL_POLL is set."""
     if not ENABLE_EMAIL_POLL:
         return
 
