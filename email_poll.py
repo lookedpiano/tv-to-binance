@@ -60,7 +60,7 @@ def _email_poll_loop():
         except Exception as e:
             logging.exception(f"[EMAIL POLL] Error during email check: {e}")
 
-        logging.info(f"[EMAIL POLL] Sleeping for {POLL_INTERVAL/3600:.1f} hours...")
+        logging.info(f"[EMAIL POLL] Sleeping for approx. {POLL_INTERVAL/3600:.1f} hours...")
         time.sleep(POLL_INTERVAL)
 
 
