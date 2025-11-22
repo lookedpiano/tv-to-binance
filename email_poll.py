@@ -7,7 +7,7 @@ import threading
 import email
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from email_fetcher import fetch_all_matching_emails, extract_alert_payload
+from email_fetcher import debug_print_all_subjects, fetch_all_matching_emails, extract_alert_payload
 from security import verify_server
 
 TZ = ZoneInfo("Europe/Zurich")
@@ -70,7 +70,11 @@ def start_email_polling_thread():
     if not verify_server():
         logging.debug("[EMAIL POLL] Skipped — this is not the main server.")
         return
-
+    
+    debug_print_all_subjects()
+    return
+    '''
     t = threading.Thread(target=_email_poll_loop, daemon=True, name="EmailPollingThread")
     t.start()
     logging.info("[EMAIL POLL] Started email polling thread — verified main server.")
+    '''

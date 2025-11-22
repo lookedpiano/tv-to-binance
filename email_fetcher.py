@@ -133,3 +133,47 @@ def send_to_webhook(payload):
         logging.info(f"[EMAIL POLL] Webhook response: {r.status_code}")
     except Exception as e:
         logging.error(f"[EMAIL POLL] Webhook error: {e}")
+
+def debug_print_all_subjects(days_back=7):
+    """
+    Fetches ALL emails from the Gmail inbox for the past X days and prints:
+    - From
+    - Subject
+    - Date
+    """
+    today = datetime.date.today()
+    since = (today - datetime.timedelta(days=days_back)).strftime("%d-%b-%Y")
+
+    mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+    mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+    mail.select("INBOX")
+
+    # Get everything since X days
+    search_criteria = f'(SINCE "{since}")'
+    status, data = mail.search(None, search_criteria)
+
+    if status != "OK":
+        logging.error(f"[DEBUG EMAIL] Search failed: {status} {data}")
+        mail.logout()
+        return
+
+    ids = data[0].split()
+    logging.info(f"[DEBUG EMAIL] Found {len(ids)} emails since {since}")
+
+    for msg_id in ids:
+        status, msg_data = mail.fetch(msg_id, "(RFC822)")
+        if status != "OK":
+            continue
+
+        msg = email.message_from_bytes(msg_data[0][1])
+        from_field = _decode(msg.get("From"))
+        subject_field = _decode(msg.get("Subject"))
+        date_field = msg.get("Date")
+
+        logging.info("----- EMAIL -----")
+        logging.info(f"FROM:    {from_field}")
+        logging.info(f"SUBJECT: {subject_field}")
+        logging.info(f"DATE:    {date_field}")
+        logging.info("-----------------")
+
+    mail.logout()
