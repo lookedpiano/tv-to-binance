@@ -1,9 +1,7 @@
-# email_fetcher.py
 import imaplib
 import email
 from email.header import decode_header
 import datetime
-import requests
 import os
 import logging
 
@@ -13,8 +11,7 @@ IMAP_PORT = 993
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
 OUTLOOK_USER = os.environ.get("OUTLOOK_USER")
-LL_PRO_3_ALERT_SUBJECT = os.environ.get("LL_PRO_3_ALERT_SUBJECT")
-WEBHOOK_URL = "https://yourserver.com/webhooks/from-outlook"
+ALERT_SUBJECT_KEYWORD = "Larsson Line Pro 3 Alert"
 
 
 def _decode(value):
@@ -30,30 +27,31 @@ def _decode(value):
     return result
 
 
-def fetch_all_matching_emails():
+def fetch_all_alert_emails():
     """
-    Return ALL emails from the INBOX that match:
-     - FROM = OUTLOOK_USER
-     - SUBJECT = LL_PRO_3_ALERT_SUBJECT
+    Fetch and return all matching alert emails:
+    - from OUTLOOK_USER
+    - subject contains 'Larsson Line Pro 3 Alert'
+    - within last 7 days
     """
+    since_days = 7
     today = datetime.date.today()
-    since = (today - datetime.timedelta(days=7)).strftime("%d-%b-%Y")  # look back 1 week
+    since = (today - datetime.timedelta(days=since_days)).strftime("%d-%b-%Y")
 
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
     mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
     mail.select("INBOX")
 
-    #search_criteria = f'(FROM "{OUTLOOK_USER}" SUBJECT "{LL_PRO_3_ALERT_SUBJECT}" SINCE "{since}")'
     search_criteria = f'(FROM "{OUTLOOK_USER}" SINCE "{since}")'
     status, data = mail.search(None, search_criteria)
 
     if status != "OK":
-        logging.warning(f"[EMAIL POLL] IMAP search failed: {status} {data}")
+        logging.warning(f"[EMAIL] Search failed: {status} {data}")
         mail.logout()
         return []
 
     ids = data[0].split()
-    results = []
+    alerts = []
 
     for msg_id in ids:
         status, msg_data = mail.fetch(msg_id, "(RFC822)")
@@ -62,14 +60,33 @@ def fetch_all_matching_emails():
 
         msg = email.message_from_bytes(msg_data[0][1])
 
+        sender = _decode(msg.get("From", ""))
+        subject = _decode(msg.get("Subject", ""))
+        date = _decode(msg.get("Date", ""))
+
+        logging.info("----- EMAIL -----")
+        logging.info(f"FROM:    {sender}")
+        logging.info(f"SUBJECT: {subject}")
+        logging.info(f"DATE:    {date}")
+        logging.info("-----------------")
+
+        # Filter again because Gmail search is weak
+        if OUTLOOK_USER.lower() not in sender.lower():
+            continue
+
+        if ALERT_SUBJECT_KEYWORD.lower() not in subject.lower():
+            continue  # skip irrelevant mail
+
         item = {
-            "from": _decode(msg.get("From")),
-            "subject": _decode(msg.get("Subject")),
+            "from": sender,
+            "subject": subject,
             "date": msg.get("Date"),
+            "date2": date,
             "text": "",
             "html": "",
         }
 
+        # Extract body
         if msg.is_multipart():
             for part in msg.walk():
                 ctype = part.get_content_type()
@@ -90,11 +107,10 @@ def fetch_all_matching_emails():
                 elif ctype == "text/html":
                     item["html"] = payload.decode(errors="ignore")
 
-        results.append(item)
+        alerts.append(item)
 
     mail.logout()
-    return results
-
+    return alerts
 
 def extract_alert_payload(text: str) -> str:
     """
@@ -125,55 +141,3 @@ def extract_alert_payload(text: str) -> str:
     lines = [line.strip() for line in section.splitlines() if line.strip()]
 
     return "\n".join(lines)
-
-
-def send_to_webhook(payload):
-    try:
-        r = requests.post(WEBHOOK_URL, json=payload, timeout=10)
-        logging.info(f"[EMAIL POLL] Webhook response: {r.status_code}")
-    except Exception as e:
-        logging.error(f"[EMAIL POLL] Webhook error: {e}")
-
-def debug_print_all_subjects(days_back=7):
-    """
-    Fetches ALL emails from the Gmail inbox for the past X days and prints:
-    - From
-    - Subject
-    - Date
-    """
-    today = datetime.date.today()
-    since = (today - datetime.timedelta(days=days_back)).strftime("%d-%b-%Y")
-
-    mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
-    mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-    mail.select("INBOX")
-
-    # Get everything since X days
-    search_criteria = f'(SINCE "{since}")'
-    status, data = mail.search(None, search_criteria)
-
-    if status != "OK":
-        logging.error(f"[DEBUG EMAIL] Search failed: {status} {data}")
-        mail.logout()
-        return
-
-    ids = data[0].split()
-    logging.info(f"[DEBUG EMAIL] Found {len(ids)} emails since {since}")
-
-    for msg_id in ids:
-        status, msg_data = mail.fetch(msg_id, "(RFC822)")
-        if status != "OK":
-            continue
-
-        msg = email.message_from_bytes(msg_data[0][1])
-        from_field = _decode(msg.get("From"))
-        subject_field = _decode(msg.get("Subject"))
-        date_field = msg.get("Date")
-
-        logging.info("----- EMAIL -----")
-        logging.info(f"FROM:    {from_field}")
-        logging.info(f"SUBJECT: {subject_field}")
-        logging.info(f"DATE:    {date_field}")
-        logging.info("-----------------")
-
-    mail.logout()

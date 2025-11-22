@@ -1,17 +1,15 @@
 import json
-import os
-import hashlib
 import time
 import logging
 import threading
 import email
-from datetime import datetime
 from zoneinfo import ZoneInfo
-from email_fetcher import debug_print_all_subjects, fetch_all_matching_emails, extract_alert_payload
+
+from email_fetcher import fetch_all_alert_emails, extract_alert_payload
 from security import verify_server
 
 TZ = ZoneInfo("Europe/Zurich")
-POLL_INTERVAL = 3593 * 5   # approx. 5 hours
+POLL_INTERVAL = 3593 * 3   # 3 hours
 
 
 def _email_poll_loop():
@@ -22,59 +20,50 @@ def _email_poll_loop():
 
     while True:
         try:
-            logging.info("[EMAIL POLL] Fetching all matching emails...")
-            emails = fetch_all_matching_emails()
+            logging.info("[EMAIL POLL] Scanning emails...")
+            emails = fetch_all_alert_emails()
 
             if not emails:
-                logging.info("[EMAIL POLL] No matching emails found.")
+                logging.info("[EMAIL POLL] No alert emails found.")
                 time.sleep(POLL_INTERVAL)
                 continue
 
-            # Process newest matching email only
-            email_item = emails[-1]
+            for msg in emails:
+                payload = extract_alert_payload(msg.get("text", ""))
+                if not payload:
+                    continue
 
-            text = email_item.get("text", "")
-            payload = extract_alert_payload(text)
+                # Parse date
+                dt = email.utils.parsedate_to_datetime(msg["date"])
+                date_str = dt.strftime("%Y-%m-%d")
 
-            if not payload:
-                logging.info("[EMAIL POLL] No payload extracted from email.")
-                time.sleep(POLL_INTERVAL)
-                continue
+                record = {
+                    "timestamp": dt.timestamp(),
+                    "date": date_str,
+                    "subject": msg["subject"],
+                    "payload": payload,
+                }
 
-            # Extract normalized date
-            email_dt = email.utils.parsedate_to_datetime(email_item["date"])
-            date_str = email_dt.strftime("%Y-%m-%d")
+                # Overwrite same day always
+                key = f"larsson_alert:{date_str}"
+                r.set(key, json.dumps(record))
 
-            # Build record
-            record = {
-                "timestamp": email_dt.timestamp(),
-                "date": date_str,
-                "subject": email_item["subject"],
-                "payload": payload
-            }
+                logging.info(f"[EMAIL POLL] Saved alert for {date_str}: {msg['subject']}")
 
-            # Overwrite record for that date
-            r.set(f"larsson_alert:{date_str}", json.dumps(record))
-            r.set("larsson_alert_last_day", date_str)
-
-            logging.info(f"[EMAIL POLL] Overwrote alert for {date_str}")
+            logging.info(f"[EMAIL POLL] Processed {len(emails)} alert emails.")
 
         except Exception as e:
-            logging.exception(f"[EMAIL POLL] Error during email check: {e}")
+            logging.exception(f"[EMAIL POLL] Error: {e}")
 
-        logging.info(f"[EMAIL POLL] Sleeping for approx. {POLL_INTERVAL/3600:.1f} hours...")
+        logging.info(f"[EMAIL POLL] Sleeping {POLL_INTERVAL/3600:.1f} hours…")
         time.sleep(POLL_INTERVAL)
 
 
 def start_email_polling_thread():
     if not verify_server():
-        logging.debug("[EMAIL POLL] Skipped — this is not the main server.")
+        logging.info("[EMAIL POLL] Not main server — skipping.")
         return
-    
-    debug_print_all_subjects()
-    return
-    '''
-    t = threading.Thread(target=_email_poll_loop, daemon=True, name="EmailPollingThread")
+
+    t = threading.Thread(target=_email_poll_loop, daemon=True)
     t.start()
-    logging.info("[EMAIL POLL] Started email polling thread — verified main server.")
-    '''
+    logging.info("[EMAIL POLL] Email polling thread started.")
