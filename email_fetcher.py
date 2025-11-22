@@ -43,7 +43,8 @@ def fetch_all_matching_emails():
     mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
     mail.select("INBOX")
 
-    search_criteria = f'(FROM "{OUTLOOK_USER}" SUBJECT "{LL_PRO_3_ALERT_SUBJECT}" SINCE "{since}")'
+    #search_criteria = f'(FROM "{OUTLOOK_USER}" SUBJECT "{LL_PRO_3_ALERT_SUBJECT}" SINCE "{since}")'
+    search_criteria = f'(FROM "{OUTLOOK_USER}" SINCE "{since}")'
     status, data = mail.search(None, search_criteria)
 
     if status != "OK":
