@@ -64,11 +64,11 @@ def fetch_all_alert_emails():
         subject = _decode(msg.get("Subject", ""))
         date = _decode(msg.get("Date", ""))
 
-        logging.info("----- EMAIL -----")
-        logging.info(f"FROM:    {sender}")
-        logging.info(f"SUBJECT: {subject}")
-        logging.info(f"DATE:    {date}")
-        logging.info("-----------------")
+        logging.debug("----- EMAIL -----")
+        logging.debug(f"FROM:    {sender}")
+        logging.debug(f"SUBJECT: {subject}")
+        logging.debug(f"DATE:    {date}")
+        logging.debug("-----------------")
 
         # Filter again because Gmail search is weak
         if OUTLOOK_USER.lower() not in sender.lower():
@@ -80,8 +80,7 @@ def fetch_all_alert_emails():
         item = {
             "from": sender,
             "subject": subject,
-            "date": msg.get("Date"),
-            "date2": date,
+            "date": date,
             "text": "",
             "html": "",
         }
@@ -107,9 +106,6 @@ def fetch_all_alert_emails():
                 elif ctype == "text/html":
                     item["html"] = payload.decode(errors="ignore")
 
-        logging.info("----- ITEM -----")
-        logging.info(item)
-        logging.info("----------------")
         alerts.append(item)
 
     mail.logout()

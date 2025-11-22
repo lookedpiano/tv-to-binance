@@ -305,15 +305,22 @@ def cache_summary():
 @routes.route("/public/alerts", methods=["GET"])
 def public_alerts():
     """
-    Public endpoint that returns cached Larsson alerts.
-    Other users who clone the repo will call this endpoint
-    to access alert data.
+    Returns ALL daily Larsson alerts stored as:
+        larsson_alert:YYYY-MM-DD
     """
     try:
         r = get_redis()
-        raw_entries = r.lrange("larsson_alerts", 0, -1)
-        alerts = [json.loads(e) for e in raw_entries]
+
+        keys = sorted(r.keys("larsson_alert:*"))
+
+        alerts = []
+        for key in keys:
+            raw = r.get(key)
+            if raw:
+                alerts.append(json.loads(raw))
+
         return jsonify({"alerts": alerts}), 200
+
     except Exception as e:
         logging.error(f"[ROUTE] /public/alerts failed: {e}")
         return jsonify({"error": "Failed to fetch alerts"}), 500
