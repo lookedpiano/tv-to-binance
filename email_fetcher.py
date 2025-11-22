@@ -107,6 +107,9 @@ def fetch_all_alert_emails():
                 elif ctype == "text/html":
                     item["html"] = payload.decode(errors="ignore")
 
+        logging.info("----- ITEM -----")
+        logging.info(item)
+        logging.info("----------------")
         alerts.append(item)
 
     mail.logout()
