@@ -110,6 +110,16 @@ def webhook_handler():
             message = error_response[0].get("error", "Invalid trade field")
             safe_log_webhook_error(symbol, action, message)
             return error_response
+        if not amount_is_base and not amount_is_quote:
+            message = "Ambiguous amount source: neither base nor quote amount detected."
+            logging.error(message)
+            safe_log_webhook_error(symbol, action, message)
+            return jsonify({"error": message}), 400
+        if amount_is_base and amount_is_quote:
+            message = "Invalid field combination: amount cannot be both base and quote."
+            logging.error(message)
+            safe_log_webhook_error(symbol, action, message)
+            return jsonify({"error": message}), 400
 
         result, status_code = execute_trade(
             symbol=symbol,

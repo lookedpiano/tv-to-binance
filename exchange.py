@@ -139,6 +139,7 @@ def resolve_trade_amount(
         if amt is not None:
 
             # ---- INVALID: ambiguous flags ----
+            # ---- Redundant safety: already protected in webhook layer ----
             if not amount_is_base and not amount_is_quote:
                 msg = (
                     "Ambiguous amount: neither 'amount_is_base' nor 'amount_is_quote' "
