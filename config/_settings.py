@@ -21,9 +21,10 @@ ALLOWED_SYMBOLS = [
 
     # Crypto pairs
     "ETHBTC",
-    "ADABTC", "ADAETH",
-    "SOLBTC", "SOLETH",
-    "ZECBTC", "ZECETH"
+    "ADABTC", "ADAETH", "ADABNB",
+    "SOLBTC", "SOLETH", "SOLBNB",
+    "ZECBTC", "ZECETH",
+    "BNBETH"
 ]
 
 # -------------------------
