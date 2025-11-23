@@ -34,13 +34,7 @@ KNOWN_QUOTES = (
     "USDC",
     "BTC",
     "ETH",
-    "BNB",
-    "XRP",
-    "SOL",
-    "TRX",
-    "DOGE",
-    "ADA",
-    "ZEC"
+    "BNB"
 )
 
 # -------------------------
