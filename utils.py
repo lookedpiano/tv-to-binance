@@ -1,7 +1,7 @@
 import logging
 from decimal import Decimal, ROUND_DOWN, InvalidOperation
 from flask import request, jsonify
-from config._settings import ADMIN_API_KEY
+from config._settings import ADMIN_API_KEY, KNOWN_QUOTES
 
 
 # ==========================================================
@@ -110,12 +110,16 @@ def require_admin_key():
 def split_symbol(symbol: str) -> tuple[str, str]:
     """
     Split a symbol like 'BTCUSDT' into ('BTC', 'USDT').
-    Uses known quotes as fallback.
+
+    Uses the KNOWN_QUOTES list from settings.
+    Matches longest quotes first to avoid conflicts
+    (e.g., USDT before USDT-SHORTER-TOKENS etc.).
     """
-    known_quotes = ("USDT", "USDC", "BTC", "ETH", "BNB", "XRP", "SOL", "TRX", "DOGE", "ADA", "ZEC")
-    for quote in known_quotes:
+    # Sort by length descending to avoid partial matches
+    for quote in sorted(KNOWN_QUOTES, key=len, reverse=True):
         if symbol.endswith(quote):
             return symbol[:-len(quote)], quote
+
     raise ValueError(f"Unknown quote asset in symbol: {symbol}")
 
 

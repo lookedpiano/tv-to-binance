@@ -27,6 +27,23 @@ ALLOWED_SYMBOLS = [
 ]
 
 # -------------------------
+# Known quote assets
+# -------------------------
+KNOWN_QUOTES = (
+    "USDT",
+    "USDC",
+    "BTC",
+    "ETH",
+    "BNB",
+    "XRP",
+    "SOL",
+    "TRX",
+    "DOGE",
+    "ADA",
+    "ZEC"
+)
+
+# -------------------------
 # Payload fields
 # -------------------------
 ALLOWED_FIELDS = {
