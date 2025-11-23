@@ -128,41 +128,70 @@ def resolve_trade_amount(
     amount_is_quote: bool = False,
 ) -> tuple[Decimal | None, str | None]:
     """
-    Resolves the target trade amount based on the provided parameters and context.
-    - amount_is_base  → amount is expressed in base-asset units
-    - amount_is_quote → amount is expressed in quote-asset units
+    Resolves the target trade amount based on the provided parameters.
+    - amount_is_base  → amount is expressed in base-asset units (ADA)
+    - amount_is_quote → amount is expressed in quote-asset units (BTC)
     """
     try:
-        # --- Explicit amount path ---
+        # ============================
+        # EXPLICIT AMOUNT (amt != None)
+        # ============================
         if amt is not None:
+
+            # ---- INVALID: ambiguous flags ----
+            if not amount_is_base and not amount_is_quote:
+                msg = (
+                    "Ambiguous amount: neither 'amount_is_base' nor 'amount_is_quote' "
+                    "was set for an explicit amount. Rejecting trade."
+                )
+                logging.warning(f"[INVEST:{side}] {msg}")
+                log_order_to_cache(symbol, side, amt, price, status="error", message=msg)
+                return None, msg
+
+            if amount_is_base and amount_is_quote:
+                msg = (
+                    "Invalid amount: both 'amount_is_base' and 'amount_is_quote' "
+                    "cannot be true at the same time."
+                )
+                logging.warning(f"[INVEST:{side}] {msg}")
+                log_order_to_cache(symbol, side, amt, price, status="error", message=msg)
+                return None, msg
+
+            # -------------------
+            # BUY ---------------
+            # -------------------
             if side == "BUY":
+
                 if amount_is_base:
-                    # e.g. buy 5 ADA
+                    # Example: buy 5 ADA
                     target = amt
                     logging.info(f"[INVEST:BUY-BASE-AMOUNT] Buying {target} base units")
+                    return target, None
 
-                elif amount_is_quote:
-                    # e.g. spend 0.01 BTC to buy ADA
+                if amount_is_quote:
+                    # Example: spend 0.01 BTC to buy ADA
                     target = amt
                     logging.info(f"[INVEST:BUY-QUOTE-AMOUNT] Spending {target} quote units")
+                    return target, None
 
-                else:
-                    target = amt  # fallback
-
+            # -------------------
+            # SELL --------------
+            # -------------------
             else:  # SELL
+
                 if amount_is_base:
-                    # e.g. sell 0.5 ADA
+                    # Example: sell 0.5 ADA
                     if amt > free_balance:
                         msg = f"Balance insufficient: requested={amt}, available={free_balance}"
                         logging.warning(f"[INVEST:SELL-BASE-AMOUNT] {msg}")
                         log_order_to_cache(symbol, side, amt, price, status="error", message=msg)
                         return None, msg
-
                     target = amt
                     logging.info(f"[INVEST:SELL-BASE-AMOUNT] Selling {target} base units")
+                    return target, None
 
-                elif amount_is_quote:
-                    # e.g. sell enough ADA to receive 0.01 BTC
+                if amount_is_quote:
+                    # Example: sell enough ADA to receive 0.01 BTC
                     if not price:
                         msg = "Missing price for quote-based sell"
                         logging.warning(f"[INVEST:SELL-QUOTE-AMOUNT] {msg}")
@@ -176,20 +205,25 @@ def resolve_trade_amount(
                         log_order_to_cache(symbol, side, base_equiv, price, status="error", message=msg)
                         return None, msg
 
-                    target = base_equiv
                     logging.info(f"[INVEST:SELL-QUOTE-AMOUNT] Selling {base_equiv} base (≈{amt} quote)")
+                    return base_equiv, None
 
-                else:
-                    target = amt  # fallback
+            # Should never reach here
+            msg = "Internal error: resolve_trade_amount failed to match any BUY/SELL branch"
+            logging.error(msg)
+            return None, msg
 
-            return target, None
-
-        # --- Percentage path ---
+        # ============================
+        # PERCENTAGE AMOUNT (pct != None)
+        # ============================
         if pct is not None:
             resolved_amt = quantize_down(free_balance * pct, "0.00000001")
             logging.info(f"[INVEST:{side}-PERCENTAGE] Using pct={float(pct)}, resolved_amt={resolved_amt}")
             return resolved_amt, None
 
+        # ============================
+        # NO AMOUNT OR PERCENTAGE
+        # ============================
         msg = "Neither amount nor percentage provided"
         logging.warning(f"[INVEST:{side}] {msg}")
         log_order_to_cache(symbol, side, "?", "?", status="error", message=msg)
