@@ -90,14 +90,29 @@ Rules:
 
 
 ## Summary Table: Six Valid Trading Inputs
-| Field Name        | Side | Meaning                             | Example                  |
+
+Example with BTCUSDT pair
+
+| Field Name        | Side | Meaning                             | Example with BTCUSDT     |
 | ----------------- | ---- | ----------------------------------- | ------------------------ |
 | buy_quote_amount  | BUY  | Spend fixed amount of quote asset   | Buy BTC with 100 USDT    |
 | buy_quote_pct     | BUY  | Spend % of quote balance            | Buy BTC with 50% of USDT |
-| buy_base_amount   | BUY  | Buy fixed base amount               | Buy 5 ADA                |
+| buy_base_amount   | BUY  | Buy fixed base amount               | Buy 0.01 BTC with USDT   |
 | sell_base_amount  | SELL | Sell fixed base amount              | Sell 0.05 BTC            |
-| sell_base_pct     | SELL | Sell % of base holdings             | Sell 80% of ADA          |
+| sell_base_pct     | SELL | Sell % of base holdings             | Sell 80% of BTC          |
 | sell_quote_amount | SELL | Sell enough base to receive X quote | Sell BTC worth 20 USDT   |
+
+
+Example with ADABTC pair
+
+| Field Name        | Side | Meaning                             | Example with ADABTC      |
+| ----------------- | ---- | ----------------------------------- | ------------------------ |
+| buy_quote_amount  | BUY  | Spend fixed amount of quote asset   | Buy ADA with 0.01 BTC    |
+| buy_quote_pct     | BUY  | Spend % of quote balance            | Buy ADA with 50% of BTC  |
+| buy_base_amount   | BUY  | Buy fixed base amount               | Buy 77 ADA with BTC      |
+| sell_base_amount  | SELL | Sell fixed base amount              | Sell 125 ADA to BTC      |
+| sell_base_pct     | SELL | Sell % of base holdings             | Sell 80% of ADA to BTC   |
+| sell_quote_amount | SELL | Sell enough base to receive X quote | Sell ADA worth 0.01 BTC  |
 
 
 
