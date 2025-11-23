@@ -32,12 +32,12 @@ ALLOWED_SYMBOLS = [
 ALLOWED_FIELDS = {
     "action",
     "symbol",
-    "buy_funds_pct",
-    "buy_funds_amount",
-    "buy_crypto_amount",
-    "sell_crypto_pct",
-    "sell_crypto_amount",
-    "sell_funds_amount",
+    "buy_quote_pct",
+    "buy_quote_amount",
+    "buy_base_amount",
+    "sell_base_pct",
+    "sell_base_amount",
+    "sell_quote_amount",
     "type",
     "leverage",
     "client_secret"

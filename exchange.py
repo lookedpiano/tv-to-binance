@@ -23,7 +23,7 @@ from utils import (
 # -------------------------
 def get_symbol_filters(symbol: str):
     """
-    Get symbol trading filters from Redis cache; fallback to REST
+    Get symbol trading filters from Redis cache; fallback to REST.
     """
     # 1) Try cache first
     filters = get_cached_symbol_filters(symbol)
@@ -53,7 +53,7 @@ def get_symbol_filters(symbol: str):
 def get_current_price(symbol: str):
     """
     Return current price using the WebSocket cache first.
-    Fallback to REST once if cache is cold (e.g., right after restart).
+    Fallback to REST once if cache is cold.
     """
     # 1) Try cached price (no REST hit)
     price = get_cached_price(symbol)
@@ -68,19 +68,22 @@ def get_current_price(symbol: str):
         price = Decimal(data["price"])
         logging.info(f"[PRICE:REST] {symbol}: {price}")
         return price
+
     except ClientError as e:
         logging.error(f"[PRICE:REST] ClientError while fetching price for {symbol}: {e.error_message}")
         if e.status_code in (418, 429) or e.error_code in (-1003,):
             logging.warning(f"Rate limit or temp block for {symbol}: <{e.error_message}>")
             return None
         return None
+
     except Exception as e:
         logging.exception(f"[PRICE:REST] Unexpected error fetching price for {symbol}: {e}")
         return None
 
+
 def get_balances():
     """
-    Get account balances from Redis cache; fallback to REST if missing or incomplete.
+    Get account balances from Redis cache; fallback to REST.
     """
     # 1) Try cached balances first
     cached = get_cached_balances()
@@ -110,9 +113,9 @@ def place_spot_market_order(symbol, side, quantity):
     """
     Place a MARKET order. Quantity must be base asset amount.
     """
-    # use str(quantity) to avoid float precision
     client = get_client()
-    return client.new_order(symbol=symbol, side=side, type="MARKET", quantity=str(quantity))
+    return client.new_order(symbol=symbol, side=side, type="MARKET", quantity=str(quantity))  # use str(quantity) to avoid float precision
+
 
 def resolve_trade_amount(
     symbol: str,
@@ -121,52 +124,61 @@ def resolve_trade_amount(
     amt: Decimal | None,
     pct: Decimal | None,
     price: Decimal | None = None,
-    amt_in_crypto: bool = False,
-    amt_in_funds: bool = False,
+    amount_is_base: bool = False,
+    amount_is_quote: bool = False,
 ) -> tuple[Decimal | None, str | None]:
     """
     Resolves the target trade amount based on the provided parameters and context.
-    Logs directly to the order cache on expected validation failures.
+    - amount_is_base  → amount is expressed in base-asset units
+    - amount_is_quote → amount is expressed in quote-asset units
     """
     try:
         # --- Explicit amount path ---
         if amt is not None:
             if side == "BUY":
-                if amt_in_crypto:
+                if amount_is_base:
                     # e.g. buy 5 ADA
                     target = amt
-                    logging.info(f"[INVEST:BUY-CRYPTO-AMOUNT] Buying {target} base units")
-                elif amt_in_funds:
-                    # e.g. spend 10 USDT to buy base
+                    logging.info(f"[INVEST:BUY-BASE-AMOUNT] Buying {target} base units")
+
+                elif amount_is_quote:
+                    # e.g. spend 0.01 BTC to buy ADA
                     target = amt
-                    logging.info(f"[INVEST:BUY-FUNDS-AMOUNT] Spending {target} quote")
+                    logging.info(f"[INVEST:BUY-QUOTE-AMOUNT] Spending {target} quote units")
+
                 else:
                     target = amt  # fallback
+
             else:  # SELL
-                if amt_in_crypto:
-                    # e.g. sell 0.001 BTC
+                if amount_is_base:
+                    # e.g. sell 0.5 ADA
                     if amt > free_balance:
                         msg = f"Balance insufficient: requested={amt}, available={free_balance}"
-                        logging.warning(f"[INVEST:SELL-CRYPTO-AMOUNT] {msg}")
+                        logging.warning(f"[INVEST:SELL-BASE-AMOUNT] {msg}")
                         log_order_to_cache(symbol, side, amt, price, status="error", message=msg)
                         return None, msg
+
                     target = amt
-                    logging.info(f"[INVEST:SELL-CRYPTO-AMOUNT] Selling {target} base units")
-                elif amt_in_funds:
-                    # e.g. sell BTC worth 6 USDT
+                    logging.info(f"[INVEST:SELL-BASE-AMOUNT] Selling {target} base units")
+
+                elif amount_is_quote:
+                    # e.g. sell enough ADA to receive 0.01 BTC
                     if not price:
-                        msg = "Missing price for funds-based sell"
-                        logging.warning(f"[INVEST:SELL-FUNDS-AMOUNT] {msg}")
+                        msg = "Missing price for quote-based sell"
+                        logging.warning(f"[INVEST:SELL-QUOTE-AMOUNT] {msg}")
                         log_order_to_cache(symbol, side, "?", "?", status="error", message=msg)
                         return None, msg
-                    crypto_equiv = amt / price
-                    if crypto_equiv > free_balance:
-                        msg = f"Balance insufficient: requested={crypto_equiv}, available={free_balance}"
-                        logging.warning(f"[INVEST:SELL-FUNDS-AMOUNT] {msg}")
-                        log_order_to_cache(symbol, side, crypto_equiv, price, status="error", message=msg)
+
+                    base_equiv = amt / price
+                    if base_equiv > free_balance:
+                        msg = f"Balance insufficient: requested={base_equiv}, available={free_balance}"
+                        logging.warning(f"[INVEST:SELL-QUOTE-AMOUNT] {msg}")
+                        log_order_to_cache(symbol, side, base_equiv, price, status="error", message=msg)
                         return None, msg
-                    target = crypto_equiv
-                    logging.info(f"[INVEST:SELL-FUNDS-AMOUNT] Selling {crypto_equiv} base (≈{amt} quote)")
+
+                    target = base_equiv
+                    logging.info(f"[INVEST:SELL-QUOTE-AMOUNT] Selling {base_equiv} base (≈{amt} quote)")
+
                 else:
                     target = amt  # fallback
 
@@ -187,27 +199,34 @@ def resolve_trade_amount(
         logging.warning(f"[ORDER LOG] Failed to log resolve_trade_amount error: {e}")
         return None, f"resolve_trade_amount internal error: {e}"
 
+
 def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decimal, place_order_fn):
     """
     Place an order safely with unified exception handling and logging.
     """
     try:
         resp = place_order_fn(symbol, side, qty)
+
     except ClientError as e:
         msg = e.error_message.lower() if e.error_message else ""
         code = e.error_code
         status = e.status_code
+
         if status in (418, 429) or code in (-1003,):
             logging.error(f"Binance rate limit hit ({status}/{code}): {e.error_message}")
             return {"error": f"Binance request limit hit ({status})"}, 429
+
         if "notional" in msg or code in (-1013,):
             logging.error("Trade rejected: below Binance min_notional")
             return {"error": "Trade rejected: below Binance min_notional"}, 400
+
         logging.exception(f"Order placement failed: {e}")
         return {"error": f"Order failed: {e.error_message}"}, 400
+
     except ServerError as e:
         logging.error(f"Binance server error: {e}")
         return {"error": "Binance server error"}, 502
+
     except Exception as e:
         logging.exception(f"Unexpected order error: {e}")
         return {"error": f"Unexpected order error: {str(e)}"}, 500

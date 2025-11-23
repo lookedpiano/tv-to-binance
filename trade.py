@@ -34,16 +34,22 @@ def execute_trade(
     side: str,
     pct=None,
     amt=None,
-    amt_in_crypto=False,
-    amt_in_funds=False,
+    amount_is_base=False,
+    amount_is_quote=False,
     trade_type="SPOT",
     place_order_fn=None,
 ):
     """
     Unified trade executor for SPOT; handles buy/sell, quantity math, filter validation, and order placement.
+
+    amount_is_base  -> amt is specified in BASE ASSET units  (e.g. buy 2 SOL)
+    amount_is_quote -> amt is specified in QUOTE ASSET units (e.g. spend 0.01 BTC)
     """
     try:
-        logging.info(f"[EXECUTE] side={side}, pct={pct}, amt={amt}, amt_in_crypto={amt_in_crypto}, amt_in_funds={amt_in_funds}")
+        logging.info(
+            f"[EXECUTE] side={side}, pct={pct}, amt={amt}, "
+            f"amount_is_base={amount_is_base}, amount_is_quote={amount_is_quote}"
+        )
 
         # === 1. Price retrieval (with one retry) ===
         price = get_current_price(symbol)
@@ -55,7 +61,7 @@ def execute_trade(
             message = f"No price available for {symbol}. Aborting trade."
             logging.warning(f"[EXECUTE] {message}")
             try:
-                log_order_to_cache(symbol, side or "?", "?", "?",status="error", message=message)
+                log_order_to_cache(symbol, side or "?", "?", "?", status="error", message=message)
             except Exception as e:
                 logging.warning(f"[ORDER LOG] Failed to log missing price error: {e}")
             return {"error": message}, 200
@@ -66,7 +72,7 @@ def execute_trade(
             message = f"Filters unavailable for {symbol}"
             logging.warning(f"[EXECUTE] {message}")
             try:
-                log_order_to_cache(symbol, side or "?", "?", price,status="error", message=message)
+                log_order_to_cache(symbol, side or "?", "?", price, status="error", message=message)
             except Exception as e:
                 logging.warning(f"[ORDER LOG] Failed to log missing filters error: {e}")
             return {"error": message}, 200
@@ -76,6 +82,7 @@ def execute_trade(
         step_size = Decimal(filters.get("step_size", "0"))
         min_qty = Decimal(filters.get("min_qty", "0"))
         min_notional = Decimal(filters.get("min_notional", "0"))
+
         if not all([step_size, min_qty, min_notional]):
             message = (
                 f"Incomplete filters for {symbol}: "
@@ -83,7 +90,7 @@ def execute_trade(
             )
             logging.warning(f"[EXECUTE] {message}")
             try:
-                log_order_to_cache(symbol, side or "?", "?", price,status="error", message=message)
+                log_order_to_cache(symbol, side or "?", "?", price, status="error", message=message)
             except Exception as e:
                 logging.warning(f"[ORDER LOG] Failed to log incomplete filters error: {e}")
             return {"error": message}, 200
@@ -95,7 +102,7 @@ def execute_trade(
             message = f"Failed to parse base/quote assets for {symbol}: {e}"
             logging.error(f"[EXECUTE] {message}")
             try:
-                log_order_to_cache(symbol, side or "?", "?", price,status="error", message=message)
+                log_order_to_cache(symbol, side or "?", "?", price, status="error", message=message)
             except Exception as log_err:
                 logging.warning(f"[ORDER LOG] Failed to log symbol-parse error: {log_err}")
             return {"error": message}, 400
@@ -109,18 +116,18 @@ def execute_trade(
             message = f"Unknown side {side}. Must be BUY or SELL."
             logging.error(f"[EXECUTE] {message}")
             try:
-                log_order_to_cache(symbol, side or "?", "?", price,status="error", message=message)
+                log_order_to_cache(symbol, side or "?", "?", price, status="error", message=message)
             except Exception as e:
                 logging.warning(f"[ORDER LOG] Failed to log invalid side error: {e}")
             return {"error": message}, 400
-        
+
         balances = get_balances() or {}
         free_balance = balances.get(balance_asset, Decimal("0"))
         if free_balance <= 0:
             message = f"No available {balance_asset} balance to {side.lower()}."
             logging.warning(f"[EXECUTE] {message}")
             try:
-                log_order_to_cache(symbol, side, "?", price,status="error", message=message)
+                log_order_to_cache(symbol, side, "?", price, status="error", message=message)
             except Exception as e:
                 logging.warning(f"[ORDER LOG] Failed to log balance error: {e}")
             return {"warning": message}, 200
@@ -133,37 +140,36 @@ def execute_trade(
             amt=amt,
             pct=pct,
             price=price,
-            amt_in_crypto=amt_in_crypto,
-            amt_in_funds=amt_in_funds,
+            amount_is_base=amount_is_base,
+            amount_is_quote=amount_is_quote,
         )
         if error_msg:
             return {"error": error_msg}, 200
 
         # === 5. Compute quantity ===
-        # target_amount here may refer to base or quote, depending on flags
         if side == "BUY":
-            if amt_in_crypto:
-                # User specified base asset directly, e.g. buy 1.2 ETH
+            if amount_is_base:
+                # The user specified base asset amount directly
                 raw_qty = amt
                 notional = raw_qty * price
-                logging.info(f"[BUY:CRYPTO-AMOUNT] qty={raw_qty} ({notional:.2f} quote value)")
+                logging.info(f"[BUY:BASE-AMOUNT] qty={raw_qty} ({notional:.2f} quote value)")
             else:
-                # Normal path: buy_funds_amount or buy_funds_pct (in quote)
+                # User specified quote amount / percentage
                 raw_qty = target_amount / price
                 notional = target_amount
-                logging.info(f"[BUY:FUNDS-{('PCT' if pct else 'AMT')}] notional≈{notional:.2f}, qty={raw_qty}")
+                logging.info(f"[BUY:QUOTE-{('PCT' if pct else 'AMT')}] notional≈{notional:.2f}, qty={raw_qty}")
 
         elif side == "SELL":
-            if amt_in_funds:
-                # User specified desired quote amount, e.g. sell BTC worth 100 USDT
+            if amount_is_quote:
+                # User specified desired quote amount directly
                 raw_qty = amt / price
                 notional = amt
-                logging.info(f"[SELL:FUNDS-AMOUNT] notional≈{notional:.2f}, qty={raw_qty}")
+                logging.info(f"[SELL:QUOTE-AMOUNT] notional≈{notional:.2f}, qty={raw_qty}")
             else:
-                # Normal path: sell_crypto_amount or sell_crypto_pct (in base)
+                # User specified base asset amount / pct
                 raw_qty = target_amount
                 notional = raw_qty * price
-                logging.info(f"[SELL:CRYPTO-{('PCT' if pct else 'AMT')}] qty={raw_qty}, notional≈{notional:.2f}")
+                logging.info(f"[SELL:BASE-{('PCT' if pct else 'AMT')}] qty={raw_qty}, notional≈{notional:.2f}")
         else:
             return {"error": f"Unknown side {side}"}, 400
 

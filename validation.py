@@ -144,12 +144,12 @@ def validate_order_qty(
 def validate_and_normalize_trade_fields(
     action: str,
     is_buy: bool,
-    buy_funds_pct_raw,
-    buy_funds_amount_raw,
-    buy_crypto_amount_raw,
-    sell_crypto_pct_raw,
-    sell_crypto_amount_raw,
-    sell_funds_amount_raw
+    buy_quote_pct_raw,
+    buy_quote_amount_raw,
+    buy_base_amount_raw,
+    sell_base_pct_raw,
+    sell_base_amount_raw,
+    sell_quote_amount_raw,
 ):
     """
     Validates and normalizes trade fields for BUY or SELL.
@@ -162,24 +162,24 @@ def validate_and_normalize_trade_fields(
     - Amount must be positive Decimal.
 
     Returns:
-        pct, amt, amt_in_crypto, amt_in_funds, error_response
+        pct, amt, amount_is_base, amount_is_quote, error_response
     """
 
-    # --- Step 1: pick the relevant group ---
+    # --- Step 1: relevant group ---
     if is_buy:
         relevant = {
-            "buy_funds_pct": buy_funds_pct_raw,
-            "buy_funds_amount": buy_funds_amount_raw,
-            "buy_crypto_amount": buy_crypto_amount_raw,
+            "buy_quote_pct": buy_quote_pct_raw,
+            "buy_quote_amount": buy_quote_amount_raw,
+            "buy_base_amount": buy_base_amount_raw,
         }
     else:
         relevant = {
-            "sell_crypto_pct": sell_crypto_pct_raw,
-            "sell_crypto_amount": sell_crypto_amount_raw,
-            "sell_funds_amount": sell_funds_amount_raw,
+            "sell_base_pct": sell_base_pct_raw,
+            "sell_base_amount": sell_base_amount_raw,
+            "sell_quote_amount": sell_quote_amount_raw,
         }
 
-    # --- Step 2: check how many were provided ---
+    # --- Step 2: ensure exactly one field is provided ---
     non_none = {k: v for k, v in relevant.items() if v is not None}
 
     if len(non_none) == 0:
@@ -194,26 +194,30 @@ def validate_and_normalize_trade_fields(
             jsonify({"error": f"Please provide only one of: {', '.join(relevant.keys())}."}), 400
         )
 
-    # --- Step 3: normalize ---
     field_name, raw_value = next(iter(non_none.items()))
     logging.info(f"[FIELDS] Using {field_name}={raw_value}")
 
-    # Percentage case
+    # --- Step 3: pct field ---
     if "pct" in field_name:
         try:
             pct = Decimal(str(raw_value))
             if not (Decimal("0") < pct <= Decimal("1")):
                 raise ValueError
-            # For BUY pct → funds-based, for SELL pct → crypto-based
-            amt_in_funds = is_buy
-            amt_in_crypto = not is_buy
-            return pct, None, amt_in_crypto, amt_in_funds, None
+
+            # pct semantics:
+            # BUY → percent of quote
+            # SELL → percent of base
+            amount_is_quote = is_buy
+            amount_is_base = not is_buy
+
+            return pct, None, amount_is_base, amount_is_quote, None
+
         except Exception:
             return None, None, False, False, (
                 jsonify({"error": f"{field_name} must be a number between 0 and 1."}), 400
             )
 
-    # Amount case
+    # --- Step 4: explicit amount ---
     try:
         amt = Decimal(str(raw_value))
         if amt <= 0:
@@ -223,11 +227,11 @@ def validate_and_normalize_trade_fields(
             jsonify({"error": f"{field_name} must be a positive number."}), 400
         )
 
-    # --- Step 4: flag mapping ---
-    amt_in_crypto = field_name in ("buy_crypto_amount", "sell_crypto_amount")
-    amt_in_funds = field_name in ("buy_funds_amount", "sell_funds_amount")
+    # --- Step 5: flag mapping ---
+    amount_is_base = field_name in ("buy_base_amount", "sell_base_amount")
+    amount_is_quote = field_name in ("buy_quote_amount", "sell_quote_amount")
 
-    return None, amt, amt_in_crypto, amt_in_funds, None
+    return None, amt, amount_is_base, amount_is_quote, None
 
 def validate_fields(data: dict):
     unknown_fields = set(data.keys()) - ALLOWED_FIELDS

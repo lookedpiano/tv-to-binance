@@ -52,12 +52,15 @@ def webhook_handler():
         try:
             action = data.get("action", "").strip().upper()
             symbol = data.get("symbol", "").strip().upper()
-            buy_funds_pct_raw = data.get("buy_funds_pct")
-            buy_funds_amount_raw = data.get("buy_funds_amount")
-            buy_crypto_amount_raw = data.get("buy_crypto_amount")
-            sell_crypto_pct_raw = data.get("sell_crypto_pct")
-            sell_crypto_amount_raw = data.get("sell_crypto_amount")
-            sell_funds_amount_raw = data.get("sell_funds_amount")
+
+            buy_quote_pct_raw = data.get("buy_quote_pct")
+            buy_quote_amount_raw = data.get("buy_quote_amount")
+            buy_base_amount_raw = data.get("buy_base_amount")
+
+            sell_base_pct_raw = data.get("sell_base_pct")
+            sell_base_amount_raw = data.get("sell_base_amount")
+            sell_quote_amount_raw = data.get("sell_quote_amount")
+
             trade_type = data.get("type", "SPOT").strip().upper()
         except Exception:
             logging.exception("Failed to extract fields")
@@ -68,12 +71,12 @@ def webhook_handler():
         log_parsed_payload(
             action,
             symbol,
-            buy_funds_pct_raw,
-            buy_funds_amount_raw,
-            buy_crypto_amount_raw,
-            sell_crypto_pct_raw,
-            sell_crypto_amount_raw,
-            sell_funds_amount_raw,
+            buy_quote_pct_raw,
+            buy_quote_amount_raw,
+            buy_base_amount_raw,
+            sell_base_pct_raw,
+            sell_base_amount_raw,
+            sell_quote_amount_raw,
             trade_type
         )
 
@@ -98,10 +101,10 @@ def webhook_handler():
             return jsonify({"error": message}), 400
 
         is_buy = action == "BUY"
-        pct, amt, amt_in_crypto, amt_in_funds, error_response = validate_and_normalize_trade_fields(
+        pct, amt, amount_is_base, amount_is_quote, error_response = validate_and_normalize_trade_fields(
             action, is_buy,
-            buy_funds_pct_raw, buy_funds_amount_raw, buy_crypto_amount_raw,
-            sell_crypto_pct_raw, sell_crypto_amount_raw, sell_funds_amount_raw
+            buy_quote_pct_raw, buy_quote_amount_raw, buy_base_amount_raw,
+            sell_base_pct_raw, sell_base_amount_raw, sell_quote_amount_raw
         )
         if error_response:
             message = error_response[0].get("error", "Invalid trade field")
@@ -113,8 +116,8 @@ def webhook_handler():
             side="BUY" if is_buy else "SELL",
             pct=pct,
             amt=amt,
-            amt_in_crypto=amt_in_crypto,
-            amt_in_funds=amt_in_funds,
+            amount_is_base=amount_is_base,
+            amount_is_quote=amount_is_quote,
             trade_type=trade_type,
             place_order_fn=place_spot_market_order
         )

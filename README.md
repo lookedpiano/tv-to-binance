@@ -18,82 +18,86 @@ It is intended solely for **educational and demonstration purposes** as part of 
 
 ## Usage
 
-1. Create a TradingView account and define your own alerts
-2. Create a Binance account and Binance API key in your own account with Reading and Spot & Margin Trading restrictions
-3. Create a Render account and set up a new web service with this Git repository as the source code, as well as a new Redis instance
+1. Create a TradingView account and define your own alerts. 
+2. Create a Binance account and API key with **Read** + **Spot/Margin Trade** permissions  
+3. Create a Render account and deploy:
+   - This Flask app as a web service  
+   - A Managed Redis instance
 
 
 
 ## Purpose
 
-The goal is to **demonstrate in a practical manner** to clients how automated trading can be implemented technically as part of my consulting services.  
-The focus is on **education and self-empowerment**—not on the execution of trades by me.
+The goal is to **demonstrate in a practical manner** how automated trading works from a technical perspective.  
+The focus is on **education and self-empowerment**, not on trade execution as a service.
 
 
 
-## Example alert
+## Example TradingView Alerts
 
-TradingView alert message to buy with a fixed amount of 1000 USDT or to sell 80 % of the base asset:
+Buy with fixed quote amount (e.g. spend 1000 USDT) or sell 80% of your base asset (e.g. 80% of ADA holdings)
 {
   "action": "{{strategy.order.action}}",
   "symbol": "{{ticker}}",
-  "buy_funds_amount": "1000",
-  "sell_crypto_pct": "0.8",
+  "buy_quote_amount": "1000",
+  "sell_base_pct": "0.8",
   "client_secret": "-your client secret-"
 }
 
-TradingView alert message to buy 34 % of available USDT or to sell a fixed amount of 100 of the base asset:
+Buy 34% of quote balance (e.g of available USDT) OR sell exactly 100 of a base asset
 {
   "action": "{{strategy.order.action}}",
   "symbol": "{{ticker}}",
-  "buy_funds_pct": "0.34",
-  "sell_crypto_amount": "100",
+  "buy_quote_pct": "0.34",
+  "sell_base_amount": "100",
   "client_secret": "-your client secret-"
 }
 
-TradingView alert message to buy 77 ADAs directly or to sell ETH worth 150 USDT:
+Buy exactly 77 units of the base asset (e.g. ADAs) OR sell enough base to receive 150 USDT worth of quote
 {
   "action": "{{strategy.order.action}}",
   "symbol": "{{ticker}}",
-  "buy_crypto_amount": "77",
-  "sell_funds_amount": "150",
-  "client_secret": "-your client secret-"
+  "buy_base_amount": "77",
+  "sell_quote_amount": "150",
+  "client_secret": "-your client_secret-"
 }
 
-Legend:
-- action: Returns the string "buy" or "sell" for the executed order.
-- symbol: Returns the trading pair, e.g. BTCUSDT, ETHUSDC, ADAUSDT, etc.
-- buy_funds_pct: A decimal fraction (0 < buy_funds_pct ≤ 1) indicating what fraction of your available quote asset balance (e.g. USDT or USDC) should be used for the buy order (Example: 0.05 = invest 5 % of your available quote balance.).
-- buy_funds_amount: An explicit numeric value specifying the exact quote asset amount (e.g. USDT) to spend on the buy order. Must not exceed your available quote asset balance.
-- buy_crypto_amount: An explicit numeric value specifying the exact base asset amount to buy (e.g. buy 77 ADA or 1.2 ETH). The system automatically calculates how much quote asset (USDT, USDC, etc.) is needed for the purchase based on the current market price.
-- sell_crypto_pct: A decimal fraction (0 < sell_crypto_pct ≤ 1) indicating what fraction of your available base asset (e.g. ADA in ADAUSDT, ETH in ETHUSDC) should be sold. (Example: 0.25 = sell 25 % of your ADA holdings.)
-- sell_crypto_amount: An explicit numeric value specifying the exact base asset amount to sell. Must not exceed your available base asset balance.
-- sell_funds_amount: An explicit numeric value specifying the exact quote asset amount you want to receive from the sale (e.g. sell ETH worth 150 USDT). The system automatically calculates how much of the base asset must be sold to reach this target.
-- client_secret: Defines your personally defined client secret for authentication.
+## Legend
+
+Fields common to both BUY and SELL
+- action – TradingView's BUY or SELL
+- symbol – Trading pair symbol (e.g. BTCUSDT, ADABTC, ETHBTC, SOLUSDC, etc.)
+- client_secret – Your personal authentication secret
+
+BUY fields
+Choose exactly one of:
+- buy_quote_pct - Fraction of your quote asset balance to spend.
+- buy_quote_amount - Exact amount of quote asset to spend.
+- buy_base_amount - Exact number of base asset units to buy.
+
+SELL fields
+Choose exactly one of:
+- sell_base_pct - Sell a fraction of your base asset
+- sell_base_amount - Sell an exact base asset amount
+- sell_quote_amount - Sell enough base to receive a target amount of quote asset.
 
 Rules:
-- If the action is "buy" or "sell", exactly one of the corresponding fields must be supplied:
-  - For BUY orders:
-    - buy_funds_pct – percentage of quote balance to use, or
-    - buy_funds_amount – exact quote amount to spend, or
-    - buy_crypto_amount – exact base asset amount to buy
-  - For SELL orders:
-    - sell_crypto_pct – percentage of base holdings to sell, or
-    - sell_crypto_amount – exact base asset amount to sell, or
-    - sell_funds_amount – target quote amount to receive
-- If multiple fields for the same side are present → payload is rejected.
-- If none of the valid fields are provided → payload is rejected.
+- Exactly one field must be supplied per side
+- No mixing multiple BUY fields
+- No mixing multiple SELL fields
+- Missing required fields → webhook rejected
 
 
 
-## ⚙️ Six trading input types
-Type                  Direction   Meaning                                       Example
-buy_funds_amount      Buy         Spend a fixed amount of funds                 Buy BTC with 100 USDT
-buy_funds_pct         Buy         Spend a % of available funds                  Buy BTC with 50 % of USDT
-buy_crypto_amount     Buy         Acquire a fixed number of coins               Buy 5 ADA
-sell_crypto_amount    Sell        Sell a fixed number of coins                  Sell 0.05 BTC
-sell_crypto_pct       Sell        Sell a % of your holdings                     Sell 80 % of ADA
-sell_funds_amount     Sell        Sell enough to get a fixed amount of funds    Sell BTC worth 20 USDT
+## Summary Table: Six Valid Trading Inputs
+| Field Name        | Side | Meaning                             | Example                  |
+| ----------------- | ---- | ----------------------------------- | ------------------------ |
+| buy_quote_amount  | BUY  | Spend fixed amount of quote asset   | Buy BTC with 100 USDT    |
+| buy_quote_pct     | BUY  | Spend % of quote balance            | Buy BTC with 50% of USDT |
+| buy_base_amount   | BUY  | Buy fixed base amount               | Buy 5 ADA                |
+| sell_base_amount  | SELL | Sell fixed base amount              | Sell 0.05 BTC            |
+| sell_base_pct     | SELL | Sell % of base holdings             | Sell 80% of ADA          |
+| sell_quote_amount | SELL | Sell enough base to receive X quote | Sell BTC worth 20 USDT   |
 
 
 

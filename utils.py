@@ -54,50 +54,49 @@ def log_webhook_delimiter(stage: str):
 def log_parsed_payload(
     action: str,
     symbol: str,
-    buy_funds_pct: str,
-    buy_funds_amount: str,
-    buy_crypto_amount: str,
-    sell_crypto_pct: str,
-    sell_crypto_amount: str,
-    sell_funds_amount: str,
+    buy_quote_pct,
+    buy_quote_amount,
+    buy_base_amount,
+    sell_base_pct,
+    sell_base_amount,
+    sell_quote_amount,
     trade_type: str
 ):
     """
     Log a parsed TradingView webhook payload summary.
     Shows only the field(s) that are actually provided (non-None).
     """
+
     base_msg = f"[PARSE] action={action}, symbol={symbol}, type={trade_type}"
 
     if action == "BUY":
         provided = {
-            "buy_funds_pct": buy_funds_pct,
-            "buy_funds_amount": buy_funds_amount,
-            "buy_crypto_amount": buy_crypto_amount,
+            "buy_quote_pct": buy_quote_pct,
+            "buy_quote_amount": buy_quote_amount,
+            "buy_base_amount": buy_base_amount,
         }
     elif action == "SELL":
         provided = {
-            "sell_crypto_pct": sell_crypto_pct,
-            "sell_crypto_amount": sell_crypto_amount,
-            "sell_funds_amount": sell_funds_amount,
+            "sell_base_pct": sell_base_pct,
+            "sell_base_amount": sell_base_amount,
+            "sell_quote_amount": sell_quote_amount,
         }
     else:
         logging.info(base_msg)
         return
 
-    # Filter to only include fields that are not None
+    # Only show the provided field(s)
     non_none = {k: v for k, v in provided.items() if v is not None}
 
-    # Append each non-None field in key=value form
     for k, v in non_none.items():
         base_msg += f", {k}={v}"
 
     logging.info(base_msg)
 
+
 def require_admin_key():
     """Validate admin key from header."""
-    provided_key = (
-        request.headers.get("X-Admin-Key")
-    )
+    provided_key = request.headers.get("X-Admin-Key")
     if not ADMIN_API_KEY or provided_key != ADMIN_API_KEY:
         logging.warning(f"[SECURITY] Unauthorized access attempt to {request.path}")
         return jsonify({"error": "Unauthorized"}), 401
@@ -111,7 +110,7 @@ def require_admin_key():
 def split_symbol(symbol: str) -> tuple[str, str]:
     """
     Split a symbol like 'BTCUSDT' into ('BTC', 'USDT').
-    Supports USDT and USDC.
+    Uses known quotes as fallback.
     """
     known_quotes = ("USDT", "USDC", "BTC", "ETH", "BNB", "XRP", "SOL", "TRX", "DOGE", "ADA", "ZEC")
     for quote in known_quotes:
@@ -197,5 +196,4 @@ def sanitize_filters(filters: dict) -> dict:
         "min_qty": _safe_get("min_qty"),
         "min_notional": _safe_get("min_notional"),
     }
-
     return sanitized
