@@ -12,13 +12,18 @@ ALLOWED_SYMBOLS = [
     # USDT pairs
     "BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "ONDOUSDT",
     "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT", "SOLUSDT",
+    "TRXUSDT", "ZECUSDT",
 
     # USDC pairs
     "BTCUSDC", "ETHUSDC", "ADAUSDC", "DOGEUSDC", "ONDOUSDC",
     "PEPEUSDC", "XRPUSDC", "WIFUSDC", "BNBUSDC", "SOLUSDC",
+    "TRXUSDC", "ZECUSDC",
 
     # Crypto pairs
-    "ADABTC", "ADAETH", "SOLBTC", "SOLETH"
+    "ETHBTC",
+    "ADABTC", "ADAETH",
+    "SOLBTC", "SOLETH",
+    "ZECBTC", "ZECETH"
 ]
 
 # -------------------------

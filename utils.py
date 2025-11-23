@@ -113,7 +113,7 @@ def split_symbol(symbol: str) -> tuple[str, str]:
     Split a symbol like 'BTCUSDT' into ('BTC', 'USDT').
     Supports USDT and USDC.
     """
-    known_quotes = ("USDT", "USDC")
+    known_quotes = ("USDT", "USDC", "BTC", "ETH", "BNB", "XRP", "SOL", "TRX", "DOGE", "ADA", "ZEC")
     for quote in known_quotes:
         if symbol.endswith(quote):
             return symbol[:-len(quote)], quote
