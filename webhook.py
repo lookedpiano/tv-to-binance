@@ -107,7 +107,14 @@ def webhook_handler():
             sell_base_pct_raw, sell_base_amount_raw, sell_quote_amount_raw
         )
         if error_response:
-            message = "Invalid trade field."
+            response_obj, status_code = error_response
+
+            try:
+                # Extract actual error message from the Response object
+                error_json = response_obj.get_json(silent=True) or {}
+                message = error_json.get("error", "you got a bug sir...")
+            except Exception:
+                message = "bug - invalid trade field?"
             logging.error(message)
             safe_log_webhook_error(symbol, action, message)
             return error_response
