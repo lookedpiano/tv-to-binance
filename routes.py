@@ -310,6 +310,11 @@ def public_alerts():
     try:
         client_secret = request.headers.get("X-Public-Auth")
 
+        logging.info('well...')
+        logging.info(client_secret)
+        booleooon = not client_secret or client_secret != INTERNAL_PUBLIC_ALERTS_SECRET
+        logging.info(booleooon)
+
         if not client_secret or client_secret != INTERNAL_PUBLIC_ALERTS_SECRET:
             logging.warning("[PUBLIC ALERTS] Unauthorized attempt")
             return jsonify({"error": "Unauthorized"}), 401
