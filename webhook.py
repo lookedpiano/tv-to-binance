@@ -114,7 +114,7 @@ def webhook_handler():
                 error_json = response_obj.get_json(silent=True) or {}
                 message = error_json.get("error", "you got a bug sir...")
             except Exception:
-                message = "bug - invalid trade field?"
+                message = "bug - investigate..."
             logging.error(message)
             safe_log_webhook_error(symbol, action, message)
             return error_response
