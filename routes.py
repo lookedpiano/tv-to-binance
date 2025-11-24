@@ -13,7 +13,7 @@ from binance_data import (
 )
 from utils import should_log_request, load_ip_file, require_admin_key
 from security import verify_before_request_secret
-from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS, INTERNAL_PUBLIC_ALERTS_SECRET
+from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS
 
 routes = Blueprint("routes", __name__)
 
@@ -302,16 +302,22 @@ def cache_summary():
 # ==========================================================
 # ========== ORIGINAL CACHE ENDPOINT =======================
 # ==========================================================
-@routes.route("/public/alerts/<client_secret>", methods=["GET"])
-def public_alerts(client_secret):
+@routes.route("/public/alerts", methods=["GET"])
+def public_alerts():
+    """
+    Returns ALL daily Larsson alerts stored as:
+        larsson_alert:YYYY-MM-DD
+    """
     try:
-        if client_secret != INTERNAL_PUBLIC_ALERTS_SECRET:
-            logging.warning("[PUBLIC ALERTS] Unauthorized path")
-            return jsonify({"error": "Unauthorized"}), 401
-
         r = get_redis()
+
         keys = sorted(r.keys("larsson_alert:*"))
-        alerts = [json.loads(r.get(k)) for k in keys if r.get(k)]
+
+        alerts = []
+        for key in keys:
+            raw = r.get(key)
+            if raw:
+                alerts.append(json.loads(raw))
 
         return jsonify({"alerts": alerts}), 200
 
