@@ -107,7 +107,8 @@ def webhook_handler():
             sell_base_pct_raw, sell_base_amount_raw, sell_quote_amount_raw
         )
         if error_response:
-            message = error_response[0].get("error", "Invalid trade field")
+            message = "Invalid trade field."
+            logging.error(message)
             safe_log_webhook_error(symbol, action, message)
             return error_response
         if not amount_is_base and not amount_is_quote:
