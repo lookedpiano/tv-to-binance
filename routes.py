@@ -302,31 +302,16 @@ def cache_summary():
 # ==========================================================
 # ========== ORIGINAL CACHE ENDPOINT =======================
 # ==========================================================
-@routes.route("/public/alerts", methods=["GET"])
-def public_alerts():
-    """
-    Returns ALL daily Larsson alerts only to authenticated internal clients.
-    """
+@routes.route("/public/alerts/<client_secret>", methods=["GET"])
+def public_alerts(client_secret):
     try:
-        client_secret = request.headers.get("X-Public-Auth")
-
-        logging.info('well...')
-        logging.info(client_secret)
-        booleooon = not client_secret or client_secret != INTERNAL_PUBLIC_ALERTS_SECRET
-        logging.info(booleooon)
-
-        if not client_secret or client_secret != INTERNAL_PUBLIC_ALERTS_SECRET:
-            logging.warning("[PUBLIC ALERTS] Unauthorized attempt")
+        if client_secret != INTERNAL_PUBLIC_ALERTS_SECRET:
+            logging.warning("[PUBLIC ALERTS] Unauthorized path")
             return jsonify({"error": "Unauthorized"}), 401
 
         r = get_redis()
         keys = sorted(r.keys("larsson_alert:*"))
-        alerts = []
-
-        for key in keys:
-            raw = r.get(key)
-            if raw:
-                alerts.append(json.loads(raw))
+        alerts = [json.loads(r.get(k)) for k in keys if r.get(k)]
 
         return jsonify({"alerts": alerts}), 200
 
