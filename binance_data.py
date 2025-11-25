@@ -25,6 +25,7 @@ from config._settings import (
     BINANCE_API_KEY,
     BINANCE_SECRET_KEY,
     ALLOWED_SYMBOLS,
+    WS_EXCLUDED_SUFFIXES,
     REDIS_URL,
 )
 
@@ -38,8 +39,7 @@ def init_all():
     """
     init_client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
     init_redis(REDIS_URL)
-    ws_symbols = filter_symbols_for_ws(ALLOWED_SYMBOLS)
-    start_ws_price_cache(ws_symbols)
+    start_ws_price_cache(ALLOWED_SYMBOLS)
     start_background_cache(ALLOWED_SYMBOLS)
     start_email_polling_thread()
     logging.info("[INIT] Binance client, Redis, WS price cache, and background caches initialized successfully.")
@@ -133,21 +133,22 @@ def _short_binance_error(e):
         text = text.split("{'Content-Type':", 1)[0] + "{...}"
     return text
 
-def filter_symbols_for_ws(symbols: list[str]) -> list[str]:
-    """Exclude symbols ending in USDC, ETH, or BNB for WS price cache."""
-    excluded_suffixes = ("USDC", "ETH", "BNB")
+def is_symbol_ws_excluded(symbol: str) -> bool:
+    """Return True if this symbol should NOT use WebSocket price caching."""
+    return symbol.endswith(WS_EXCLUDED_SUFFIXES)
 
+def filter_symbols_for_ws(symbols: list[str]) -> list[str]:
+    """Return only symbols that should be tracked by WebSocket."""
     filtered = []
     excluded_count = 0
 
     for sym in symbols:
-        if sym.endswith(excluded_suffixes):
+        if is_symbol_ws_excluded(sym):
             excluded_count += 1
         else:
             filtered.append(sym)
 
     logging.info(f"[WS FILTER] Excluding {excluded_count} symbols from WebSocket price cache.")
-
     return filtered
 
 # ==========================================================
@@ -279,9 +280,11 @@ def start_ws_price_cache(symbols: List[str]):
             return
         _ws_started = True
 
+    ws_symbols = filter_symbols_for_ws(symbols)
+
     threading.Thread(target=_log_price_snapshot, name="PriceLogger", daemon=True).start()
-    threading.Thread(target=_ws_loop, args=(symbols,), name="BinanceWSPriceCache", daemon=True).start()
-    threading.Thread(target=_ws_health_monitor, args=(symbols,), name="WSHealthMonitor", daemon=True).start()
+    threading.Thread(target=_ws_loop, args=(ws_symbols,), name="BinanceWSPriceCache", daemon=True).start()
+    threading.Thread(target=_ws_health_monitor, args=(ws_symbols,), name="WSHealthMonitor", daemon=True).start()
     logging.info("[WS] Price cache started")
 
 # ==========================================================

@@ -97,6 +97,15 @@ KNOWN_QUOTES = (
 )
 
 # -------------------------
+# Excluded symbols from WebSocket price caching
+# -------------------------
+WS_EXCLUDED_SUFFIXES = (
+    "USDC",
+    "ETH",
+    "BNB"
+)
+
+# -------------------------
 # Payload fields
 # -------------------------
 ALLOWED_FIELDS = {

@@ -10,6 +10,7 @@ from binance_data import (
     get_cached_symbol_filters,
     fetch_and_cache_balances,
     fetch_and_cache_filters,
+    is_symbol_ws_excluded,
     log_order_to_cache,
     get_client,
 )
@@ -55,13 +56,21 @@ def get_current_price(symbol: str):
     Return current price using the WebSocket cache first.
     Fallback to REST once if cache is cold.
     """
-    # 1) Try cached price (no REST hit)
+
+    # skip WS cache for excluded symbols
+    if is_symbol_ws_excluded(symbol):
+        logging.info(f"[PRICE:REST-ONLY] {symbol} is excluded from WS, fetching via REST")
+        return fetch_price_via_rest(symbol)
+
+    # Normal flow (WS cache first)
     price = get_cached_price(symbol)
     if price is not None:
         logging.info(f"[PRICE:CACHE] {symbol}: {price}")
         return price
 
-    # 2) Fallback: single REST call (rare; only if cache hasn't seen this symbol yet)
+    return fetch_price_via_rest(symbol)
+
+def fetch_price_via_rest(symbol: str):
     try:
         client = get_client()
         data = client.ticker_price(symbol)
@@ -70,10 +79,9 @@ def get_current_price(symbol: str):
         return price
 
     except ClientError as e:
-        logging.error(f"[PRICE:REST] ClientError while fetching price for {symbol}: {e.error_message}")
+        logging.error(f"[PRICE:REST] ClientError for {symbol}: {e.error_message}")
         if e.status_code in (418, 429) or e.error_code in (-1003,):
             logging.warning(f"Rate limit or temp block for {symbol}: <{e.error_message}>")
-            return None
         return None
 
     except Exception as e:
