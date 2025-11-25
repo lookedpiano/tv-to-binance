@@ -19,6 +19,8 @@ ALLOWED_SYMBOLS = [
     "XNOUSDT", "BATUSDT", "DUSKUSDT", "GLMUSDT",
 
     # USDC pairs
+    "BTCUSDC", "ETHUSDC", "ADAUSDC", "DOGEUSDC", "ONDOUSDC",
+    "PEPEUSDC", "XRPUSDC",
 
     # Crypto pairs
     "ETHBTC",
