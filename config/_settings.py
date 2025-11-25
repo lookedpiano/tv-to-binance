@@ -8,35 +8,6 @@ ALLOWED_TRADE_TYPES = {"SPOT"}
 # -------------------------
 # Symbols allowed for trading
 # -------------------------
-ALLOWED_SYMBOLS_DELETE_ME = [
-    # USDT pairs
-    "BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "ONDOUSDT",
-    "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT", "SOLUSDT",
-    "TRXUSDT", "ZECUSDT", "ICPUSDT", "PAXGUSDT", "DASHUSDT",
-    "STRKUSDT", "ASTERUSDT", "AAVEUSDT", "ACTUSDT", "ACXUSDT",
-    "AIXBTUSDT", "ALGOUSDT", "API3USDT", "APTUSDT", "ARUSDT",
-    "ARBUSDT", "ARKMUSDT", "ATOMUSDT", "AVAXUSDT", "AXSUSDT",
-    "BANANAUSDT", "BCHUSDT",
-    
-    # no USDC pairs
-    "XNOUSDT", "BATUSDT", "DUSKUSDT", "GLMUSDT", "AUDIOUSDT",
-    "AXLUSDT",
-
-    # USDC pairs
-
-    # Crypto pairs
-    "ETHBTC",
-    "BNBBTC", "BNBETH",
-    "ADABTC", "ADAETH", "ADABNB",
-    "XRPBTC", "XRPETH", "XRPBNB",
-    "TRXBTC", "TRXETH", "TRXBNB",
-    "SOLBTC", "SOLETH", "SOLBNB",
-    "ZECBTC", "ZECETH",
-    "PAXGBTC",
-    "DOGEBTC",
-    "ALGOBTC",
-]
-
 ALLOWED_SYMBOLS = [
     # USDT pairs
     "BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "ONDOUSDT",
