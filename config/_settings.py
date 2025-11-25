@@ -8,7 +8,7 @@ ALLOWED_TRADE_TYPES = {"SPOT"}
 # -------------------------
 # Symbols allowed for trading
 # -------------------------
-ALLOWED_SYMBOLS_TOTAL = [
+ALLOWED_SYMBOLS = [
     # USDT pairs
     "BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "ONDOUSDT",
     "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT", "SOLUSDT",
