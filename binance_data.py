@@ -38,7 +38,8 @@ def init_all():
     """
     init_client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
     init_redis(REDIS_URL)
-    start_ws_price_cache(ALLOWED_SYMBOLS)
+    ws_symbols = filter_symbols_for_ws(ALLOWED_SYMBOLS)
+    start_ws_price_cache(ws_symbols)
     start_background_cache(ALLOWED_SYMBOLS)
     start_email_polling_thread()
     logging.info("[INIT] Binance client, Redis, WS price cache, and background caches initialized successfully.")
@@ -131,6 +132,23 @@ def _short_binance_error(e):
     if "{'Content-Type':" in text:
         text = text.split("{'Content-Type':", 1)[0] + "{...}"
     return text
+
+def filter_symbols_for_ws(symbols: list[str]) -> list[str]:
+    """Exclude symbols ending in USDC, ETH, or BNB for WS price cache."""
+    excluded_suffixes = ("USDC", "ETH", "BNB")
+
+    filtered = []
+    excluded_count = 0
+
+    for sym in symbols:
+        if sym.endswith(excluded_suffixes):
+            excluded_count += 1
+        else:
+            filtered.append(sym)
+
+    logging.info(f"[WS FILTER] Excluding {excluded_count} symbols from WebSocket price cache.")
+
+    return filtered
 
 # ==========================================================
 # ========== PRICE CACHE (WebSocket) ========================

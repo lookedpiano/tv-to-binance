@@ -8,7 +8,7 @@ ALLOWED_TRADE_TYPES = {"SPOT"}
 # -------------------------
 # Symbols allowed for trading
 # -------------------------
-ALLOWED_SYMBOLS = [
+ALLOWED_SYMBOLS_DELETE_ME = [
     # USDT pairs
     "BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "ONDOUSDT",
     "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT", "SOLUSDT",
@@ -37,7 +37,7 @@ ALLOWED_SYMBOLS = [
     "ALGOBTC",
 ]
 
-ALLOWED_SYMBOLS_TOTAL = [
+ALLOWED_SYMBOLS = [
     # USDT pairs
     "BTCUSDT", "ETHUSDT", "ADAUSDT", "DOGEUSDT", "ONDOUSDT",
     "PEPEUSDT", "XRPUSDT", "WIFUSDT", "BNBUSDT", "SOLUSDT",
