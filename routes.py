@@ -105,6 +105,24 @@ def health_check():
 
 
 # ==========================================================
+# ========== ALLOWED SYMBOLS ========================
+# ==========================================================
+
+@routes.route("/allowed-symbols", methods=["GET"])
+def get_allowed_symbols():
+    """
+    Return the list of allowed trading symbols.
+    """
+    if (unauthorized := require_admin_key()):
+        return unauthorized
+    try:
+        return jsonify({"allowed_symbols": ALLOWED_SYMBOLS}), 200
+    except Exception as e:
+        logging.error(f"[ROUTE] /allowed-symbols failed: {e}")
+        return jsonify({"error": "Failed to fetch allowed symbols"}), 500
+
+
+# ==========================================================
 # ========== PRICE CACHE ENDPOINTS ==========================
 # ==========================================================
 
