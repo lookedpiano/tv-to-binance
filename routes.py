@@ -13,7 +13,7 @@ from binance_data import (
 )
 from utils import should_log_request, load_ip_file, require_admin_key
 from security import verify_before_request_secret
-from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS
+from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS, ENABLE_WS_PRICE_CACHE
 
 routes = Blueprint("routes", __name__)
 
@@ -128,13 +128,20 @@ def get_allowed_symbols():
 
 @routes.route("/cache/prices", methods=["GET"])
 def cache_prices():
-    """Return all cached prices."""
+    """Return all cached prices, or message if WS cache is disabled."""
     try:
+        if not ENABLE_WS_PRICE_CACHE:
+            return jsonify({
+                "message": "WebSocket price caching is disabled. No cached prices are available."
+            }), 200
+
         r = get_redis()
         snapshot = r.hgetall("price_cache")
         if not snapshot:
             return jsonify({"message": "No cached prices available"}), 200
+
         return jsonify(snapshot), 200
+
     except Exception as e:
         logging.error(f"[ROUTE] /cache/prices failed: {e}")
         return jsonify({"error": "Failed to fetch cached prices"}), 500
@@ -142,11 +149,17 @@ def cache_prices():
 
 @routes.route("/cache/prices/count", methods=["GET"])
 def cache_prices_count():
-    """Return number of cached price entries."""
+    """Return number of cached price entries, or message if WS cache disabled."""
     try:
+        if not ENABLE_WS_PRICE_CACHE:
+            return jsonify({
+                "message": "WebSocket price caching is disabled. No cached price count is available."
+            }), 200
+
         r = get_redis()
         count = r.hlen("price_cache")
         return jsonify({"count": count}), 200
+
     except Exception as e:
         logging.error(f"[ROUTE] /cache/prices/count failed: {e}")
         return jsonify({"error": "Failed to count cached prices"}), 500
@@ -154,13 +167,21 @@ def cache_prices_count():
 
 @routes.route("/cache/prices/<symbol>", methods=["GET"])
 def cache_price_symbol(symbol):
-    """Return cached price for a single symbol."""
+    """Return cached price for a single symbol, or message if WS cache disabled."""
     try:
+        if not ENABLE_WS_PRICE_CACHE:
+            return jsonify({
+                "message": "WebSocket price caching is disabled. No cached prices are available.",
+                "symbol": symbol.upper()
+            }), 200
+
         r = get_redis()
         price = r.hget("price_cache", symbol.upper())
         if price is None:
             return jsonify({"error": f"No cached price for {symbol.upper()}"}), 404
+
         return jsonify({symbol.upper(): price}), 200
+
     except Exception as e:
         logging.error(f"[ROUTE] /cache/prices/{symbol} failed: {e}")
         return jsonify({"error": "Failed to fetch cached price"}), 500
