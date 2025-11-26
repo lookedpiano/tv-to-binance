@@ -46,7 +46,6 @@ def init_all():
     else:
         logging.info("[WS] Price cache disabled via config flag.")
 
-    start_ws_price_cache(ALLOWED_SYMBOLS)
     start_background_cache(ALLOWED_SYMBOLS)
     start_email_polling_thread()
     logging.info("[INIT] Binance client, Redis, WS price cache, and background caches initialized successfully.")
