@@ -396,7 +396,22 @@ def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str
         info = client.exchange_info(symbols=symbols)  # Fetch all at once
     except Exception as e:
         logging.error(f"[CACHE:{log_context}] Failed to fetch filters batch: {_short_binance_error(e)}")
-        return
+        
+        # If Binance says "Invalid symbol.", find which one(s)
+        if "Invalid symbol" in str(e):
+            logging.warning("[CACHE] Batch failed due to invalid symbol. Checking individually...")
+            invalid = []
+
+            for sym in symbols:
+                try:
+                    client.exchange_info(symbols=[sym])
+                except Exception as e_sym:
+                    if "Invalid symbol" in str(e_sym):
+                        invalid.append(sym)
+
+            logging.error(f"[CACHE] INVALID SYMBOLS FOUND: {invalid}")
+
+        return  # stop, batch cannot continue
 
     for s in info["symbols"]:
         symbol = s["symbol"]
