@@ -19,6 +19,8 @@ from utils import (
     quantize_down,
 )
 
+from config._settings import ENABLE_WS_PRICE_CACHE
+
 # -------------------------
 # Exchange helpers (connector)
 # -------------------------
@@ -53,21 +55,31 @@ def get_symbol_filters(symbol: str):
 # -------- Price (connector) --------
 def get_current_price(symbol: str):
     """
-    Return current price using the WebSocket cache first.
-    Fallback to REST once if cache is cold.
+    Return current price.
+    WS price cache is used ONLY if:
+      - WS price caching system is enabled (ENABLE_WS_PRICE_CACHE)
+      - symbol is not excluded
+    Otherwise → REST only.
     """
 
-    # skip WS cache for excluded symbols
-    if is_symbol_ws_excluded(symbol):
-        logging.info(f"[PRICE:REST-ONLY] {symbol} is excluded from WS, fetching via REST")
+    # 1) Global WS disable → always REST
+    if not ENABLE_WS_PRICE_CACHE:
+        logging.info(f"[PRICE:REST-ONLY] WS price cache disabled → fetching {symbol} via REST")
         return fetch_price_via_rest(symbol)
 
-    # Normal flow (WS cache first)
+    # 2) Symbol-level exclusion → REST
+    if is_symbol_ws_excluded(symbol):
+        logging.info(f"[PRICE:REST-ONLY] {symbol} excluded from WS → REST")
+        return fetch_price_via_rest(symbol)
+
+    # 3) Try WebSocket cache
     price = get_cached_price(symbol)
     if price is not None:
         logging.info(f"[PRICE:CACHE] {symbol}: {price}")
         return price
 
+    # 4) Fallback to REST
+    logging.info(f"[PRICE:REST-FALLBACK] {symbol} cache empty → REST")
     return fetch_price_via_rest(symbol)
 
 def fetch_price_via_rest(symbol: str):
