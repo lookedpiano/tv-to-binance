@@ -108,7 +108,8 @@ KNOWN_QUOTES = (
 )
 
 # -------------------------
-# Excluded symbols from WebSocket price caching
+# Excluded symbols from 
+# WebSocket price caching
 # -------------------------
 WS_EXCLUDED_SUFFIXES = (
     "USDC",
