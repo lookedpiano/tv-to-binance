@@ -72,6 +72,7 @@ KNOWN_QUOTES = (
 # -------------------------
 WS_EXCLUDED_SUFFIXES = (
     "USDC",
+    "BTC",
     "ETH",
     "BNB"
 )
