@@ -29,13 +29,10 @@ from config._settings import (
 # -----------------------
 def run_webhook_validations():
     try:
-        '''
         valid_ip, error_response = validate_outbound_ip_address()
         if not valid_ip:
             safe_log_webhook_error(symbol=None, side=None, message="Outbound IP not allowed")
             return None, error_response
-        '''
-        validate_outbound_ip_address_new()
 
         data, error_response = validate_json()
         if not data:
@@ -247,28 +244,6 @@ def validate_fields(data: dict):
     return True, None
 
 def validate_outbound_ip_address() -> tuple[bool, tuple | None]:
-    try:
-        current_ip = requests.get("https://api.ipify.org", timeout=21).text.strip()
-        logging.info(f"[OUTBOUND_IP] Validate current outbound IP for Binance calls: {current_ip}")
-
-        '''
-        On October 27th, Render will introduce new outbound IP ranges for each region - OBSERVE
-
-        NEW # remember: up to 30 IPs per API key are allowed on Binance
-        "74.220.51.0/24" # the first 24 bits of the address are fixed -> 74.220.51.0, 74.220.51.1, ..., 74.220.51.255 -> 256 ips
-        "74.220.59.0/24" # the first 24 bits of the address are fixed -> 74.220.59.0, 74.220.59.1, ..., 74.220.59.255 -> 256 ips
-        '''
-        ALLOWED_OUTBOUND_IPS = load_ip_file("config/outbound_ips.txt")
-
-        if current_ip not in ALLOWED_OUTBOUND_IPS:
-            logging.warning(f"[SECURITY] Outbound IP {current_ip} not in allowed list")
-            return False, (jsonify({"error": f"Outbound IP {current_ip} not allowed"}), 403)
-        return True, None
-    except Exception as e:
-        logging.exception(f"Failed to validate outbound IP: {e}")
-        return False, (jsonify({"error": "Could not validate outbound IP"}), 500)
-
-def validate_outbound_ip_address_new() -> tuple[bool, tuple | None]:
     try:
         current_ip = requests.get("https://api.ipify.org", timeout=21).text.strip()
         logging.info(f"[OUTBOUND_IP] Validate current outbound IP for Binance calls: {current_ip}")
