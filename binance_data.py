@@ -483,15 +483,35 @@ def take_daily_balance_snapshot(
         logging.info("[SNAPSHOT] No balances provided, fetching from Binance...")
         balances = fetch_account_balances(client)
 
-    # Compute total account value in USDT-equivalent (using cached prices)
+    # ---------------------------------------------------------
+    # Fetch price for each asset and cache it
+    # ---------------------------------------------------------
+    from exchange import get_current_price   # avoid circular
+    cached_prices = {}
+
+    for asset, amount in balances.items():
+        symbol = f"{asset}USDT"
+        try:
+            price = get_current_price(symbol)
+            if price:
+                r.hset("spot_balance_prices", symbol, str(price))
+                cached_prices[symbol] = Decimal(str(price))
+                logging.info(f"[SNAPSHOT] Cached price for {symbol}: {price}")
+        except Exception as e:
+            logging.warning(f"[SNAPSHOT] Failed to fetch price for {symbol}: {e}")
+
+    # ---------------------------------------------------------
+    # Compute total account value
+    # ---------------------------------------------------------
     total_usdt = Decimal("0")
     for asset, amount in balances.items():
         if asset in STABLECOINS:
             total_usdt += amount
         else:
-            price = get_cached_price(f"{asset}USDT")
+            symbol = f"{asset}USDT"
+            price = cached_prices.get(symbol)
             if price:
-                total_usdt += amount * Decimal(str(price))
+                total_usdt += amount * price
 
     date_str = datetime.now(TZ).strftime("%Y-%m-%d")
     snapshot = {

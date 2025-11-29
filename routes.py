@@ -185,6 +185,20 @@ def cache_price_symbol(symbol):
     except Exception as e:
         logging.error(f"[ROUTE] /cache/prices/{symbol} failed: {e}")
         return jsonify({"error": "Failed to fetch cached price"}), 500
+    
+
+@routes.route("/cache/spot-balance-prices", methods=["GET"])
+def get_spot_balance_prices():
+    """Return cached prices for all assets in user's Binance spot wallet."""
+    try:
+        r = get_redis()
+        prices = r.hgetall("spot_balance_prices")
+        if not prices:
+            return jsonify({"message": "No spot balance prices cached"}), 200
+        return jsonify({"count": len(prices), "prices": prices}), 200
+    except Exception as e:
+        logging.exception(f"[ROUTE] /cache/spot-balance-prices failed: {e}")
+        return jsonify({"error": "Failed to fetch spot balance prices"}), 500
 
 
 # ==========================================================
