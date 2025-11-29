@@ -27,6 +27,7 @@ from config._settings import (
     ALLOWED_SYMBOLS,
     WS_EXCLUDED_SUFFIXES,
     ENABLE_WS_PRICE_CACHE,
+    ENABLE_FILTER_CACHE,
     REDIS_URL,
 )
 
@@ -632,11 +633,15 @@ def start_background_cache(symbols: List[str]):
         else:
             logging.warning("[CACHE:INIT] No balances fetched; skipping snapshot.")
 
-        fetch_and_cache_filters(client, symbols, "INIT")
+        if ENABLE_FILTER_CACHE:
+            fetch_and_cache_filters(client, symbols, "INIT")
     else:
         logging.info("[CACHE] Skipping initial REST fetch.")
 
     threading.Thread(target=_balance_updater, args=(client,), daemon=True, name="BalanceCache").start()
-    threading.Thread(target=_filter_updater, args=(client, symbols), daemon=True, name="FilterCache").start()
     threading.Thread(target=_daily_balance_snapshot_updater, args=(client,), daemon=True, name="BalanceSnapshot").start()
+
+    if ENABLE_FILTER_CACHE:
+        threading.Thread(target=_filter_updater, args=(client, symbols), daemon=True, name="FilterCache").start()
+    
     logging.info("[CACHE] Background threads started (balances and filters)")

@@ -19,37 +19,67 @@ from utils import (
     quantize_down,
 )
 
-from config._settings import ENABLE_WS_PRICE_CACHE
+from config._settings import ENABLE_WS_PRICE_CACHE, ENABLE_FILTER_CACHE
 
 # -------------------------
 # Exchange helpers (connector)
 # -------------------------
 def get_symbol_filters(symbol: str):
     """
-    Get symbol trading filters from Redis cache; fallback to REST.
+    Return trading filters for a symbol.
+
+    Behavior:
+      - If ENABLE_FILTER_CACHE is False → always fetch via REST
+      - If ENABLE_FILTER_CACHE is True → try cache first, REST fallback
     """
-    # 1) Try cache first
+
+    # ---------------------------------------------------------
+    # 1) Global filter-cache disable → ALWAYS REST
+    # ---------------------------------------------------------
+    if not ENABLE_FILTER_CACHE:
+        logging.info(f"[FILTER:REST-ONLY] Filter cache disabled → fetching {symbol} via REST")
+        try:
+            client = get_client()
+            fetch_and_cache_filters(client, [symbol], log_context="REST-ONLY")
+
+            filters = get_cached_symbol_filters(symbol)
+            if filters:
+                return filters
+
+            logging.warning(f"[FILTER:REST-ONLY] REST fetch returned no filters for {symbol}")
+            return None
+
+        except Exception as e:
+            logging.exception(f"[FILTER:REST-ONLY] Failed fetching filters for {symbol}: {e}")
+            return None
+
+    # ---------------------------------------------------------
+    # 2) Cache enabled → Try Redis first
+    # ---------------------------------------------------------
     filters = get_cached_symbol_filters(symbol)
     if filters:
-        logging.info(f"[FILTER:CACHE] Found cached filters for {symbol}")
+        logging.info(f"[FILTER:CACHE] {symbol}: filters returned from cache")
         return filters
 
-    # 2) Fallback: call existing REST
+    logging.info(f"[FILTER:REST-FALLBACK] Cache empty → fetching {symbol} via REST")
+
+    # ---------------------------------------------------------
+    # 3) Fallback to REST
+    # ---------------------------------------------------------
     try:
         client = get_client()
         fetch_and_cache_filters(client, [symbol], log_context="FALLBACK")
 
-        # Try to load again after caching
         filters = get_cached_symbol_filters(symbol)
         if filters:
-            logging.info(f"[FILTER:REST] Successfully fetched and cached filters for {symbol}")
+            logging.info(f"[FILTER:REST] Successfully fetched + cached filters for {symbol}")
             return filters
-        else:
-            logging.warning(f"[FILTER:REST] Fallback fetched but filters still unavailable for {symbol}")
-            return None
+
+        logging.warning(f"[FILTER:REST] Fallback fetch did not return filters for {symbol}")
+        return None
 
     except Exception as e:
-        logging.exception(f"[FILTER:REST] Fallback error while fetching filters for {symbol}: {e}")
+        logging.exception(f"[FILTER:REST] Fallback error for {symbol}: {e}")
         return None
 
 # -------- Price (connector) --------
