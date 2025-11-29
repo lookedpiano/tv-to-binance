@@ -19,7 +19,7 @@ from utils import (
     quantize_down,
 )
 
-from config._settings import ENABLE_WS_PRICE_CACHE, ENABLE_FILTER_CACHE
+from config._settings import ENABLE_WS_PRICE_CACHE, ENABLE_FILTER_CACHE, STABLECOINS
 
 # -------------------------
 # Exchange helpers (connector)
@@ -113,6 +113,12 @@ def get_current_price(symbol: str):
     return fetch_price_via_rest(symbol)
 
 def fetch_price_via_rest(symbol: str):
+    # Skip stablecoin pairs like USDTUSDT and USDCUSDT
+    base = symbol.replace("USDT", "")
+    if base in STABLECOINS:
+        logging.info(f"[PRICE:SKIP] Skipping price fetch for stablecoin pair {symbol}")
+        return Decimal("1")
+
     try:
         client = get_client()
         data = client.ticker_price(symbol)

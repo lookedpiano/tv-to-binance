@@ -29,6 +29,7 @@ from config._settings import (
     WS_EXCLUDED_SUFFIXES,
     ENABLE_WS_PRICE_CACHE,
     ENABLE_FILTER_CACHE,
+    STABLECOINS,
     REDIS_URL,
 )
 
@@ -89,7 +90,6 @@ FILTER_REFRESH_INTERVAL = 24 * 3600 * 11  # 11 day
 DAILY_SNAPSHOT_INTERVAL = 24 * 3600       # 1 day
 WS_RECONNECT_GRACE = 127                  # Restart stale WS streams if no update for 127s
 WS_CHECK_INTERVAL = 83                    # Health monitor check interval (seconds)
-STABLECOINS = {"USDT", "USDC"}
 
 DAILY_BALANCE_SNAPSHOT_KEY = "balance_snapshots"
 

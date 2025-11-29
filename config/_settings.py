@@ -141,6 +141,8 @@ REQUIRED_FIELDS = {"action", "symbol", "client_secret"}
 SECRET_FIELD = "client_secret"
 WEBHOOK_REQUEST_PATH = "/to-the-moon"
 
+STABLECOINS = {"USDT", "USDC"}
+
 # -------------------------
 # Safeguards
 # -------------------------
