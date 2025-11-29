@@ -163,11 +163,12 @@ BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 REDIS_URL = os.getenv("REDIS_URL")
+PORT = os.getenv("PORT", "4747")
+DELAY_INITIALIZATION_IN_SECONDS = os.getenv("DELAY_INITIALIZATION_IN_SECONDS")
 SKIP_INITIAL_FETCH = _get_bool_env("SKIP_INITIAL_FETCH", default=False)
 ENABLE_WS_PRICE_CACHE = _get_bool_env("ENABLE_WS_PRICE_CACHE", default=False)
 ENABLE_FILTER_CACHE = _get_bool_env("ENABLE_FILTER_CACHE", default=False)
 GENERATE_FAKE_BALANCE_DATA = _get_bool_env("GENERATE_FAKE_BALANCE_DATA", default=False)
-PORT = os.getenv("PORT", "4747")
 
 if not ADMIN_API_KEY:
     raise RuntimeError("Missing required environment variable: ADMIN_API_KEY")
@@ -185,5 +186,7 @@ if not PORT:
         "The following ports are reserved by Render and cannot be used: 18012, 18013 and 19099.\n"
         "Choose a port such that: 1024 < PORT <= 49000, excluding the reserved ones."
     )
+if not DELAY_INITIALIZATION_IN_SECONDS:
+    raise RuntimeError("Missing required environment variable: DELAY_INITIALIZATION_IN_SECONDS")
 
 

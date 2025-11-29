@@ -2,7 +2,7 @@ import debug_suppression  # modifies logging settings (logging suppression + exc
 import logging
 
 from flask import Flask
-from binance_data import init_all
+from binance_data import init_all, init_delay
 from routes import routes
 from webhook import webhook
 from config._settings import PORT
@@ -20,6 +20,8 @@ app.register_blueprint(webhook)
 # INIT
 # -------------------------
 try:
+    init_delay()
+
     init_all()
 except Exception as e:
     logging.exception(f"[INIT] Failed to initialize background services: {e}")

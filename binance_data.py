@@ -22,6 +22,7 @@ from email_poll import start_email_polling_thread
 from config._settings import (
     SKIP_INITIAL_FETCH,
     GENERATE_FAKE_BALANCE_DATA,
+    DELAY_INITIALIZATION_IN_SECONDS,
     BINANCE_API_KEY,
     BINANCE_SECRET_KEY,
     ALLOWED_SYMBOLS,
@@ -30,6 +31,33 @@ from config._settings import (
     ENABLE_FILTER_CACHE,
     REDIS_URL,
 )
+
+# -------------------------
+# INITIALIZATION
+# -------------------------
+def init_delay():
+    """
+    Delay application startup to avoid Binance REST API bursts when
+    multiple cloned servers initialize simultaneously.
+
+    DELAY_INITIALIZATION_IN_SECONDS must be set to a valid integer.
+    If it's invalid (e.g., non-numeric), a clear RuntimeError is raised.
+    """
+    delay_raw = DELAY_INITIALIZATION_IN_SECONDS
+
+    if delay_raw is None:
+        raise RuntimeError("DELAY_INITIALIZATION_IN_SECONDS is required but missing.")
+
+    try:
+        seconds = int(delay_raw)
+    except ValueError:
+        raise RuntimeError(
+            f"DELAY_INITIALIZATION_IN_SECONDS must be an integer, got: '{delay_raw}'"
+        )
+
+    logging.info(f"[INIT] Delaying initialization for {seconds} seconds...")
+    time.sleep(seconds)
+
 
 # -------------------------
 # REDIS + WS INIT
