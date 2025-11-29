@@ -58,7 +58,6 @@ def init_delay():
     logging.info(f"[INIT] Delaying initialization for {seconds} seconds...")
     time.sleep(seconds)
 
-
 # -------------------------
 # REDIS + WS INIT
 # -------------------------
