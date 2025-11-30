@@ -119,7 +119,7 @@ def fetch_price_via_rest(symbol: str):
         quote = DEFAULT_QUOTE_ASSET
 
         if base in STABLECOINS and quote in STABLECOINS:
-            logging.info(f"[PRICE:SKIP] Skipping stablecoin pair {symbol}")
+            logging.info(f"[PRICE:SKIP] Stablecoin pair {symbol}")
             return Decimal("1")
 
     try:
