@@ -142,6 +142,7 @@ SECRET_FIELD = "client_secret"
 WEBHOOK_REQUEST_PATH = "/to-the-moon"
 
 STABLECOINS = {"USDT", "USDC"}
+DEFAULT_QUOTE_ASSET = "USDT"
 
 # -------------------------
 # Safeguards

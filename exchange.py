@@ -19,7 +19,7 @@ from utils import (
     quantize_down,
 )
 
-from config._settings import ENABLE_WS_PRICE_CACHE, ENABLE_FILTER_CACHE, STABLECOINS
+from config._settings import ENABLE_WS_PRICE_CACHE, ENABLE_FILTER_CACHE, STABLECOINS, DEFAULT_QUOTE_ASSET
 
 # -------------------------
 # Exchange helpers (connector)
@@ -113,11 +113,14 @@ def get_current_price(symbol: str):
     return fetch_price_via_rest(symbol)
 
 def fetch_price_via_rest(symbol: str):
-    # Skip stablecoin pairs like USDTUSDT and USDCUSDT
-    base = symbol.replace("USDT", "")
-    if base in STABLECOINS:
-        logging.info(f"[PRICE:SKIP] Skipping price fetch for stablecoin pair {symbol}")
-        return Decimal("1")
+    # detect stablecoin-vs-stablecoin pairs like USDTUSDT or USDCUSDT
+    if symbol.endswith(DEFAULT_QUOTE_ASSET):
+        base = symbol[: -len(DEFAULT_QUOTE_ASSET)]
+        quote = DEFAULT_QUOTE_ASSET
+
+        if base in STABLECOINS and quote in STABLECOINS:
+            logging.info(f"[PRICE:SKIP] Skipping stablecoin pair {symbol}")
+            return Decimal("1")
 
     try:
         client = get_client()
@@ -129,7 +132,7 @@ def fetch_price_via_rest(symbol: str):
     except ClientError as e:
         logging.error(f"[PRICE:REST] ClientError for {symbol}: {e.error_message}")
         if e.status_code in (418, 429) or e.error_code in (-1003,):
-            logging.warning(f"Rate limit or temp block for {symbol}: <{e.error_message}>")
+            logging.warning(f"[PRICE:RATE-LIMIT] {symbol}: {e.error_message}")
         return None
 
     except Exception as e:

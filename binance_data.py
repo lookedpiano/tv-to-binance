@@ -29,12 +29,13 @@ from config._settings import (
     WS_EXCLUDED_SUFFIXES,
     ENABLE_WS_PRICE_CACHE,
     ENABLE_FILTER_CACHE,
+    DEFAULT_QUOTE_ASSET,
     STABLECOINS,
     REDIS_URL,
 )
 
 # -------------------------
-# INITIALIZATION
+# INITIALIZATION DELAY
 # -------------------------
 def init_delay():
     """
@@ -518,7 +519,7 @@ def take_daily_balance_snapshot(
     cached_prices = {}
 
     for asset, amount in balances.items():
-        symbol = f"{asset}USDT"
+        symbol = f"{asset}{DEFAULT_QUOTE_ASSET}"
         try:
             price = get_current_price(symbol)
             if price:
@@ -536,7 +537,7 @@ def take_daily_balance_snapshot(
         if asset in STABLECOINS:
             total_usdt += amount
         else:
-            symbol = f"{asset}USDT"
+            symbol = f"{asset}{DEFAULT_QUOTE_ASSET}"
             price = cached_prices.get(symbol)
             if price:
                 total_usdt += amount * price
