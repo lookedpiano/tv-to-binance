@@ -9,7 +9,7 @@ from email_fetcher import fetch_all_alert_emails, extract_alert_payload
 from security import verify_server
 
 TZ = ZoneInfo("Europe/Zurich")
-POLL_INTERVAL = 3593 * 3   # 3 hours
+POLL_INTERVAL = 3593 * 11   # 11 hours
 
 
 def _email_poll_loop():
