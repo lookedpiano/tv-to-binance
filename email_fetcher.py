@@ -31,10 +31,10 @@ def fetch_all_alert_emails():
     """
     Fetch and return all matching alert emails:
     - from OUTLOOK_USER
-    - subject contains 'Larsson Line Pro 3 Alert'
-    - within last 7 days
+    - subject contains 'LL Pro 3 Alert'
+    - within last 3 days
     """
-    since_days = 7
+    since_days = 3
     today = datetime.date.today()
     since = (today - datetime.timedelta(days=since_days)).strftime("%d-%b-%Y")
 
