@@ -1,9 +1,10 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 import time
 import logging
 
 from binance_data import (
     safe_log_webhook_error,
+    apply_api_delay,
 )
 
 from validation import (
@@ -35,8 +36,19 @@ from config._settings import (
 webhook = Blueprint("webhook", __name__)
 
 # -------------------------
-# Webhook endpoint
+# Webhook endpoints
 # -------------------------
+@webhook.before_request
+def apply_api_delay_before_webhook():
+    """
+    Apply API delay only for the webhook POST endpoint.
+    Prevents multiple cloned instances from hitting Binance
+    at the same time.
+    """
+    # Only delay for POST /YOUR_WEBHOOK_PATH
+    if request.method == "POST" and request.path == WEBHOOK_REQUEST_PATH:
+        apply_api_delay()
+
 @webhook.route(WEBHOOK_REQUEST_PATH, methods=['POST'])
 def webhook_handler():
     log_webhook_delimiter("START")

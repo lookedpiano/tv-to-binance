@@ -22,7 +22,7 @@ from email_poll import start_email_polling_thread
 from config._settings import (
     SKIP_INITIAL_FETCH,
     GENERATE_FAKE_BALANCE_DATA,
-    DELAY_INITIALIZATION_IN_SECONDS,
+    DELAY_API_ACCESS_SECONDS,
     BINANCE_API_KEY,
     BINANCE_SECRET_KEY,
     ALLOWED_SYMBOLS,
@@ -37,28 +37,33 @@ from config._settings import (
 # -------------------------
 # INITIALIZATION DELAY
 # -------------------------
-def init_delay():
+def apply_api_delay():
     """
-    Delay application startup to avoid Binance REST API bursts when
-    multiple cloned servers initialize simultaneously.
+    Delay any outward REST API access (e.g., Binance requests) to avoid
+    multiple cloned servers hitting rate limits simultaneously.
 
-    DELAY_INITIALIZATION_IN_SECONDS must be set to a valid integer.
-    If it's invalid (e.g., non-numeric), a clear RuntimeError is raised.
+    DELAY_API_ACCESS_SECONDS must be set to a valid integer.
+    If the value is invalid (e.g., non-numeric), a RuntimeError is raised.
+
+    This delay is applied both during server startup and before executing
+    incoming webhook requests, ensuring staggered API usage across cloned
+    deployments.
     """
-    delay_raw = DELAY_INITIALIZATION_IN_SECONDS
+    delay_raw = DELAY_API_ACCESS_SECONDS
 
     if delay_raw is None:
-        raise RuntimeError("DELAY_INITIALIZATION_IN_SECONDS is required but missing.")
+        raise RuntimeError("DELAY_API_ACCESS_SECONDS is required but missing.")
 
     try:
         seconds = int(delay_raw)
     except ValueError:
         raise RuntimeError(
-            f"DELAY_INITIALIZATION_IN_SECONDS must be an integer, got: '{delay_raw}'"
+            f"DELAY_API_ACCESS_SECONDS must be an integer, got: '{delay_raw}'"
         )
 
-    logging.info(f"[INIT] Delaying initialization for {seconds} seconds...")
-    time.sleep(seconds)
+    if seconds > 0:
+        logging.info(f"[DELAY] Staggering API access by {seconds} seconds...")
+        time.sleep(seconds)
 
 # -------------------------
 # REDIS + WS INIT

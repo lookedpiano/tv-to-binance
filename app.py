@@ -2,7 +2,7 @@ import debug_suppression  # modifies logging settings (logging suppression + exc
 import logging
 
 from flask import Flask
-from binance_data import init_all, init_delay
+from binance_data import init_all, apply_api_delay
 from routes import routes
 from webhook import webhook
 from config._settings import PORT
@@ -20,7 +20,7 @@ app.register_blueprint(webhook)
 # INIT
 # -------------------------
 try:
-    init_delay()
+    apply_api_delay()
 
     init_all()
 except Exception as e:
