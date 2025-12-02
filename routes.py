@@ -380,6 +380,30 @@ def public_alerts():
 
 
 # ==========================================================
+# ========== ALERTS HIGHLIGHTS =============================
+# ==========================================================
+@routes.route("/assets/bases", methods=["GET"])
+def list_base_assets():
+    """
+    Return a sorted list of unique base assets derived from ALLOWED_SYMBOLS.
+    Example: BTCUSDT → BTC, ETHUSDT → ETH, ARBUSDT → ARB, etc.
+    """
+    bases = set()
+
+    for symbol in ALLOWED_SYMBOLS:
+        # Try matching known quote assets USDT, USDC, BTC, ETH, BNB etc.
+        # Extend this list as needed.
+        for quote in ("USDT", "USDC", "BTC", "ETH", "BNB"):
+            if symbol.endswith(quote):
+                base = symbol[:-len(quote)]
+                bases.add(base)
+                break
+
+    response = {"count": len(bases), "bases": sorted(bases)}
+    return jsonify(response), 200
+
+
+# ==========================================================
 # ========== DASHBOARD======================================
 # ==========================================================
 @routes.route("/dashboard", methods=["GET"])
