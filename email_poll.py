@@ -48,7 +48,7 @@ def _email_poll_loop():
                 key = f"larsson_alert:{date_str}"
                 r.set(key, json.dumps(record))
 
-                logging.info(f"[EMAIL POLL] Saved alert for {date_str}: {msg['subject']}")
+                logging.debug(f"[EMAIL POLL] Saved alert for {date_str}: {msg['subject']}")
 
             logging.info(f"[EMAIL POLL] Processed {len(emails)} alert emails.")
 
