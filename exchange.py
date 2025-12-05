@@ -126,7 +126,7 @@ def fetch_price_via_rest(symbol: str):
         client = get_client()
         data = client.ticker_price(symbol)
         price = Decimal(data["price"])
-        logging.info(f"[PRICE:REST] {symbol}: {price}")
+        logging.debug(f"[PRICE:REST] {symbol}: {price}")
         return price
 
     except ClientError as e:
