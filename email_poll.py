@@ -9,7 +9,7 @@ from email_fetcher import fetch_all_alert_emails, extract_alert_payload
 from security import verify_server
 
 TZ = ZoneInfo("Europe/Zurich")
-POLL_INTERVAL = 3593 * 4   # 4 hours
+POLL_INTERVAL = 3593 * 3   # 3 hours
 
 
 def _email_poll_loop():
@@ -20,7 +20,7 @@ def _email_poll_loop():
 
     while True:
         try:
-            logging.info("[EMAIL POLL] Scanning emails...")
+            logging.debug("[EMAIL POLL] Scanning emails...")
             emails = fetch_all_alert_emails()
 
             if not emails:
@@ -55,7 +55,7 @@ def _email_poll_loop():
         except Exception as e:
             logging.exception(f"[EMAIL POLL] Error: {e}")
 
-        logging.info(f"[EMAIL POLL] Sleeping {POLL_INTERVAL/3600:.1f} hours…")
+        logging.debug(f"[EMAIL POLL] Sleeping {POLL_INTERVAL/3600:.1f} hours…")
         time.sleep(POLL_INTERVAL)
 
 

@@ -404,12 +404,22 @@ def refresh_balances_for_assets(client: Client, assets: list[str]):
 
         r = get_redis()
         cached = json.loads(r.get("account_balances") or '{"balances": {}, "ts": 0}')
+
+        updated_assets = []
+
         for asset in assets:
             if asset in all_balances:
                 cached["balances"][asset] = str(all_balances[asset])
+                updated_assets.append(asset)
                 logging.info(f"[CACHE] Updated {asset} balance after trade.")
+
         cached["ts"] = now_local_ts()
         r.set("account_balances", json.dumps(cached))
+
+        logging.info(
+            f"[CACHE] Balance refresh completed for assets: {', '.join(updated_assets) if updated_assets else 'none'}"
+        )
+
     except Exception as e:
         logging.warning(f"[CACHE] Failed to refresh balances for {assets}: {_short_binance_error(e)}")
 
@@ -421,7 +431,7 @@ This section fetches trading filters (LOT_SIZE, NOTIONAL, etc.) from Binance
 and caches them in Redis for efficient reuse when placing trades.
 """
 def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str):
-    """Fetch filters for all allowed symbols from Binance, sanitize, and cache."""
+    """Fetch filters for all allowed symbols from Binance, sanitize, and cache with delta logging."""
     logging.info(f"[CACHE:{log_context}] Fetching filters for {len(symbols)} symbols...")
     r = get_redis()
     ts = now_local_ts()
@@ -447,8 +457,10 @@ def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str
 
         return  # stop, batch cannot continue
 
+    updated_filters = []
+
     for s in info["symbols"]:
-        symbol = s["symbol"]
+        symbol = s["symbol"].upper()
         try:
             raw_filters = {}
             for f in s["filters"]:
@@ -459,15 +471,45 @@ def fetch_and_cache_filters(client: Client, symbols: List[str], log_context: str
                     raw_filters["min_notional"] = f.get("minNotional")
 
             filters = sanitize_filters(raw_filters)
-            r.set(
-                f"filters:{symbol.upper()}",
-                json.dumps({"filters": {k: str(v) for k, v in filters.items()}, "ts": ts}),
-            )
-            logging.debug(f"[CACHE:{log_context}] Filters cached for {symbol}")
-        except Exception as e:
-            logging.warning(f"[CACHE:{log_context}] Failed to process filters for {symbol}: {_short_binance_error(e)}")
+            new_payload = {k: str(v) for k, v in filters.items()}
 
-    r.set("last_refresh_filters", now_local_ts())  # Always record that a refresh attempt happened
+            # -----------------------------
+            # Delta detection vs cache
+            # -----------------------------
+            existing_raw = r.get(f"filters:{symbol}")
+            if existing_raw:
+                existing = json.loads(existing_raw).get("filters", {})
+            else:
+                existing = None
+
+            # Only log if something actually changed
+            if existing != new_payload:
+                updated_filters.append(symbol)
+
+            # -----------------------------
+            # Write to Redis
+            # -----------------------------
+            r.set(
+                f"filters:{symbol}",
+                json.dumps({"filters": new_payload, "ts": ts}),
+            )
+
+        except Exception as e:
+            logging.warning(
+                f"[CACHE:{log_context}] Failed to process filters for {symbol}: {_short_binance_error(e)}"
+            )
+
+    r.set("last_refresh_filters", now_local_ts())  # Always record refresh attempt
+
+    # -----------------------------
+    # Final delta summary log
+    # -----------------------------
+    if updated_filters:
+        logging.info(
+            f"[CACHE:{log_context}] Updated filters for {len(updated_filters)} symbols: {updated_filters}"
+        )
+    else:
+        logging.info(f"[CACHE:{log_context}] Filters unchanged — no updates written.")
 
 def _filter_updater(client: Client, symbols: List[str]):
     """Thread loop: refreshes filters."""
