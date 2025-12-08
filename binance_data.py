@@ -480,8 +480,14 @@ def get_cached_symbol_filters(symbol: str) -> Optional[Dict[str, str]]:
     data = get_redis().get(f"filters:{symbol.upper()}")
     if not data:
         return None
+
     parsed = json.loads(data)
-    return parsed.get("filters")
+    filters = parsed.get("filters")
+
+    if filters:
+        logging.info(f"[FILTER:CACHE-HIT] Loaded cached filters for {symbol.upper()}")
+
+    return filters
 
 # ==========================================================
 # ========== DAILY SNAPSHOT CACHE ==========================
