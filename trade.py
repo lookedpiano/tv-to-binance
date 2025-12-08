@@ -26,6 +26,8 @@ from exchange import (
     place_order_with_handling,
 )
 
+from config._settings import BINANCE_RATE_LIMIT
+
 # ---------------------------------
 # Unified trade execution
 # ---------------------------------
@@ -53,17 +55,35 @@ def execute_trade(
 
         # === 1. Price retrieval (with one retry) ===
         price = get_current_price(symbol)
+
+        # -------- HARD STOP ON RATE LIMIT --------
+        if price == BINANCE_RATE_LIMIT:
+            message = f"Rate limit hit while fetching price for {symbol}. Trade skipped."
+            logging.warning(f"[EXECUTE] {message}")
+
+            try:
+                log_order_to_cache(symbol, side or "?", "?", "?", status="error", message=message)
+            except Exception as e:
+                logging.warning(f"[ORDER LOG] Failed to log rate-limit error: {e}")
+
+            return {"error": message}, 200
+
+        # -------- NORMAL RETRY ON OTHER FAILURES --------
         if price is None:
             logging.info(f"[EXECUTE] Retrying price fetch for {symbol} in 3s...")
             time.sleep(3)
             price = get_current_price(symbol)
-        if price is None:
+
+        # -------- FINAL ABORT --------
+        if price is None or price == BINANCE_RATE_LIMIT:
             message = f"No price available for {symbol}. Aborting trade."
             logging.warning(f"[EXECUTE] {message}")
+
             try:
                 log_order_to_cache(symbol, side or "?", "?", "?", status="error", message=message)
             except Exception as e:
                 logging.warning(f"[ORDER LOG] Failed to log missing price error: {e}")
+
             return {"error": message}, 200
 
         # === 2. Fetch filters ===

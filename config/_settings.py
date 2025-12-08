@@ -144,6 +144,8 @@ WEBHOOK_REQUEST_PATH = "/to-the-moon"
 STABLECOINS = {"USDT", "USDC"}
 DEFAULT_QUOTE_ASSET = "USDT"
 
+BINANCE_RATE_LIMIT = "BINANCE_RATE_LIMIT"
+
 # -------------------------
 # Safeguards
 # -------------------------

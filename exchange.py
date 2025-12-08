@@ -19,7 +19,13 @@ from utils import (
     quantize_down,
 )
 
-from config._settings import ENABLE_WS_PRICE_CACHE, ENABLE_FILTER_CACHE, STABLECOINS, DEFAULT_QUOTE_ASSET
+from config._settings import (
+    ENABLE_WS_PRICE_CACHE, 
+    ENABLE_FILTER_CACHE, 
+    STABLECOINS, 
+    DEFAULT_QUOTE_ASSET, 
+    BINANCE_RATE_LIMIT,
+)
 
 # -------------------------
 # Exchange helpers (connector)
@@ -130,9 +136,19 @@ def fetch_price_via_rest(symbol: str):
         return price
 
     except ClientError as e:
+        msg = e.error_message.lower() if e.error_message else ""
+
         logging.error(f"[PRICE:REST] ClientError for {symbol}: {e.error_message}")
-        if e.status_code in (418, 429) or e.error_code in (-1003,):
+
+        if (
+            e.status_code in (418, 429)
+            or e.error_code in (-1003,)
+            or "way too much request weight" in msg
+            or "banned" in msg
+        ):
             logging.warning(f"[PRICE:RATE-LIMIT] {symbol}: {e.error_message}")
+            return BINANCE_RATE_LIMIT
+
         return None
 
     except Exception as e:
