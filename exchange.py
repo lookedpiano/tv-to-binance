@@ -91,32 +91,64 @@ def get_symbol_filters(symbol: str):
 # -------- Price (connector) --------
 def get_current_price(symbol: str):
     """
-    Return current price.
-    WS price cache is used ONLY if:
-      - WS price caching system is enabled (ENABLE_WS_PRICE_CACHE)
-      - symbol is not excluded
-    Otherwise → REST only.
+    Return current price with proper rate-limit fallback to cache.
     """
 
     # 1) Global WS disable → always REST
     if not ENABLE_WS_PRICE_CACHE:
         logging.info(f"[PRICE:REST-ONLY] WS price cache disabled → fetching {symbol} via REST")
-        return fetch_price_via_rest(symbol)
+        price = fetch_price_via_rest(symbol)
+
+        # RATE LIMIT → FALLBACK TO CACHE
+        if price == BINANCE_RATE_LIMIT:
+            cached = get_cached_price(symbol)
+            if cached is not None:
+                logging.warning(
+                    f"[PRICE:CACHE-FALLBACK] Rate limit hit → using cached price for {symbol}: {cached}"
+                )
+                return cached
+
+            logging.error(f"[PRICE:ABORT] Rate limit hit and no cached price available for {symbol}")
+            return BINANCE_RATE_LIMIT
+
+        return price
 
     # 2) Symbol-level exclusion → REST
     if is_symbol_ws_excluded(symbol):
         logging.info(f"[PRICE:REST-ONLY] {symbol} excluded from WS → REST")
-        return fetch_price_via_rest(symbol)
+        price = fetch_price_via_rest(symbol)
 
-    # 3) Try WebSocket cache
-    price = get_cached_price(symbol)
-    if price is not None:
-        logging.info(f"[PRICE:CACHE] {symbol}: {price}")
+        if price == BINANCE_RATE_LIMIT:
+            cached = get_cached_price(symbol)
+            if cached is not None:
+                logging.warning(
+                    f"[PRICE:CACHE-FALLBACK] Rate limit hit → using cached price for {symbol}: {cached}"
+                )
+                return cached
+            return BINANCE_RATE_LIMIT
+
         return price
 
-    # 4) Fallback to REST
+    # 3) Try WebSocket cache first
+    cached = get_cached_price(symbol)
+    if cached is not None:
+        logging.info(f"[PRICE:CACHE] {symbol}: {cached}")
+        return cached
+
+    # 4) REST fallback
     logging.info(f"[PRICE:REST-FALLBACK] {symbol} cache empty → REST")
-    return fetch_price_via_rest(symbol)
+    price = fetch_price_via_rest(symbol)
+
+    if price == BINANCE_RATE_LIMIT:
+        cached = get_cached_price(symbol)
+        if cached is not None:
+            logging.warning(
+                f"[PRICE:CACHE-FALLBACK] Rate limit hit → using cached price for {symbol}: {cached}"
+            )
+            return cached
+        return BINANCE_RATE_LIMIT
+
+    return price
 
 def fetch_price_via_rest(symbol: str):
     # detect stablecoin-vs-stablecoin pairs like USDTUSDT or USDCUSDT
