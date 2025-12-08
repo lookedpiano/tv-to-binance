@@ -30,14 +30,27 @@ from config._settings import (
 # -------------------------
 # Exchange helpers (connector)
 # -------------------------
-def get_symbol_filters(symbol: str):
+def get_symbol_filters(symbol: str, rate_limit_hit: bool = False):
     """
     Return trading filters for a symbol.
 
     Behavior:
-      - If ENABLE_FILTER_CACHE is False → always fetch via REST
-      - If ENABLE_FILTER_CACHE is True → try cache first, REST fallback
+      - If rate_limit_hit is True → CACHE ONLY (never hit REST)
+      - Else if ENABLE_FILTER_CACHE is False → always fetch via REST
+      - Else → cache first, REST fallback
     """
+
+    # ---------------------------------------------------------
+    # 0) RATE LIMIT MODE → CACHE ONLY
+    # ---------------------------------------------------------
+    if rate_limit_hit:
+        filters = get_cached_symbol_filters(symbol)
+        if filters:
+            logging.warning(f"[FILTER:CACHE-ONLY] Rate limit active → using cached filters for {symbol}")
+            return filters
+
+        logging.error(f"[FILTER:ABORT] Rate limit active and no cached filters for {symbol}")
+        return None
 
     # ---------------------------------------------------------
     # 1) Global filter-cache disable → ALWAYS REST

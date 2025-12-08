@@ -87,7 +87,7 @@ def execute_trade(
             return {"error": message}, 200
 
         # === 2. Fetch filters ===
-        filters = get_symbol_filters(symbol)
+        filters = get_symbol_filters(symbol, rate_limit_hit=(price == BINANCE_RATE_LIMIT))
         if not filters:
             message = f"Filters unavailable for {symbol}"
             logging.warning(f"[EXECUTE] {message}")
