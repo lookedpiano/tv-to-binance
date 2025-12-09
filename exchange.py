@@ -367,24 +367,24 @@ def place_order_with_handling(symbol: str, side: str, qty: Decimal, price: Decim
         code = e.error_code
         status = e.status_code
 
+        # -------- RATE LIMIT --------
         if status in (418, 429) or code in (-1003,):
             logging.error(f"Binance rate limit hit ({status}/{code}): {e.error_message}")
             return {"error": f"Binance request limit hit ({status})"}, 429
 
+        # -------- INSUFFICIENT BALANCE --------
+        if code == -2010 or "insufficient balance" in msg:
+            logging.warning(f"[ORDER] Insufficient balance for {symbol} {side}: {e.error_message}")
+            return {"error": "Insufficient balance for requested trade."}, 200
+
+        # -------- BELOW MIN NOTIONAL --------
         if "notional" in msg or code in (-1013,):
-            logging.error("Trade rejected: below Binance min_notional")
-            return {"error": "Trade rejected: below Binance min_notional"}, 400
+            logging.warning("Trade rejected: below Binance min_notional")
+            return {"error": "Trade rejected: below Binance min_notional"}, 200
 
-        logging.exception(f"Order placement failed: {e}")
+        # -------- OTHER CLIENT ERRORS --------
+        logging.error(f"[ORDER] Binance ClientError {status}/{code}: {e.error_message}")
         return {"error": f"Order failed: {e.error_message}"}, 400
-
-    except ServerError as e:
-        logging.error(f"Binance server error: {e}")
-        return {"error": "Binance server error"}, 502
-
-    except Exception as e:
-        logging.exception(f"Unexpected order error: {e}")
-        return {"error": f"Unexpected order error: {str(e)}"}, 500
 
     logging.info(f"[ORDER] {side} successfully executed: qty={qty} {symbol} at price={price}")
     return {"status": f"spot_{side.lower()}_executed", "order": resp}, 200
