@@ -31,67 +31,41 @@ from config._settings import (
 # -----------------------
 def run_webhook_validations():
     try:
+        # ---------------- IP VALIDATION ----------------
         valid_ip, error_response = validate_outbound_ip_address()
         if not valid_ip:
             safe_log_webhook_error(symbol=None, side=None, message="Outbound IP not allowed")
             return None, error_response
 
+        # ---------------- JSON VALIDATION ----------------
         data, error_response = validate_json()
         if not data:
-            invalid_json_payload_msg = "Invalid JSON message"
-            try:
-                error_json = error_response[0].get_json(silent=True) or {}
-                message = error_json.get("error", invalid_json_payload_msg)
-            except Exception:
-                message = invalid_json_payload_msg
+            fallback = "Invalid JSON payload"
+            message = _extract_error_message(error_response, fallback)
 
             safe_log_webhook_error(symbol=None, side=None, message=message)
             return None, error_response
 
+        # ---------------- FIELD VALIDATION ----------------
         valid_fields, error_response = validate_fields(data)
         if not valid_fields:
-            invalid_fields_msg = "Invalid or missing fields in payload"
+            fallback = "Invalid or missing fields in payload"
+            message = _extract_error_message(error_response, fallback)
 
-            try:
-                error_json = error_response[0].get_json(silent=True) or {}
-                message = error_json.get("error", invalid_fields_msg)
-            except Exception:
-                message = invalid_fields_msg
-
-            symbol = (
-                str(data.get("symbol", "")).strip().upper()
-                if isinstance(data, dict)
-                else None
-            )
-            action = (
-                str(data.get("action", "")).strip().upper()
-                if isinstance(data, dict)
-                else None
-            )
+            symbol = str(data.get("symbol", "")).strip().upper() if isinstance(data, dict) else None
+            action = str(data.get("action", "")).strip().upper() if isinstance(data, dict) else None
 
             safe_log_webhook_error(symbol, action, message=message)
             return None, error_response
 
+        # ---------------- SECRET VALIDATION ----------------
         valid_secret, error_response = validate_secret(data)
         if not valid_secret:
-            invalid_secret_msg = "Invalid or missing secret"
+            fallback = "Invalid or missing secret"
+            message = _extract_error_message(error_response, fallback)
 
-            try:
-                error_json = error_response[0].get_json(silent=True) or {}
-                message = error_json.get("error", invalid_secret_msg)
-            except Exception:
-                message = invalid_secret_msg
-
-            symbol = (
-                str(data.get("symbol", "")).strip().upper()
-                if isinstance(data, dict)
-                else None
-            )
-            action = (
-                str(data.get("action", "")).strip().upper()
-                if isinstance(data, dict)
-                else None
-            )
+            symbol = str(data.get("symbol", "")).strip().upper() if isinstance(data, dict) else None
+            action = str(data.get("action", "")).strip().upper() if isinstance(data, dict) else None
 
             safe_log_webhook_error(symbol, action, message=message)
             return None, error_response
@@ -102,6 +76,14 @@ def run_webhook_validations():
         safe_log_webhook_error(symbol=None, side=None, message=f"Validation exception: {e}")
         logging.exception("[VALIDATION] Unexpected error during webhook validation")
         return None, (jsonify({"error": "Unexpected validation error"}), 500)
+
+def _extract_error_message(error_response, fallback: str) -> str:
+    try:
+        error_json = error_response[0].get_json(silent=True) or {}
+        return error_json.get("error", fallback)
+    except Exception:
+        return fallback
+
 
 def validate_json():
     try:
