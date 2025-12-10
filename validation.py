@@ -3,6 +3,8 @@ import hmac
 import ipaddress
 import requests
 import logging
+import json
+from collections import Counter
 from decimal import Decimal
 
 from utils import (
@@ -78,13 +80,27 @@ def run_webhook_validations():
 
 def validate_json():
     try:
-        data = request.get_json(force=False, silent=False)
-        if not isinstance(data, dict):
-            raise ValueError("Payload is not a valid JSON object.")
-        return data, None
-    except Exception as e:
         raw = request.data.decode("utf-8", errors="ignore")
-        logging.warning(f"[VALIDATION] Invalid JSON or Content-Type: {e}")
+
+        # Try raw JSON parse WITH duplicate detection
+        pairs = json.loads(raw, object_pairs_hook=list)
+
+        keys = [k for k, v in pairs]
+        counts = Counter(keys)
+
+        duplicates = [k for k, c in counts.items() if c > 1]
+        if duplicates:
+            logging.error(f"[SECURITY] Duplicate JSON fields detected: {duplicates}")
+            return None, (jsonify({"error": f"Duplicate fields detected: {duplicates}"}), 400)
+
+        # Now safely convert into a normal dict
+        data = dict(pairs)
+
+        return data, None
+
+    except json.JSONDecodeError as e:
+        logging.exception(f"[FATAL ERROR] Failed to parse JSON payload: {e}")
+        raw = request.data.decode("utf-8", errors="ignore")
         logging.info(f"[RAW DATA]\n{raw}")
         return None, (jsonify({"error": "Invalid JSON payload"}), 400)
 
