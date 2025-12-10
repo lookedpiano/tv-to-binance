@@ -38,11 +38,26 @@ def run_webhook_validations():
 
         data, error_response = validate_json()
         if not data:
-            safe_log_webhook_error(symbol=None, side=None, message="Invalid JSON payload")
+            invalid_json_payload_msg = "Invalid JSON message"
+            try:
+                error_json = error_response[0].get_json(silent=True) or {}
+                message = error_json.get("error", invalid_json_payload_msg)
+            except Exception:
+                message = invalid_json_payload_msg
+
+            safe_log_webhook_error(symbol=None, side=None, message=message)
             return None, error_response
 
         valid_fields, error_response = validate_fields(data)
         if not valid_fields:
+            invalid_fields_msg = "Invalid or missing fields in payload"
+
+            try:
+                error_json = error_response[0].get_json(silent=True) or {}
+                message = error_json.get("error", invalid_fields_msg)
+            except Exception:
+                message = invalid_fields_msg
+
             symbol = (
                 str(data.get("symbol", "")).strip().upper()
                 if isinstance(data, dict)
@@ -53,11 +68,20 @@ def run_webhook_validations():
                 if isinstance(data, dict)
                 else None
             )
-            safe_log_webhook_error(symbol, action, message="Invalid or missing fields in payload")
+
+            safe_log_webhook_error(symbol, action, message=message)
             return None, error_response
 
         valid_secret, error_response = validate_secret(data)
         if not valid_secret:
+            invalid_secret_msg = "Invalid or missing secret"
+
+            try:
+                error_json = error_response[0].get_json(silent=True) or {}
+                message = error_json.get("error", invalid_secret_msg)
+            except Exception:
+                message = invalid_secret_msg
+
             symbol = (
                 str(data.get("symbol", "")).strip().upper()
                 if isinstance(data, dict)
@@ -68,7 +92,8 @@ def run_webhook_validations():
                 if isinstance(data, dict)
                 else None
             )
-            safe_log_webhook_error(symbol, action, message="Invalid or missing secret")
+
+            safe_log_webhook_error(symbol, action, message=message)
             return None, error_response
 
         return data, None
