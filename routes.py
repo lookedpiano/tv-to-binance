@@ -13,7 +13,7 @@ from binance_data import (
 )
 from utils import should_log_request, load_ip_file, require_admin_key
 from security import verify_before_request_secret
-from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS, ENABLE_WS_PRICE_CACHE
+from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS, ALPHA_TOKENS, ENABLE_WS_PRICE_CACHE
 
 routes = Blueprint("routes", __name__)
 
@@ -385,21 +385,33 @@ def public_alerts():
 @routes.route("/assets/bases", methods=["GET"])
 def list_base_assets():
     """
-    Return a sorted list of unique base assets derived from ALLOWED_SYMBOLS.
-    Example: BTCUSDT → BTC, ETHUSDT → ETH, ARBUSDT → ARB, etc.
+    Return:
+      - unique base assets extracted from ALLOWED_SYMBOLS
+      - alpha tokens from ALPHA_TOKENS
     """
+
+    # ---- Collect bases from ALLOWED_SYMBOLS ----
     bases = set()
 
+    # Known quote assets (extendable)
+    QUOTES = ("USDT", "USDC", "BTC", "ETH", "BNB")
+
     for symbol in ALLOWED_SYMBOLS:
-        # Try matching known quote assets USDT, USDC, BTC, ETH, BNB etc.
-        # Extend this list as needed.
-        for quote in ("USDT", "USDC", "BTC", "ETH", "BNB"):
+        for quote in QUOTES:
             if symbol.endswith(quote):
                 base = symbol[:-len(quote)]
                 bases.add(base)
                 break
 
-    response = {"count": len(bases), "bases": sorted(bases)}
+    # ---- Include Alpha Tokens ----
+    alphas = set(ALPHA_TOKENS)
+
+    response = {
+        "count": len(bases),
+        "bases": sorted(bases),
+        "alphas": sorted(alphas),
+    }
+
     return jsonify(response), 200
 
 
