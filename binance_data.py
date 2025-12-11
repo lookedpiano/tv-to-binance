@@ -578,7 +578,7 @@ def take_daily_balance_snapshot(
             if price:
                 r.hset("spot_balance_prices", symbol, str(price))
                 cached_prices[symbol] = Decimal(str(price))
-                logging.info(f"[SNAPSHOT] Cached price for {symbol}: {price}")
+                logging.debug(f"[SNAPSHOT] Cached price for {symbol}: {price}")
         except Exception as e:
             logging.warning(f"[SNAPSHOT] Failed to fetch price for {symbol}: {e}")
 
