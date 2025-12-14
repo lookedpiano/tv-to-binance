@@ -34,6 +34,7 @@ ALLOWED_SYMBOLS = [
     "TURBOUSDT", "UMAUSDT", "UNIUSDT", "UTKUSDT", "VETUSDT",
     "VIRTUALUSDT", "WUSDT", "WLDUSDT", "XLMUSDT", "XTZUSDT",
     "YGGUSDT", "ZKUSDT", "ZROUSDT", "WLFIUSDT",
+    "BROCCOLI714USDT",
     
     # no USDC pairs
     "XNOUSDT", "BATUSDT", "DUSKUSDT", "GLMUSDT", "AUDIOUSDT",
@@ -71,6 +72,7 @@ ALLOWED_SYMBOLS = [
     # "TURBOUSDC", "UMAUSDC", "UNIUSDC", "UTKUSDC", "VETUSDC",
     # "VIRTUALUSDC", "WUSDC", "WLDUSDC", "XLMUSDC", "XTZUSDC",
     # "YGGUSDC", "ZKUSDC", "ZROUSDC", "WLFIUSDC",
+    # "BROCCOLI714USDC",
 
     # Crypto pairs
     "ETHBTC",
@@ -129,6 +131,7 @@ ALPHA_TOKENS = [
     "H",
     "HAJIMI",
     "HANA",
+    "JELLYJELLY",
     "JCT",
     "KGEN",
     "KO",
@@ -148,11 +151,15 @@ ALPHA_TOKENS = [
     "P",
     "PAAL",
     "PEAQ",
+    "PIEVERSE",
     "PIPPIN",
+    "PLAY",
     "POPCAT",
     "PORT3",
+    "POWER",
     "QUQ",
     "RAVE",
+    "RIVER",
     "RLS",
     "ROAM",
     "SAFE",
@@ -171,6 +178,8 @@ ALPHA_TOKENS = [
     "TOKEN",
     "TYCOON",
     "UB",
+    "US",
+    "VELO",
     "VINU",
     "VRA",
     "WILD",
