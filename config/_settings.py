@@ -101,6 +101,7 @@ ALLOWED_SYMBOLS = [
 
 ALPHA_TOKENS = [
     "AERO",
+    "AIA",
     "AICELL",
     "AIN",
     "AIOT",
@@ -157,6 +158,7 @@ ALPHA_TOKENS = [
     "POPCAT",
     "PORT3",
     "POWER",
+    "PTB",
     "QUQ",
     "RAVE",
     "RIVER",
@@ -182,6 +184,7 @@ ALPHA_TOKENS = [
     "VELO",
     "VINU",
     "VRA",
+    "VSN",
     "WILD",
     "YALA",
     "ZENT",
