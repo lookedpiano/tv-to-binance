@@ -164,6 +164,7 @@ ALPHA_TOKENS = [
     "RIVER",
     "RLS",
     "ROAM",
+    "RVV",
     "SAFE",
     "SAROS",
     "SENTIS",
