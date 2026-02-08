@@ -186,6 +186,7 @@ ALPHA_TOKENS = [
     "SHARDS",
     "SHOGGOTH",
     "SKATE",
+    "SKR",
     "SLX",
     "SPX",
     "STABLE",
