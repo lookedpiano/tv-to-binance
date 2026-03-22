@@ -185,6 +185,7 @@ ALPHA_TOKENS = [
     "SENTIS",
     "SHARDS",
     "SHOGGOTH",
+    "SIREN",
     "SKATE",
     "SKR",
     "SLX",
