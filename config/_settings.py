@@ -50,7 +50,7 @@ ALLOWED_SYMBOLS = [
     "JSTUSDT", "METISUSDT", "ARPAUSDT", "REZUSDT", "ROBOUSDT",
 
     # Bitunix
-    "BASEDUSDT", "AKEUSDT", "HIGHUSDT",
+    "BASEDUSDT", "AKEUSDT", "HIGHUSDT", "CETUSUSDT", "SPKUSDT",
 
     # ARCUSDT available on Bitunix spot market
 
