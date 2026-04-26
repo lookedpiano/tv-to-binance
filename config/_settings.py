@@ -51,6 +51,7 @@ ALLOWED_SYMBOLS = [
 
     # Bitunix
     "BASEDUSDT", "AKEUSDT", "HIGHUSDT", "CETUSUSDT", "SPKUSDT",
+    "LINEAUSDT",
 
     # ARCUSDT available on Bitunix spot market
 
