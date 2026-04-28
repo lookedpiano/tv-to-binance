@@ -11,7 +11,6 @@ IMAP_PORT = 993
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
 OUTLOOK_USER = os.environ.get("OUTLOOK_USER")
-ALERT_SUBJECT_KEYWORD = "Larsson Line Pro 3 Alert"
 
 
 def _decode(value):
@@ -74,7 +73,11 @@ def fetch_all_alert_emails():
         if OUTLOOK_USER.lower() not in sender.lower():
             continue
 
-        if ALERT_SUBJECT_KEYWORD.lower() not in subject.lower():
+        valid_alert_subject_keywords = ["larsson line pro 3 alert", "larsson line pro alert"]
+        subject_lower = subject.lower()
+
+        # Check if any of our valid subjects are in the email subject
+        if not any(kw in subject_lower for kw in valid_alert_subject_keywords):
             continue  # skip irrelevant mail
 
         item = {
