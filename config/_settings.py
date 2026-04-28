@@ -54,6 +54,7 @@ ALLOWED_SYMBOLS = [
     "LINEAUSDT", "AGLDUSDT", "ZBTUSDT", "IRYSUSDT", "SWARMSUSDT",
 
     # ARCUSDT available on Bitunix spot market
+    
 
     # USDC pairs
     # "BTCUSDC", "ETHUSDC", "ADAUSDC", "DOGEUSDC", "ONDOUSDC",
