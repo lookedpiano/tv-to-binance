@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, request
 import time
 import logging
+import threading
+from collections import defaultdict
 
 from binance_data import (
     safe_log_webhook_error,
@@ -33,6 +35,27 @@ from config._settings import (
     WEBHOOK_REQUEST_PATH,
 )
 
+# -------------------------
+# Rate Limiter logic
+# -------------------------
+class WebhookRateLimiter:
+    def __init__(self, limit=10, window=60):
+        self.limit = limit
+        self.window = window
+        self.history = defaultdict(list)
+        self.lock = threading.Lock()
+
+    def is_allowed(self, ip):
+        with self.lock:
+            now = time.time()
+            self.history[ip] = [t for t in self.history[ip] if now - t < self.window]
+            if len(self.history[ip]) < self.limit:
+                self.history[ip].append(now)
+                return True
+            return False
+
+limiter = WebhookRateLimiter(limit=5, window=60) # 5 requests per minute per IP
+
 webhook = Blueprint("webhook", __name__)
 
 # -------------------------
@@ -41,12 +64,15 @@ webhook = Blueprint("webhook", __name__)
 @webhook.before_request
 def apply_api_delay_before_webhook():
     """
-    Apply API delay only for the webhook POST endpoint.
-    Prevents multiple cloned instances from hitting Binance
-    at the same time.
+    Apply rate limiting and API delay only for the webhook POST endpoint.
+    Prevents flooding and staggering API access.
     """
-    # Only delay for POST /YOUR_WEBHOOK_PATH
     if request.method == "POST" and request.path == WEBHOOK_REQUEST_PATH:
+        ip = request.remote_addr
+        if not limiter.is_allowed(ip):
+            logging.warning(f"[SECURITY] Rate limit exceeded for IP: {ip}")
+            return jsonify({"error": "Too many requests. Please try again later."}), 429
+        
         apply_api_delay()
 
 @webhook.route(WEBHOOK_REQUEST_PATH, methods=['POST'])
