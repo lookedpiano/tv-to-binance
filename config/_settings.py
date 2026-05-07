@@ -59,7 +59,7 @@ ALLOWED_SYMBOLS = [
     "AIOUSDT",
 
     # ARCUSDT available on Bitunix spot market
-
+    
 
     # USDC pairs
     # "BTCUSDC", "ETHUSDC", "ADAUSDC", "DOGEUSDC", "ONDOUSDC",
