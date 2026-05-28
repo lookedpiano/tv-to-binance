@@ -183,7 +183,7 @@ def fetch_price_via_rest(symbol: str):
     except ClientError as e:
         msg = e.error_message.lower() if e.error_message else ""
 
-        logging.error(f"[PRICE:REST] ClientError for {symbol}: {e.error_message}")
+        logging.warning(f"[PRICE:REST] ClientError for {symbol}: {e.error_message}") # logging.error causes deploy failures
 
         if (
             e.status_code in (418, 429)
