@@ -2,6 +2,7 @@ import imaplib
 import email
 from email.header import decode_header
 import datetime
+import re
 import os
 import logging
 
@@ -115,6 +116,30 @@ def fetch_all_alert_emails():
     return alerts
 
 def extract_alert_payload(text: str) -> str:
+    """
+    Extracts everything between:
+        'Hi <name>,' and '// Larsson Line Pro'
+
+    Normalizes indentation and removes empty lines.
+    """
+    if not text:
+        return ""
+
+    pattern = r"Hi\s+.+?,\s*(.*?)\s*//\s*Larsson Line Pro"
+
+    match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+
+    if not match:
+        return ""
+
+    section = match.group(1)
+
+    # Strip whitespace + remove blank lines
+    lines = [line.strip() for line in section.splitlines() if line.strip()]
+
+    return "\n".join(lines)
+
+def extract_alert_payload_old(text: str) -> str:
     """
     Extracts everything between:
         'Hi jimmy,' and '// Larsson Line Pro'
