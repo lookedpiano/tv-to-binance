@@ -27,6 +27,10 @@ from config._settings import (
     BINANCE_RATE_LIMIT,
 )
 
+SKIP_REST_PRICE_SYMBOLS = {
+    "1000PEPPER",
+}
+
 # -------------------------
 # Exchange helpers (connector)
 # -------------------------
@@ -164,14 +168,20 @@ def get_current_price(symbol: str):
     return price
 
 def fetch_price_via_rest(symbol: str):
-    # detect stablecoin-vs-stablecoin pairs like USDTUSDT or USDCUSDT
+    # Extract base asset
+    base = symbol
     if symbol.endswith(DEFAULT_QUOTE_ASSET):
-        base = symbol[: -len(DEFAULT_QUOTE_ASSET)]
-        quote = DEFAULT_QUOTE_ASSET
+        base = symbol[:-len(DEFAULT_QUOTE_ASSET)]
 
-        if base in STABLECOINS and quote in STABLECOINS:
-            logging.info(f"[PRICE:SKIP] Stablecoin pair {symbol}")
-            return Decimal("1")
+    # Skip unsupported symbols
+    if base in SKIP_REST_PRICE_SYMBOLS:
+        logging.info(f"[PRICE:SKIP] Skipping REST price lookup for {symbol}")
+        return None
+
+    # detect stablecoin-vs-stablecoin pairs
+    if base in STABLECOINS and DEFAULT_QUOTE_ASSET in STABLECOINS:
+        logging.info(f"[PRICE:SKIP] Stablecoin pair {symbol}")
+        return Decimal("1")
 
     try:
         client = get_client()
