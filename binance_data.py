@@ -15,6 +15,7 @@ from binance.spot import Spot as Client
 from binance.error import ClientError
 from utils import sanitize_filters
 from email_poll import start_email_polling_thread
+from security import is_outbound_ip_allowed
 
 # -------------------------
 # Configuration
@@ -359,6 +360,15 @@ and caches them in Redis for quick access.
 def fetch_and_cache_balances(client: Client, log_context: str, return_balances: bool = False):
     """Fetch balances via REST and write them to Redis."""
     try:
+        # Verify that this server's outbound IP is whitelisted by Binance
+        allowed, current_ip = is_outbound_ip_allowed()
+        if not allowed:
+            logging.error(
+                f"[CACHE:{log_context}] Outbound IP {current_ip} is not whitelisted. "
+                "Skipping Binance balance fetch."
+            )
+            return {}
+
         logging.info(f"[CACHE:{log_context}] Fetching account balances from REST...")
         balances = fetch_account_balances(client)
         if not balances:
