@@ -73,7 +73,6 @@ ALLOWED_SYMBOLS = [
     # ARCUSDT available on Bitunix spot market
 
 
-
     # USDC pairs
     # "BTCUSDC", "ETHUSDC", "ADAUSDC", "DOGEUSDC", "ONDOUSDC",
     # "PEPEUSDC", "XRPUSDC", "WIFUSDC", "BNBUSDC", "SOLUSDC",
