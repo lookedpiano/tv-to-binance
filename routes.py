@@ -416,6 +416,68 @@ def list_base_assets():
 
 
 # ==========================================================
+# ========== Frontend Updating Invenstments ================
+# ==========================================================
+@routes.route("/portfolio/invested-assets", methods=["GET"])
+def get_invested_assets():
+    try:
+        r = get_redis()
+
+        assets = sorted(
+            asset.decode() if isinstance(asset, bytes) else asset
+            for asset in r.smembers("invested_assets")
+        )
+
+        return jsonify({
+            "assets": assets,
+            "count": len(assets),
+        }), 200
+
+    except Exception as e:
+        logging.exception(f"[ROUTE] Failed to get invested assets: {e}")
+        return jsonify({"error": "Failed to get invested assets"}), 500
+
+@routes.route("/portfolio/invested-assets", methods=["PUT"])
+def update_invested_assets():
+    try:
+        data = request.get_json(silent=True) or {}
+        assets = data.get("assets", [])
+
+        if not isinstance(assets, list):
+            return jsonify({"error": "assets must be a list"}), 400
+
+        normalized = {
+            str(asset).strip().upper()
+            for asset in assets
+            if str(asset).strip()
+        }
+
+        r = get_redis()
+
+        # Replace the entire current selection
+        r.delete("invested_assets")
+
+        if normalized:
+            r.sadd("invested_assets", *normalized)
+
+        logging.info(
+            f"[PORTFOLIO] Updated invested assets: "
+            f"{sorted(normalized)}"
+        )
+
+        return jsonify({
+            "assets": sorted(normalized),
+            "count": len(normalized),
+        }), 200
+
+    except Exception as e:
+        logging.exception(
+            f"[ROUTE] Failed to update invested assets: {e}"
+        )
+        return jsonify({"error": "Failed to update invested assets"}), 500
+
+
+# ==========================================================
 # ========== DASHBOARD======================================
 # ==========================================================
 @routes.route("/dashboard", methods=["GET"])
