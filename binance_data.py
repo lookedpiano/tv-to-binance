@@ -725,8 +725,8 @@ def get_current_price_snapshot_period():
 
     Periods are:
 
-        08:00 - 19:59 -> morning
-        20:00 - 07:59 -> evening
+        05:00 - 16:59 -> morning
+        17:00 - 04:59 -> evening
 
     Returns:
 
@@ -741,17 +741,17 @@ def get_current_price_snapshot_period():
     """
     now = datetime.now(TZ)
 
-    if 8 <= now.hour < 20:
+    if 5 <= now.hour < 17:
         period_start = now.replace(
-            hour=8,
+            hour=5,
             minute=0,
             second=0,
             microsecond=0,
         )
 
-    elif now.hour >= 20:
+    elif now.hour >= 17:
         period_start = now.replace(
-            hour=20,
+            hour=17,
             minute=0,
             second=0,
             microsecond=0,
@@ -761,7 +761,7 @@ def get_current_price_snapshot_period():
         yesterday = now - timedelta(days=1)
 
         period_start = yesterday.replace(
-            hour=20,
+            hour=17,
             minute=0,
             second=0,
             microsecond=0,
@@ -984,7 +984,7 @@ def _asset_price_snapshot_loop():
                     f"period {period_id}; fetching now."
                 )
 
-                fetch_and_cache_asset_price_snapshot()
+            fetch_and_cache_asset_price_snapshot()
 
         except Exception:
             logging.exception(
