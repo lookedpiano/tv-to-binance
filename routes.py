@@ -10,6 +10,7 @@ from binance_data import (
     fetch_and_cache_filters,
     get_cached_orders,
     DAILY_BALANCE_SNAPSHOT_KEY,
+    ASSET_PRICE_SNAPSHOT_PREFIX,
 )
 from utils import should_log_request, load_ip_file, require_admin_key
 from security import verify_before_request_secret
@@ -475,6 +476,65 @@ def update_invested_assets():
             f"[ROUTE] Failed to update invested assets: {e}"
         )
         return jsonify({"error": "Failed to update invested assets"}), 500
+
+@routes.route("/debug/asset-price-snapshots", methods=["GET"])
+def debug_asset_price_snapshots():
+    """
+    Debug endpoint: return all asset price snapshots currently
+    stored in Redis.
+    """
+    try:
+        r = get_redis()
+
+        keys = sorted(
+            r.keys(f"{ASSET_PRICE_SNAPSHOT_PREFIX}:*")
+        )
+
+        snapshots = []
+
+        for key in keys:
+            if isinstance(key, bytes):
+                key = key.decode()
+
+            # Skip metadata hashes
+            if key.endswith(":meta"):
+                continue
+
+            raw = r.hgetall(key)
+
+            data = {
+                (
+                    k.decode() if isinstance(k, bytes) else k
+                ): (
+                    v.decode() if isinstance(v, bytes) else v
+                )
+                for k, v in raw.items()
+            }
+
+            snapshots.append({
+                "key": key,
+                "prices": data,
+            })
+
+        # Latest snapshot pointer
+        latest = r.get("asset_price_snapshot:last")
+
+        if isinstance(latest, bytes):
+            latest = latest.decode()
+
+        return jsonify({
+            "count": len(snapshots),
+            "latest": latest,
+            "snapshots": snapshots,
+        }), 200
+
+    except Exception as e:
+        logging.exception(
+            f"[ROUTE] Failed to read asset price snapshots: {e}"
+        )
+        return jsonify({
+            "error": "Failed to read asset price snapshots"
+        }), 500
 
 
 # ==========================================================
