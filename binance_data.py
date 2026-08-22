@@ -972,6 +972,7 @@ def _asset_price_snapshot_loop():
             # Only fetch once per period
             # -----------------------------------------------------
 
+            '''
             if r.exists(redis_key):
                 logging.info(
                     f"[ASSET PRICE] Snapshot already exists for "
@@ -985,6 +986,9 @@ def _asset_price_snapshot_loop():
                 )
 
                 fetch_and_cache_asset_price_snapshot()
+            '''
+            logging.info("fetch_and_cache_asset_price_snapshot...")
+            fetch_and_cache_asset_price_snapshot()
 
         except Exception:
             logging.exception(
