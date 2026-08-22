@@ -984,7 +984,7 @@ def _asset_price_snapshot_loop():
                     f"period {period_id}; fetching now."
                 )
 
-            fetch_and_cache_asset_price_snapshot()
+                fetch_and_cache_asset_price_snapshot()
 
         except Exception:
             logging.exception(
