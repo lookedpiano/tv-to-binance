@@ -481,7 +481,7 @@ def update_invested_assets():
 def debug_asset_price_snapshots():
     """
     Debug endpoint: return all asset price snapshots currently
-    stored in Redis.
+    stored in Redis, including metadata.
     """
     try:
         r = get_redis()
@@ -496,13 +496,30 @@ def debug_asset_price_snapshots():
             if isinstance(key, bytes):
                 key = key.decode()
 
-            # Skip metadata hashes
-            if key.endswith(":meta"):
+            # The "last" key is a Redis string pointer, not a hash.
+            if key == f"{ASSET_PRICE_SNAPSHOT_PREFIX}:last":
                 continue
+
+            # Only process Redis hashes.
+            key_type = r.type(key)
+
+            if isinstance(key_type, bytes):
+                key_type = key_type.decode()
+
+            if key_type != "hash":
+                logging.warning(
+                    f"[ROUTE] Skipping unexpected Redis key type: "
+                    f"{key} ({key_type})"
+                )
+                continue
+
+            # -----------------------------------------------------
+            # Prices
+            # -----------------------------------------------------
 
             raw = r.hgetall(key)
 
-            data = {
+            prices = {
                 (
                     k.decode() if isinstance(k, bytes) else k
                 ): (
@@ -511,13 +528,35 @@ def debug_asset_price_snapshots():
                 for k, v in raw.items()
             }
 
+            # -----------------------------------------------------
+            # Metadata
+            # -----------------------------------------------------
+
+            meta_key = f"{key}:meta"
+            raw_meta = r.hgetall(meta_key)
+
+            metadata = {
+                (
+                    k.decode() if isinstance(k, bytes) else k
+                ): (
+                    v.decode() if isinstance(v, bytes) else v
+                )
+                for k, v in raw_meta.items()
+            }
+
             snapshots.append({
                 "key": key,
-                "prices": data,
+                "prices": prices,
+                #"metadata": metadata,
             })
 
+        # ---------------------------------------------------------
         # Latest snapshot pointer
-        latest = r.get("asset_price_snapshot:last")
+        # ---------------------------------------------------------
+
+        latest = r.get(
+            f"{ASSET_PRICE_SNAPSHOT_PREFIX}:last"
+        )
 
         if isinstance(latest, bytes):
             latest = latest.decode()
@@ -532,6 +571,7 @@ def debug_asset_price_snapshots():
         logging.exception(
             f"[ROUTE] Failed to read asset price snapshots: {e}"
         )
+
         return jsonify({
             "error": "Failed to read asset price snapshots"
         }), 500
