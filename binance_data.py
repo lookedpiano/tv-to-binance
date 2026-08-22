@@ -702,6 +702,306 @@ def get_cached_orders(limit: int = 100):
         logging.error(f"[CACHE] Failed to fetch cached orders: {e}")
         return []
 
+
+# ==========================================================
+# ========== 12h hour period ===============================
+# ==========================================================
+
+# Fixed snapshot periods:
+#
+#   08:00 -> morning period
+#   20:00 -> evening period
+#
+# The background thread does NOT determine the period.
+# The current clock time does.
+#
+ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL = 60 * 60  # every 60min
+
+ASSET_PRICE_SNAPSHOT_PREFIX = "asset_price_snapshot"
+
+
+def get_current_price_snapshot_period():
+    """
+    Return the fixed 12-hour snapshot period for the current time.
+
+    Periods are:
+
+        08:00 - 19:59 -> morning
+        20:00 - 07:59 -> evening
+
+    Returns:
+
+        {
+            "period": "2026-08-18-08",
+            "period_start": datetime(...),
+            "period_end": datetime(...)
+        }
+
+    The period identifier is deterministic and independent of
+    application/server startup time.
+    """
+    now = datetime.now(TZ)
+
+    if 8 <= now.hour < 20:
+        period_start = now.replace(
+            hour=8,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+    elif now.hour >= 20:
+        period_start = now.replace(
+            hour=20,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+    else:
+        yesterday = now - timedelta(days=1)
+
+        period_start = yesterday.replace(
+            hour=20,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+    period_end = period_start + timedelta(hours=12)
+
+    return {
+        "period": period_start.strftime("%Y-%m-%d-%H"),
+        "period_start": period_start,
+        "period_end": period_end,
+    }
+
+
+def get_invested_assets() -> set[str]:
+    """Return the assets currently selected as invested in the frontend."""
+
+    r = get_redis()
+
+    assets = r.smembers("invested_assets")
+
+    return {
+        asset.decode() if isinstance(asset, bytes) else asset
+        for asset in assets
+    }
+
+
+def fetch_and_cache_asset_price_snapshot():
+    """
+    Fetch all Binance spot ticker prices in one REST request and
+    cache the prices of all currently interesting assets.
+
+    Prices are stored in the Redis hash belonging to the current
+    fixed 12-hour period.
+
+    Example:
+
+        asset_price_snapshot:2026-08-18-08
+
+            BTC  -> 118234.12
+            ETH  -> 4521.31
+            BNB  -> 823.42
+
+    The snapshot period is determined by the clock, not by server
+    startup time.
+    """
+
+    try:
+        interested_assets = {
+            asset.upper().strip()
+            for asset in get_invested_assets()
+            if asset and asset.strip()
+        }
+
+        if not interested_assets:
+            logging.warning(
+                "[ASSET PRICE] No interested assets found."
+            )
+            return None
+
+        period_info = get_current_price_snapshot_period()
+
+        period_id = period_info["period"]
+
+        logging.info(
+            f"[ASSET PRICE] Fetching snapshot for period "
+            f"{period_id} "
+            f"({period_info['period_start']} -> "
+            f"{period_info['period_end']})"
+        )
+
+        client = get_client()
+
+        # ---------------------------------------------------------
+        # ONE Binance REST request
+        # ---------------------------------------------------------
+
+        all_spot_prices = client.ticker_price()
+
+        # ---------------------------------------------------------
+        # Build local lookup of USDT prices
+        # ---------------------------------------------------------
+
+        quote = DEFAULT_QUOTE_ASSET
+
+        usdt_prices = {}
+
+        for item in all_spot_prices:
+            symbol = item.get("symbol", "")
+
+            if not symbol.endswith(quote):
+                continue
+
+            try:
+                base = symbol[:-len(quote)]
+                price = Decimal(str(item["price"]))
+            except (KeyError, ValueError):
+                continue
+
+            usdt_prices[base] = price
+
+        # ---------------------------------------------------------
+        # Build snapshot
+        # ---------------------------------------------------------
+
+        snapshot = {}
+
+        for asset in interested_assets:
+
+            # Stablecoins have a value of 1 USD.
+            if asset in STABLECOINS:
+                snapshot[asset] = "1"
+                continue
+
+            price = usdt_prices.get(asset)
+
+            if price is None:
+                logging.warning(
+                    f"[ASSET PRICE] No {quote} price found for {asset}"
+                )
+                continue
+
+            snapshot[asset] = str(price)
+
+        if not snapshot:
+            logging.warning(
+                "[ASSET PRICE] No prices could be resolved."
+            )
+            return None
+
+        # ---------------------------------------------------------
+        # Store in Redis
+        # ---------------------------------------------------------
+
+        r = get_redis()
+
+        redis_key = (
+            f"{ASSET_PRICE_SNAPSHOT_PREFIX}:{period_id}"
+        )
+
+        r.hset(redis_key, mapping=snapshot)
+
+        # Metadata
+        r.hset(
+            f"{redis_key}:meta",
+            mapping={
+                "period": period_id,
+                "period_start": period_info["period_start"].isoformat(),
+                "period_end": period_info["period_end"].isoformat(),
+                "updated_at": datetime.now(TZ).isoformat(),
+                "asset_count": str(len(snapshot)),
+            },
+        )
+
+        # Pointer to the latest snapshot
+        r.set(
+            "asset_price_snapshot:last",
+            redis_key,
+        )
+
+        logging.info(
+            f"[ASSET PRICE] Cached {len(snapshot)} prices "
+            f"under {redis_key}"
+        )
+
+        return snapshot
+
+    except Exception as e:
+        logging.exception(
+            f"[ASSET PRICE] Failed to fetch price snapshot: {e}"
+        )
+        return None
+
+
+def _asset_price_snapshot_loop():
+    """
+    Background loop for asset-price snapshots.
+
+    The server does not define the snapshot periods.
+
+    Instead, the current clock determines whether we are in the
+    08:00 or 20:00 period.
+
+    The thread wakes up periodically and only creates a new
+    snapshot when the current period has not already been cached.
+
+    This makes the system resilient to server restarts and
+    deployments at arbitrary times.
+    """
+
+    logging.info(
+        "[ASSET PRICE] Asset price snapshot thread started."
+    )
+
+    while True:
+        try:
+            period_info = get_current_price_snapshot_period()
+
+            period_id = period_info["period"]
+
+            r = get_redis()
+
+            redis_key = (
+                f"{ASSET_PRICE_SNAPSHOT_PREFIX}:{period_id}"
+            )
+
+            # -----------------------------------------------------
+            # Only fetch once per period
+            # -----------------------------------------------------
+
+            if r.exists(redis_key):
+                logging.info(
+                    f"[ASSET PRICE] Snapshot already exists for "
+                    f"period {period_id}; skipping fetch."
+                )
+
+            else:
+                logging.info(
+                    f"[ASSET PRICE] No snapshot exists for "
+                    f"period {period_id}; fetching now."
+                )
+
+                fetch_and_cache_asset_price_snapshot()
+
+        except Exception:
+            logging.exception(
+                "[ASSET PRICE] Unexpected error in snapshot loop."
+            )
+
+        # Check every hour whether a snapshot for the current
+        # fixed 12-hour period already exists.
+
+        logging.info(
+            "[ASSET PRICE] Sleeping for an hour..."
+        )
+        
+        time.sleep(ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL)
+
+
 # ==========================================================
 # ========== STARTUP ENTRYPOINT =============================
 # ==========================================================
@@ -735,4 +1035,19 @@ def start_background_cache(symbols: List[str]):
     if ENABLE_FILTER_CACHE:
         threading.Thread(target=_filter_updater, args=(client, symbols), daemon=True, name="FilterCache").start()
     
-    logging.info("[CACHE] Background threads started (balances and filters)")
+    # ---------------------------------------------------------
+    # Periodic asset price snapshots
+    # ---------------------------------------------------------
+    """
+    Start the background asset-price snapshot thread.
+
+    The current fixed 12-hour period is checked immediately.
+    If it does not yet have a snapshot, one is fetched.
+
+    Subsequent checks occur every 12 hours.
+
+    Snapshot periods are independent of server startup time.
+    """
+    threading.Thread(target=_asset_price_snapshot_loop, daemon=True, name="AssetPriceSnapshot").start()
+
+    logging.info("[CACHE] Background threads started (balances, filters, and asset price snapshots)")
