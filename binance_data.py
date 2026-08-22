@@ -719,7 +719,6 @@ ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL = 60 * 60  # every 60min
 
 ASSET_PRICE_SNAPSHOT_PREFIX = "asset_price_snapshot"
 
-
 def get_current_price_snapshot_period():
     """
     Return the fixed 12-hour snapshot period for the current time.
