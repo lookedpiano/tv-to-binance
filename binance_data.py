@@ -1039,8 +1039,11 @@ def get_extreme_asset_price_changes(threshold_percent: Decimal = Decimal("50")):
         if isinstance(key, bytes):
             key = key.decode()
 
-        # Ignore metadata keys
+        # Ignore metadata hashes and the "last" pointer
         if key.endswith(":meta"):
+            continue
+
+        if key == f"{ASSET_PRICE_SNAPSHOT_PREFIX}:last":
             continue
 
         snapshot_keys.append(key)
