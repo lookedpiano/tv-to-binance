@@ -9,6 +9,7 @@ from binance_data import (
     fetch_and_cache_balances,
     fetch_and_cache_filters,
     get_cached_orders,
+    get_extreme_asset_price_changes,
     DAILY_BALANCE_SNAPSHOT_KEY,
     ASSET_PRICE_SNAPSHOT_PREFIX,
 )
@@ -574,6 +575,22 @@ def debug_asset_price_snapshots():
 
         return jsonify({
             "error": "Failed to read asset price snapshots"
+        }), 500
+
+@routes.route("/extreme-asset-price-changes", methods=["GET"])
+def extreme_asset_price_changes():
+    try:
+        result = get_extreme_asset_price_changes()
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        logging.exception(
+            f"[ROUTE] Failed to calculate extreme asset price changes: {e}"
+        )
+
+        return jsonify({
+            "error": "Failed to calculate extreme asset price changes"
         }), 500
 
 

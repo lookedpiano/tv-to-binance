@@ -1000,6 +1000,164 @@ def _asset_price_snapshot_loop():
         
         time.sleep(ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL)
 
+def get_extreme_asset_price_changes(threshold_percent: Decimal = Decimal("50")):
+    """
+    Compare the two most recent asset price snapshots and return
+    assets whose price changed by more than the given percentage.
+
+    Example result:
+
+        {
+            "previous_snapshot": "asset_price_snapshot:2026-08-22-20",
+            "current_snapshot": "asset_price_snapshot:2026-08-23-05",
+            "changes": [
+                {
+                    "asset": "BTC",
+                    "previous_price": "77367.99",
+                    "current_price": "76945.91",
+                    "change_percent": "-0.5455",
+                    "direction": "down"
+                }
+            ]
+        }
+
+    Only assets with abs(change_percent) > threshold_percent
+    are returned.
+    """
+
+    r = get_redis()
+
+    # ---------------------------------------------------------
+    # Find snapshot keys
+    # ---------------------------------------------------------
+
+    keys = r.keys(f"{ASSET_PRICE_SNAPSHOT_PREFIX}:*")
+
+    snapshot_keys = []
+
+    for key in keys:
+        if isinstance(key, bytes):
+            key = key.decode()
+
+        # Ignore metadata keys
+        if key.endswith(":meta"):
+            continue
+
+        snapshot_keys.append(key)
+
+    if len(snapshot_keys) < 2:
+        logging.info(
+            "[ASSET PRICE] Not enough snapshots to calculate changes."
+        )
+
+        return {
+            "previous_snapshot": None,
+            "current_snapshot": None,
+            "changes": [],
+        }
+
+    # ---------------------------------------------------------
+    # Sort snapshots by period ID
+    #
+    # Keys look like:
+    # asset_price_snapshot:2026-08-23-05
+    # ---------------------------------------------------------
+
+    snapshot_keys.sort()
+
+    previous_key = snapshot_keys[-2]
+    current_key = snapshot_keys[-1]
+
+    logging.info(
+        f"[ASSET PRICE] Comparing snapshots: "
+        f"{previous_key} -> {current_key}"
+    )
+
+    # ---------------------------------------------------------
+    # Read both Redis hashes
+    # ---------------------------------------------------------
+
+    previous_raw = r.hgetall(previous_key)
+    current_raw = r.hgetall(current_key)
+
+    previous = {}
+    current = {}
+
+    for asset, price in previous_raw.items():
+        if isinstance(asset, bytes):
+            asset = asset.decode()
+
+        if isinstance(price, bytes):
+            price = price.decode()
+
+        try:
+            previous[asset] = Decimal(price)
+        except Exception:
+            continue
+
+    for asset, price in current_raw.items():
+        if isinstance(asset, bytes):
+            asset = asset.decode()
+
+        if isinstance(price, bytes):
+            price = price.decode()
+
+        try:
+            current[asset] = Decimal(price)
+        except Exception:
+            continue
+
+    # ---------------------------------------------------------
+    # Compare assets present in both snapshots
+    # ---------------------------------------------------------
+
+    changes = []
+
+    common_assets = previous.keys() & current.keys()
+
+    for asset in common_assets:
+        old_price = previous[asset]
+        new_price = current[asset]
+
+        # Avoid division by zero
+        if old_price == 0:
+            continue
+
+        change_percent = (
+            (new_price - old_price)
+            / old_price
+            * Decimal("100")
+        )
+
+        if abs(change_percent) <= threshold_percent:
+            continue
+
+        direction = "up" if change_percent > 0 else "down"
+
+        changes.append({
+            "asset": asset,
+            "previous_price": str(old_price),
+            "current_price": str(new_price),
+            "change_percent": str(
+                change_percent.quantize(Decimal("0.01"))
+            ),
+            "direction": direction,
+        })
+
+    # Largest changes first
+    changes.sort(
+        key=lambda item: abs(Decimal(item["change_percent"])),
+        reverse=True,
+    )
+
+    return {
+        "previous_snapshot": previous_key,
+        "current_snapshot": current_key,
+        "threshold_percent": str(threshold_percent),
+        "changes": changes,
+        "count": len(changes),
+    }
+
 
 # ==========================================================
 # ========== STARTUP ENTRYPOINT =============================
