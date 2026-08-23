@@ -709,13 +709,13 @@ def get_cached_orders(limit: int = 100):
 
 # Fixed snapshot periods:
 #
-#   08:00 -> morning period
-#   20:00 -> evening period
+#   05:00 -> morning period
+#   17:00 -> evening period
 #
 # The background thread does NOT determine the period.
 # The current clock time does.
 #
-ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL = 60 * 60  # every 60min
+ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL = 60 * 30  # every 30 min
 
 ASSET_PRICE_SNAPSHOT_PREFIX = "asset_price_snapshot"
 
