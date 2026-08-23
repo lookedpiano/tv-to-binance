@@ -1000,7 +1000,7 @@ def _asset_price_snapshot_loop():
         
         time.sleep(ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL)
 
-def get_extreme_asset_price_changes(threshold_percent: Decimal = Decimal("10")):
+def get_extreme_asset_price_changes(threshold_percent: Decimal = Decimal("1")):
     """
     Compare the two most recent asset price snapshots and return
     assets whose price changed by more than the given percentage.
