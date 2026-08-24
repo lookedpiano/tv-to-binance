@@ -991,11 +991,11 @@ def _asset_price_snapshot_loop():
                 "[ASSET PRICE] Unexpected error in snapshot loop."
             )
 
-        # Check every hour whether a snapshot for the current
+        # Check every half an hour whether a snapshot for the current
         # fixed 12-hour period already exists.
 
         logging.info(
-            "[ASSET PRICE] Sleeping for an hour..."
+            "[ASSET PRICE] Sleeping for half an hour..."
         )
         
         time.sleep(ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL)
