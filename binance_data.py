@@ -716,7 +716,6 @@ def get_cached_orders(limit: int = 100):
 # The current clock time does.
 #
 ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL = 60 * 30  # every 30 min
-
 ASSET_PRICE_SNAPSHOT_PREFIX = "asset_price_snapshot"
 
 def get_current_price_snapshot_period():
@@ -731,7 +730,7 @@ def get_current_price_snapshot_period():
     Returns:
 
         {
-            "period": "2026-08-18-08",
+            "period": "2026-08-18-05",
             "period_start": datetime(...),
             "period_end": datetime(...)
         }
@@ -799,7 +798,7 @@ def fetch_and_cache_asset_price_snapshot():
 
     Example:
 
-        asset_price_snapshot:2026-08-18-08
+        asset_price_snapshot:2026-08-18-05
 
             BTC  -> 118234.12
             ETH  -> 4521.31
@@ -943,7 +942,7 @@ def _asset_price_snapshot_loop():
     The server does not define the snapshot periods.
 
     Instead, the current clock determines whether we are in the
-    08:00 or 20:00 period.
+    05:00 or 17:00 period.
 
     The thread wakes up periodically and only creates a new
     snapshot when the current period has not already been cached.
@@ -1000,7 +999,7 @@ def _asset_price_snapshot_loop():
         
         time.sleep(ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL)
 
-def get_extreme_asset_price_changes(threshold_percent: Decimal = Decimal("5")):
+def get_extreme_asset_price_changes(threshold_percent: Decimal = Decimal("10")):
     """
     Compare the two most recent asset price snapshots and return
     assets whose price changed by more than the given percentage.
@@ -1008,7 +1007,7 @@ def get_extreme_asset_price_changes(threshold_percent: Decimal = Decimal("5")):
     Example result:
 
         {
-            "previous_snapshot": "asset_price_snapshot:2026-08-22-20",
+            "previous_snapshot": "asset_price_snapshot:2026-08-22-17",
             "current_snapshot": "asset_price_snapshot:2026-08-23-05",
             "changes": [
                 {
