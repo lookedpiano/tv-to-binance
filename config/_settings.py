@@ -79,6 +79,7 @@ ALLOWED_SYMBOLS = [
     "DOGSUSDT", "ORDIUSDT", "MNTUSDT", "POWRUSDT", "STEEMUSDT", "AVNTUSDT",
     "HAEDALUSDT", "ONEUSDT", "SOMIUSDT",
 
+
     # ARCUSDT available on Bitunix spot market
 
     # USDC pairs
