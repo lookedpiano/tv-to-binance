@@ -80,6 +80,7 @@ ALLOWED_SYMBOLS = [
     "HAEDALUSDT", "ONEUSDT", "SOMIUSDT",
 
 
+
     # ARCUSDT available on Bitunix spot market
 
     # USDC pairs
