@@ -81,6 +81,7 @@ ALLOWED_SYMBOLS = [
     "MAGICUSDT", "CROUSDT",
 
 
+
     # ARCUSDT available on Bitunix spot market
 
     # USDC pairs
