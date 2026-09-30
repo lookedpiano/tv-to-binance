@@ -84,7 +84,6 @@ ALLOWED_SYMBOLS = [
     "GASUSDT", "BEAMUSDT",
 
 
-
     # ARCUSDT available on Bitunix spot market
 
     # USDC pairs
