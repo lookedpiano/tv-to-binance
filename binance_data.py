@@ -704,7 +704,7 @@ def get_cached_orders(limit: int = 100):
 
 
 # ==========================================================
-# ========== 12h hour period ===============================
+# ========== 12h ASSET PRICE SNAPSHOTS =====================
 # ==========================================================
 
 # Fixed snapshot periods:
@@ -715,8 +715,12 @@ def get_cached_orders(limit: int = 100):
 # The background thread does NOT determine the period.
 # The current clock time does.
 #
-ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL = 60 * 30  # every 30 min
+ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL = 60 * 30  # every 30 minutes
 ASSET_PRICE_SNAPSHOT_PREFIX = "asset_price_snapshot"
+
+# Keep this many days of completed 12-hour snapshots.
+# Change this value whenever you want to retain more/less history.
+ASSET_PRICE_SNAPSHOT_RETENTION_DAYS = 10
 
 def get_current_price_snapshot_period():
     """
@@ -934,8 +938,208 @@ def fetch_and_cache_asset_price_snapshot():
         )
         return None
 
-
 def _asset_price_snapshot_loop():
+    """
+    Background loop for asset-price snapshots.
+
+    Fixed snapshot periods are determined by the current clock:
+
+        05:00 - 16:59 -> morning period
+        17:00 - 04:59 -> evening period
+
+    The thread checks every 30 minutes whether the current period
+    already has a snapshot.
+
+    A Redis lock prevents multiple application instances from
+    simultaneously creating the same snapshot.
+
+    Old snapshot data is automatically removed according to:
+
+        ASSET_PRICE_SNAPSHOT_RETENTION_DAYS
+    """
+
+    logging.info(
+        "[ASSET PRICE] Asset price snapshot thread started."
+    )
+
+    while True:
+        try:
+            period_info = get_current_price_snapshot_period()
+
+            period_id = period_info["period"]
+
+            r = get_redis()
+
+            redis_key = (
+                f"{ASSET_PRICE_SNAPSHOT_PREFIX}:{period_id}"
+            )
+
+            # -----------------------------------------------------
+            # Acquire a short Redis lock for snapshot creation.
+            #
+            # This protects against multiple Render instances or
+            # multiple application workers checking the same period
+            # at the same time.
+            # -----------------------------------------------------
+
+            lock_key = (
+                f"{ASSET_PRICE_SNAPSHOT_PREFIX}:lock:{period_id}"
+            )
+
+            lock = r.lock(
+                lock_key,
+                timeout=300,
+                blocking=False,
+            )
+
+            acquired = False
+
+            try:
+                acquired = lock.acquire(blocking=False)
+
+                if not acquired:
+                    logging.info(
+                        f"[ASSET PRICE] Another process is currently "
+                        f"handling period {period_id}; skipping."
+                    )
+
+                else:
+                    # -------------------------------------------------
+                    # Double-check after acquiring the lock.
+                    #
+                    # Another process may have created the snapshot
+                    # immediately before we acquired the lock.
+                    # -------------------------------------------------
+
+                    if r.exists(redis_key):
+                        logging.info(
+                            f"[ASSET PRICE] Snapshot already exists "
+                            f"for period {period_id}; skipping fetch."
+                        )
+
+                    else:
+                        logging.info(
+                            f"[ASSET PRICE] No snapshot exists for "
+                            f"period {period_id}; fetching now."
+                        )
+
+                        snapshot = (
+                            fetch_and_cache_asset_price_snapshot()
+                        )
+
+                        if snapshot:
+                            logging.info(
+                                f"[ASSET PRICE] Snapshot created "
+                                f"successfully for period {period_id}."
+                            )
+                        else:
+                            logging.warning(
+                                f"[ASSET PRICE] Failed to create "
+                                f"snapshot for period {period_id}."
+                            )
+
+            finally:
+                if acquired:
+                    try:
+                        lock.release()
+                    except Exception:
+                        logging.exception(
+                            "[ASSET PRICE] Failed to release "
+                            "snapshot Redis lock."
+                        )
+
+            # ---------------------------------------------------------
+            # Remove old snapshot data.
+            #
+            # This keeps Redis usage bounded and prevents snapshot
+            # history from growing forever.
+            # ---------------------------------------------------------
+
+            cutoff = (
+                period_info["period_start"]
+                - timedelta(
+                    days=ASSET_PRICE_SNAPSHOT_RETENTION_DAYS
+                )
+            )
+
+            deleted_count = 0
+
+            for key in r.scan_iter(
+                match=f"{ASSET_PRICE_SNAPSHOT_PREFIX}:*"
+            ):
+                if isinstance(key, bytes):
+                    key = key.decode()
+
+                # Never delete the "last" pointer.
+                if key == f"{ASSET_PRICE_SNAPSHOT_PREFIX}:last":
+                    continue
+
+                # Only process actual snapshot keys and metadata keys.
+                # Lock keys are intentionally ignored.
+                if not key.startswith(
+                    f"{ASSET_PRICE_SNAPSHOT_PREFIX}:"
+                ):
+                    continue
+
+                remainder = key[
+                    len(f"{ASSET_PRICE_SNAPSHOT_PREFIX}:") :
+                ]
+
+                # Ignore Redis lock keys.
+                if remainder.startswith("lock:"):
+                    continue
+
+                # Ignore anything that does not look like a
+                # snapshot period ID.
+                if remainder.endswith(":meta"):
+                    period_key = remainder[:-5]
+                else:
+                    period_key = remainder
+
+                try:
+                    snapshot_period_start = datetime.strptime(
+                        period_key,
+                        "%Y-%m-%d-%H",
+                    ).replace(tzinfo=TZ)
+
+                except ValueError:
+                    continue
+
+                if snapshot_period_start < cutoff:
+                    try:
+                        deleted = r.delete(key)
+
+                        if deleted:
+                            deleted_count += 1
+
+                    except Exception:
+                        logging.exception(
+                            f"[ASSET PRICE] Failed to delete "
+                            f"old snapshot key {key}"
+                        )
+
+            if deleted_count:
+                logging.info(
+                    f"[ASSET PRICE] Removed {deleted_count} old "
+                    f"snapshot Redis keys."
+                )
+
+        except Exception:
+            logging.exception(
+                "[ASSET PRICE] Unexpected error in snapshot loop."
+            )
+
+        # ---------------------------------------------------------
+        # Check again in 30 minutes.
+        # ---------------------------------------------------------
+
+        logging.info(
+            "[ASSET PRICE] Sleeping for 30 minutes..."
+        )
+
+        time.sleep(ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL)
+
+def _asset_price_snapshot_loop_old():
     """
     Background loop for asset-price snapshots.
 
@@ -1000,6 +1204,248 @@ def _asset_price_snapshot_loop():
         time.sleep(ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL)
 
 def get_extreme_asset_price_changes(threshold_percent: Decimal = Decimal("10")):
+    """
+    Compare the two most recent asset price snapshots and return
+    assets whose price changed by more than the given percentage.
+
+    Only snapshots retained within
+    ASSET_PRICE_SNAPSHOT_RETENTION_DAYS are available.
+
+    Example result:
+
+        {
+            "previous_snapshot": "asset_price_snapshot:2026-08-22-17",
+            "current_snapshot": "asset_price_snapshot:2026-08-23-05",
+            "threshold_percent": "10",
+            "changes": [
+                {
+                    "asset": "BTC",
+                    "previous_price": "77367.99",
+                    "current_price": "76945.91",
+                    "change_percent": "-0.55",
+                    "direction": "down"
+                }
+            ],
+            "count": 1
+        }
+
+    Only assets with:
+
+        abs(change_percent) > threshold_percent
+
+    are returned.
+    """
+
+    r = get_redis()
+
+    # ---------------------------------------------------------
+    # Find actual snapshot hashes.
+    #
+    # Redis also contains:
+    #
+    #   asset_price_snapshot:last
+    #   asset_price_snapshot:<period>:meta
+    #   asset_price_snapshot:lock:<period>
+    #
+    # Those are deliberately excluded.
+    # ---------------------------------------------------------
+
+    snapshot_keys = []
+
+    for key in r.scan_iter(
+        match=f"{ASSET_PRICE_SNAPSHOT_PREFIX}:*"
+    ):
+        if isinstance(key, bytes):
+            key = key.decode()
+
+        # Ignore the "last" pointer.
+        if key == f"{ASSET_PRICE_SNAPSHOT_PREFIX}:last":
+            continue
+
+        # Ignore metadata hashes.
+        if key.endswith(":meta"):
+            continue
+
+        # Ignore distributed locks.
+        if ":lock:" in key:
+            continue
+
+        # -----------------------------------------------------
+        # Validate that this actually looks like:
+        #
+        # asset_price_snapshot:YYYY-MM-DD-HH
+        # -----------------------------------------------------
+
+        period_id = key[
+            len(f"{ASSET_PRICE_SNAPSHOT_PREFIX}:") :
+        ]
+
+        try:
+            datetime.strptime(
+                period_id,
+                "%Y-%m-%d-%H",
+            )
+
+        except ValueError:
+            continue
+
+        snapshot_keys.append(key)
+
+    # ---------------------------------------------------------
+    # Need at least two snapshots.
+    # ---------------------------------------------------------
+
+    if len(snapshot_keys) < 2:
+        logging.info(
+            "[ASSET PRICE] Not enough snapshots to calculate "
+            "price changes."
+        )
+
+        return {
+            "previous_snapshot": None,
+            "current_snapshot": None,
+            "threshold_percent": str(threshold_percent),
+            "changes": [],
+            "count": 0,
+        }
+
+    # ---------------------------------------------------------
+    # Sort chronologically.
+    #
+    # Because the period ID is:
+    #
+    #   YYYY-MM-DD-HH
+    #
+    # lexical sorting is chronological sorting.
+    # ---------------------------------------------------------
+
+    snapshot_keys.sort()
+
+    previous_key = snapshot_keys[-2]
+    current_key = snapshot_keys[-1]
+
+    logging.info(
+        f"[ASSET PRICE] Comparing snapshots: "
+        f"{previous_key} -> {current_key}"
+    )
+
+    # ---------------------------------------------------------
+    # Read both snapshot hashes.
+    # ---------------------------------------------------------
+
+    previous_raw = r.hgetall(previous_key)
+    current_raw = r.hgetall(current_key)
+
+    previous = {}
+    current = {}
+
+    # ---------------------------------------------------------
+    # Parse previous snapshot.
+    # ---------------------------------------------------------
+
+    for asset, price in previous_raw.items():
+
+        if isinstance(asset, bytes):
+            asset = asset.decode()
+
+        if isinstance(price, bytes):
+            price = price.decode()
+
+        try:
+            previous[asset] = Decimal(price)
+
+        except Exception:
+            logging.warning(
+                f"[ASSET PRICE] Invalid previous price "
+                f"for {asset}: {price}"
+            )
+
+    # ---------------------------------------------------------
+    # Parse current snapshot.
+    # ---------------------------------------------------------
+
+    for asset, price in current_raw.items():
+
+        if isinstance(asset, bytes):
+            asset = asset.decode()
+
+        if isinstance(price, bytes):
+            price = price.decode()
+
+        try:
+            current[asset] = Decimal(price)
+
+        except Exception:
+            logging.warning(
+                f"[ASSET PRICE] Invalid current price "
+                f"for {asset}: {price}"
+            )
+
+    # ---------------------------------------------------------
+    # Only compare assets present in both snapshots.
+    # ---------------------------------------------------------
+
+    changes = []
+
+    common_assets = previous.keys() & current.keys()
+
+    for asset in common_assets:
+
+        old_price = previous[asset]
+        new_price = current[asset]
+
+        # Avoid division by zero.
+        if old_price == 0:
+            continue
+
+        change_percent = (
+            (new_price - old_price)
+            / old_price
+            * Decimal("100")
+        )
+
+        # Only return changes beyond the threshold.
+        if abs(change_percent) <= threshold_percent:
+            continue
+
+        direction = (
+            "up"
+            if change_percent > 0
+            else "down"
+        )
+
+        changes.append({
+            "asset": asset,
+            "previous_price": str(old_price),
+            "current_price": str(new_price),
+            "change_percent": str(
+                change_percent.quantize(
+                    Decimal("0.01")
+                )
+            ),
+            "direction": direction,
+        })
+
+    # ---------------------------------------------------------
+    # Largest percentage changes first.
+    # ---------------------------------------------------------
+
+    changes.sort(
+        key=lambda item: abs(
+            Decimal(item["change_percent"])
+        ),
+        reverse=True,
+    )
+
+    return {
+        "previous_snapshot": previous_key,
+        "current_snapshot": current_key,
+        "threshold_percent": str(threshold_percent),
+        "changes": changes,
+        "count": len(changes),
+    }
+
+def get_extreme_asset_price_changes_old(threshold_percent: Decimal = Decimal("10")):
     """
     Compare the two most recent asset price snapshots and return
     assets whose price changed by more than the given percentage.
@@ -1203,7 +1649,8 @@ def start_background_cache(symbols: List[str]):
     The current fixed 12-hour period is checked immediately.
     If it does not yet have a snapshot, one is fetched.
 
-    Subsequent checks occur every 12 hours.
+    The thread then checks every 30 minutes whether the
+    current fixed 12-hour period already has a snapshot.
 
     Snapshot periods are independent of server startup time.
     """
