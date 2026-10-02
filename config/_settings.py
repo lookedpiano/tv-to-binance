@@ -83,6 +83,7 @@ ALLOWED_SYMBOLS = [
     "PUNDIXUSDT", "SIGNUSDT", "KITEUSDT", "ALPINEUSDT", "AWEUSDT", "CHRUSDT",
     "GASUSDT", "BEAMUSDT", "PROSUSDT", "SFPUSDT", "0GUSDT", "RSRUSDT",
     "MOVEUSDT",
+    
 
 
     # ARCUSDT available on Bitunix spot market
