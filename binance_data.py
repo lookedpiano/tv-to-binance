@@ -9,7 +9,6 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 from binance.spot import Spot as Client
 from binance.error import ClientError
@@ -41,6 +40,7 @@ from config._settings import (
     DEFAULT_QUOTE_ASSET,
     STABLECOINS,
     REDIS_URL,
+    TZ,
 )
 
 # -------------------------
@@ -107,11 +107,6 @@ WS_RECONNECT_GRACE = 127                  # Restart stale WS streams if no updat
 WS_CHECK_INTERVAL = 83                    # Health monitor check interval (seconds)
 
 DAILY_BALANCE_SNAPSHOT_KEY = "balance_snapshots"
-
-# ==========================================================
-# ========== TIMEZONE CONFIG ===============================
-# ==========================================================
-TZ = ZoneInfo("Europe/Zurich")
 
 def now_local_ts() -> float:
     """Return the current local timestamp (Europe/Zurich)."""

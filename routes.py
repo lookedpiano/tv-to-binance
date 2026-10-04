@@ -2,7 +2,6 @@ import json
 import logging
 from flask import Blueprint, render_template, jsonify, request
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from binance_data import (
     get_redis,
     get_client,
@@ -15,14 +14,10 @@ from binance_data import (
 )
 from utils import should_log_request, load_ip_file, require_admin_key
 from security import verify_before_request_secret
-from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS, ALPHA_TOKENS, ENABLE_WS_PRICE_CACHE
+from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS, ALPHA_TOKENS, ENABLE_WS_PRICE_CACHE, TZ
 
 routes = Blueprint("routes", __name__)
 
-# ==========================================================
-# ========== TIMEZONE CONFIG ===============================
-# ==========================================================
-TZ = ZoneInfo("Europe/Zurich")
 
 # ==========================================================
 # ========== REQUEST HOOKS =================================

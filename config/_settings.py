@@ -1,5 +1,8 @@
 import os
 
+from zoneinfo import ZoneInfo
+
+
 # -------------------------
 # Types allowed for trading
 # -------------------------
@@ -302,6 +305,10 @@ BINANCE_RATE_LIMIT = "BINANCE_RATE_LIMIT"
 # -------------------------
 MAX_CROSS_LEVERAGE = 3
 
+# -------------------------
+# TIMEZONE CONFIG
+# -------------------------
+TZ = ZoneInfo("Europe/Zurich")
 
 # -------------------------
 # 12h ASSET PRICE SNAPSHOTS Binance
