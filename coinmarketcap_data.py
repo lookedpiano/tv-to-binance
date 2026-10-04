@@ -13,7 +13,8 @@ from config._settings import (
     TZ,
 )
 
-from redis_client import r
+
+from binance_data import get_redis
 
 
 CMC_QUOTES_URL = (
@@ -73,7 +74,7 @@ def set_cmc_asset_id(symbol, cmc_id):
 
     symbol = _normalise_symbol(symbol)
 
-    r.hset(
+    get_redis().hset(
         CMC_ASSET_MAP_REDIS_KEY,
         symbol,
         str(int(cmc_id)),
@@ -93,7 +94,7 @@ def set_cmc_asset_ids(asset_map):
         for symbol, cmc_id in asset_map.items()
     }
 
-    r.hset(
+    get_redis().hset(
         CMC_ASSET_MAP_REDIS_KEY,
         mapping=mapping,
     )
@@ -112,7 +113,7 @@ def get_cmc_asset_ids():
         }
     """
 
-    raw = r.hgetall(CMC_ASSET_MAP_REDIS_KEY)
+    raw = get_redis().hgetall(CMC_ASSET_MAP_REDIS_KEY)
 
     result = {}
 
@@ -382,6 +383,8 @@ def fetch_and_cache_cmc_asset_price_snapshot():
     # Don't overwrite an existing snapshot
     # ---------------------------------------------------------
 
+    r = get_redis()
+
     if r.exists(redis_key):
 
         logging.info(
@@ -584,6 +587,8 @@ def cleanup_old_cmc_snapshots():
         f"{CMC_PRICE_SNAPSHOT_PREFIX}:"
     )
 
+    r = get_redis()
+
     for key in r.scan_iter(
         match=f"{prefix}*"
     ):
@@ -654,7 +659,7 @@ def cmc_asset_price_snapshot_loop():
                 f"{period_id}"
             )
 
-            if r.exists(redis_key):
+            if get_.exists(redis_key):
 
                 logging.info(
                     "[CMC] Snapshot already exists "
