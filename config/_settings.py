@@ -302,6 +302,28 @@ BINANCE_RATE_LIMIT = "BINANCE_RATE_LIMIT"
 # -------------------------
 MAX_CROSS_LEVERAGE = 3
 
+
+# -------------------------
+# 12h ASSET PRICE SNAPSHOTS Binance
+# -------------------------
+ASSET_PRICE_SNAPSHOT_PREFIX = "asset_price_snapshot"
+ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL = 60 * 30  # every 30 minutes
+
+# Keep this many days of completed 12-hour snapshots.
+# Change this value whenever you want to retain more/less history.
+ASSET_PRICE_SNAPSHOT_RETENTION_DAYS = 10
+
+# -------------------------
+# 12h ASSET PRICE SNAPSHOTS CMC
+# -------------------------
+CMC_API_KEY = os.getenv("CMC_API_KEY")
+
+CMC_API_BASE_URL = "https://pro-api.coinmarketcap.com"
+
+CMC_PRICE_SNAPSHOT_PREFIX = "asset_price_snapshot_cmc"
+CMC_PRICE_SNAPSHOT_CHECK_INTERVAL = 60 * 30
+CMC_PRICE_SNAPSHOT_RETENTION_DAYS = 10
+
 # -------------------------
 # Helper
 # -------------------------

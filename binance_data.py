@@ -23,6 +23,14 @@ from security import is_outbound_ip_allowed
 from config._settings import (
     SKIP_INITIAL_FETCH,
     GENERATE_FAKE_BALANCE_DATA,
+    ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL,
+    ASSET_PRICE_SNAPSHOT_RETENTION_DAYS,
+    ASSET_PRICE_SNAPSHOT_PREFIX,
+    CMC_API_KEY,
+    CMC_API_BASE_URL,
+    CMC_PRICE_SNAPSHOT_PREFIX,
+    CMC_PRICE_SNAPSHOT_CHECK_INTERVAL,
+    CMC_PRICE_SNAPSHOT_RETENTION_DAYS,
     DELAY_API_ACCESS_SECONDS,
     BINANCE_API_KEY,
     BINANCE_SECRET_KEY,
@@ -714,13 +722,6 @@ def get_cached_orders(limit: int = 100):
 #
 # The background thread does NOT determine the period.
 # The current clock time does.
-#
-ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL = 60 * 30  # every 30 minutes
-ASSET_PRICE_SNAPSHOT_PREFIX = "asset_price_snapshot"
-
-# Keep this many days of completed 12-hour snapshots.
-# Change this value whenever you want to retain more/less history.
-ASSET_PRICE_SNAPSHOT_RETENTION_DAYS = 10
 
 def get_current_price_snapshot_period():
     """
