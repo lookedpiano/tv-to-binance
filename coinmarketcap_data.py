@@ -736,140 +736,269 @@ def cleanup_old_cmc_snapshots():
         )
 
 
-def get_extreme_cmc_asset_price_changes():
+def get_extreme_cmc_asset_price_changes(
+    threshold_percent: Decimal = Decimal("10")
+):
     """
-    Calculate the largest percentage price changes between
-    consecutive CMC asset price snapshots.
+    Compare the two most recent CMC asset price snapshots and return
+    assets whose price changed by more than the given percentage.
 
-    Returns the same general structure as the Binance
-    extreme asset price change calculation.
+    Only snapshots retained within
+    CMC_PRICE_SNAPSHOT_RETENTION_DAYS are available.
+
+    Only assets with:
+
+        abs(change_percent) > threshold_percent
+
+    are returned.
+
+    Example result:
+
+        {
+            "previous_snapshot":
+                "asset_price_snapshot_cmc:2026-10-05-05",
+
+            "current_snapshot":
+                "asset_price_snapshot_cmc:2026-10-05-17",
+
+            "threshold_percent": "10",
+
+            "changes": [
+                {
+                    "asset": "RLC",
+                    "previous_price": "0.6245",
+                    "current_price": "0.5699",
+                    "change_percent": "-8.73",
+                    "direction": "down"
+                }
+            ],
+
+            "count": 1,
+            "source": "coinmarketcap"
+        }
     """
 
     r = get_redis()
 
-    snapshots = []
+    # ---------------------------------------------------------
+    # Find actual CMC snapshot hashes.
+    #
+    # Redis also contains:
+    #
+    #   asset_price_snapshot_cmc:last
+    #   asset_price_snapshot_cmc:<period>:meta
+    #   asset_price_snapshot_cmc:lock:<period>
+    #
+    # Those are deliberately excluded.
+    # ---------------------------------------------------------
+
+    snapshot_keys = []
 
     for key in r.scan_iter(
         match=f"{CMC_PRICE_SNAPSHOT_PREFIX}:*"
     ):
 
-        key = (
-            key.decode()
-            if isinstance(key, bytes)
-            else key
-        )
+        if isinstance(key, bytes):
+            key = key.decode()
 
-        # Ignore metadata, pointer and lock keys.
-        if (
-            key.endswith(":meta")
-            or key.endswith(":last")
-            or ":lock:" in key
-        ):
+        # Ignore "last" pointer.
+        if key == f"{CMC_PRICE_SNAPSHOT_PREFIX}:last":
             continue
 
-        raw = r.hgetall(key)
-
-        if not raw:
+        # Ignore metadata hashes.
+        if key.endswith(":meta"):
             continue
 
-        prices = {}
+        # Ignore distributed locks.
+        if ":lock:" in key:
+            continue
 
-        for asset, price in raw.items():
+        # -----------------------------------------------------
+        # Validate that this actually looks like:
+        #
+        # asset_price_snapshot_cmc:YYYY-MM-DD-HH
+        # -----------------------------------------------------
 
-            asset = (
-                asset.decode()
-                if isinstance(asset, bytes)
-                else asset
+        period_id = key[
+            len(f"{CMC_PRICE_SNAPSHOT_PREFIX}:") :
+        ]
+
+        try:
+
+            datetime.strptime(
+                period_id,
+                "%Y-%m-%d-%H",
             )
 
-            price = (
-                price.decode()
-                if isinstance(price, bytes)
-                else price
-            )
+        except ValueError:
+            continue
 
-            try:
-                prices[asset] = Decimal(price)
-            except (InvalidOperation, TypeError, ValueError):
-                logging.warning(
-                    "[CMC] Invalid stored price for %s: %s",
-                    asset,
-                    price,
-                )
+        snapshot_keys.append(key)
 
-        period = key.replace(
-            f"{CMC_PRICE_SNAPSHOT_PREFIX}:",
-            "",
+    # ---------------------------------------------------------
+    # Need at least two snapshots.
+    # ---------------------------------------------------------
+
+    if len(snapshot_keys) < 2:
+
+        logging.info(
+            "[CMC ASSET PRICE] Not enough snapshots to calculate "
+            "price changes."
         )
 
-        snapshots.append({
-            "period": period,
-            "prices": prices,
-        })
-
-    # Need at least two snapshots to calculate changes.
-    if len(snapshots) < 2:
         return {
+            "previous_snapshot": None,
+            "current_snapshot": None,
+            "threshold_percent": str(threshold_percent),
+            "changes": [],
             "count": 0,
             "source": "coinmarketcap",
-            "message": "Not enough CMC snapshots to calculate changes",
-            "changes": [],
         }
 
-    # Chronological order.
-    snapshots.sort(
-        key=lambda snapshot: snapshot["period"]
+    # ---------------------------------------------------------
+    # Sort chronologically.
+    #
+    # YYYY-MM-DD-HH sorts chronologically.
+    # ---------------------------------------------------------
+
+    snapshot_keys.sort()
+
+    previous_key = snapshot_keys[-2]
+    current_key = snapshot_keys[-1]
+
+    logging.info(
+        "[CMC ASSET PRICE] Comparing snapshots: "
+        f"{previous_key} -> {current_key}"
     )
+
+    # ---------------------------------------------------------
+    # Read both snapshot hashes.
+    # ---------------------------------------------------------
+
+    previous_raw = r.hgetall(previous_key)
+    current_raw = r.hgetall(current_key)
+
+    previous = {}
+    current = {}
+
+    # ---------------------------------------------------------
+    # Parse previous snapshot.
+    # ---------------------------------------------------------
+
+    for asset, price in previous_raw.items():
+
+        if isinstance(asset, bytes):
+            asset = asset.decode()
+
+        if isinstance(price, bytes):
+            price = price.decode()
+
+        try:
+
+            previous[asset] = Decimal(price)
+
+        except Exception:
+
+            logging.warning(
+                "[CMC ASSET PRICE] Invalid previous price "
+                f"for {asset}: {price}"
+            )
+
+    # ---------------------------------------------------------
+    # Parse current snapshot.
+    # ---------------------------------------------------------
+
+    for asset, price in current_raw.items():
+
+        if isinstance(asset, bytes):
+            asset = asset.decode()
+
+        if isinstance(price, bytes):
+            price = price.decode()
+
+        try:
+
+            current[asset] = Decimal(price)
+
+        except Exception:
+
+            logging.warning(
+                "[CMC ASSET PRICE] Invalid current price "
+                f"for {asset}: {price}"
+            )
+
+    # ---------------------------------------------------------
+    # Only compare assets present in BOTH snapshots.
+    # ---------------------------------------------------------
 
     changes = []
 
-    for index in range(1, len(snapshots)):
+    common_assets = previous.keys() & current.keys()
 
-        previous = snapshots[index - 1]
-        current = snapshots[index]
+    for asset in common_assets:
 
-        previous_prices = previous["prices"]
-        current_prices = current["prices"]
+        old_price = previous[asset]
+        new_price = current[asset]
 
-        for asset in current_prices:
+        # Avoid division by zero.
+        if old_price == 0:
+            continue
 
-            if asset not in previous_prices:
-                continue
+        change_percent = (
+            (new_price - old_price)
+            / old_price
+            * Decimal("100")
+        )
 
-            old_price = previous_prices[asset]
-            new_price = current_prices[asset]
+        # -----------------------------------------------------
+        # IMPORTANT:
+        #
+        # Match Binance behavior exactly.
+        #
+        # Only return changes where:
+        #
+        #     abs(change_percent) > threshold_percent
+        # -----------------------------------------------------
 
-            if old_price == 0:
-                continue
+        if abs(change_percent) <= threshold_percent:
+            continue
 
-            percentage_change = (
-                (new_price - old_price)
-                / old_price
-            ) * Decimal("100")
+        direction = (
+            "up"
+            if change_percent > 0
+            else "down"
+        )
 
-            changes.append({
-                "asset": asset,
-                "previous_period": previous["period"],
-                "current_period": current["period"],
-                "previous_price": str(old_price),
-                "current_price": str(new_price),
-                "percentage_change": str(
-                    percentage_change
-                ),
-            })
+        changes.append({
+            "asset": asset,
+            "previous_price": str(old_price),
+            "current_price": str(new_price),
+            "change_percent": str(
+                change_percent.quantize(
+                    Decimal("0.01")
+                )
+            ),
+            "direction": direction,
+        })
 
-    # Largest absolute movements first.
+    # ---------------------------------------------------------
+    # Largest percentage changes first.
+    # ---------------------------------------------------------
+
     changes.sort(
         key=lambda item: abs(
-            Decimal(item["percentage_change"])
+            Decimal(item["change_percent"])
         ),
         reverse=True,
     )
 
     return {
+        "previous_snapshot": previous_key,
+        "current_snapshot": current_key,
+        "threshold_percent": str(threshold_percent),
+        "changes": changes,
         "count": len(changes),
         "source": "coinmarketcap",
-        "changes": changes,
     }
 
 
