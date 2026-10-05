@@ -1,5 +1,6 @@
 import json
 import logging
+from coinmarketcap_data import CMC_ASSET_MAP_REDIS_KEY
 from flask import Blueprint, render_template, jsonify, request
 from datetime import datetime
 from binance_data import (
@@ -14,7 +15,7 @@ from binance_data import (
 )
 from utils import should_log_request, load_ip_file, require_admin_key
 from security import verify_before_request_secret
-from config._settings import WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS, ALPHA_TOKENS, ENABLE_WS_PRICE_CACHE, TZ
+from config._settings import CMC_PRICE_SNAPSHOT_PREFIX, WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS, ALPHA_TOKENS, ENABLE_WS_PRICE_CACHE, TZ
 
 routes = Blueprint("routes", __name__)
 
@@ -315,6 +316,168 @@ def cache_balance_snapshots_count():
     except Exception as e:
         logging.error(f"[ROUTE] /cache/balance-snapshots/count failed: {e}")
         return jsonify({"error": "Failed to count cached balance-snapshots"}), 500
+
+
+# ==========================================================
+# ========== CMC ASSET PRICE SNAPSHOTS =====================
+# ==========================================================
+
+@routes.route("/cache/cmc/asset-price-snapshots", methods=["GET"])
+def get_cmc_asset_price_snapshots():
+    """Return all stored CMC asset price snapshots."""
+    if (unauthorized := require_admin_key()):
+        return unauthorized
+
+    try:
+        r = get_redis()
+
+        snapshots = []
+
+        for key in r.scan_iter(
+            match=f"{CMC_PRICE_SNAPSHOT_PREFIX}:*"
+        ):
+            key = key.decode() if isinstance(key, bytes) else key
+
+            # Ignore metadata, pointer and lock keys
+            if (
+                key.endswith(":meta")
+                or key.endswith(":last")
+                or ":lock:" in key
+                or key == CMC_ASSET_MAP_REDIS_KEY
+            ):
+                continue
+
+            snapshot = r.hgetall(key)
+
+            if not snapshot:
+                continue
+
+            parsed = {}
+
+            for asset, price in snapshot.items():
+                asset = asset.decode() if isinstance(asset, bytes) else asset
+                price = price.decode() if isinstance(price, bytes) else price
+                parsed[asset] = price
+
+            snapshots.append({
+                "period": key.replace(
+                    f"{CMC_PRICE_SNAPSHOT_PREFIX}:", ""
+                ),
+                "prices": parsed,
+            })
+
+        snapshots.sort(key=lambda s: s["period"])
+
+        return jsonify({
+            "count": len(snapshots),
+            "snapshots": snapshots,
+        }), 200
+
+    except Exception as e:
+        logging.exception(
+            "[ROUTE] /cache/cmc/asset-price-snapshots failed"
+        )
+        return jsonify({
+            "error": f"Failed to fetch CMC asset price snapshots: {e}"
+        }), 500
+
+
+@routes.route("/cache/cmc/asset-price-snapshots/count", methods=["GET"])
+def get_cmc_asset_price_snapshots_count():
+    """Return number of stored CMC asset price snapshots."""
+    if (unauthorized := require_admin_key()):
+        return unauthorized
+
+    try:
+        r = get_redis()
+
+        count = 0
+
+        for key in r.scan_iter(
+            match=f"{CMC_PRICE_SNAPSHOT_PREFIX}:*"
+        ):
+            key = key.decode() if isinstance(key, bytes) else key
+
+            if (
+                key.endswith(":meta")
+                or key.endswith(":last")
+                or ":lock:" in key
+                or key == CMC_ASSET_MAP_REDIS_KEY
+            ):
+                continue
+
+            count += 1
+
+        return jsonify({
+            "count": count
+        }), 200
+
+    except Exception as e:
+        logging.exception(
+            "[ROUTE] /cache/cmc/asset-price-snapshots/count failed"
+        )
+        return jsonify({
+            "error": "Failed to count cached CMC asset price snapshots"
+        }), 500
+
+@routes.route("/cache/cmc/asset-price-snapshots/latest", methods=["GET"])
+def get_latest_cmc_asset_price_snapshot():
+    """Return the latest stored CMC asset price snapshot."""
+    if (unauthorized := require_admin_key()):
+        return unauthorized
+
+    try:
+        r = get_redis()
+
+        last_key = r.get(
+            f"{CMC_PRICE_SNAPSHOT_PREFIX}:last"
+        )
+
+        if not last_key:
+            return jsonify({
+                "error": "No CMC asset price snapshot available"
+            }), 404
+
+        last_key = (
+            last_key.decode()
+            if isinstance(last_key, bytes)
+            else last_key
+        )
+
+        snapshot = r.hgetall(last_key)
+
+        if not snapshot:
+            return jsonify({
+                "error": "Latest CMC asset price snapshot is empty"
+            }), 404
+
+        prices = {}
+
+        for asset, price in snapshot.items():
+            asset = asset.decode() if isinstance(asset, bytes) else asset
+            price = price.decode() if isinstance(price, bytes) else price
+            prices[asset] = price
+
+        period = last_key.replace(
+            f"{CMC_PRICE_SNAPSHOT_PREFIX}:",
+            ""
+        )
+
+        return jsonify({
+            "period": period,
+            "source": "coinmarketcap",
+            "quote_currency": "USD",
+            "asset_count": len(prices),
+            "prices": prices,
+        }), 200
+
+    except Exception as e:
+        logging.exception(
+            "[ROUTE] /cache/cmc/asset-price-snapshots/latest failed"
+        )
+        return jsonify({
+            "error": f"Failed to fetch latest CMC snapshot: {e}"
+        }), 500
 
 
 # ==========================================================

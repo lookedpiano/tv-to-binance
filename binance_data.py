@@ -16,6 +16,8 @@ from utils import sanitize_filters
 from email_poll import start_email_polling_thread
 from security import is_outbound_ip_allowed
 
+from coinmarketcap_data import cmc_asset_price_snapshot_loop
+
 # -------------------------
 # Configuration
 # -------------------------
@@ -1650,6 +1652,7 @@ def start_background_cache(symbols: List[str]):
 
     Snapshot periods are independent of server startup time.
     """
-    threading.Thread(target=_asset_price_snapshot_loop, daemon=True, name="AssetPriceSnapshot").start()
+    threading.Thread(target=_asset_price_snapshot_loop, daemon=True, name="Binance-Asset-Price-Snapshot").start()
+    threading.Thread(target=cmc_asset_price_snapshot_loop, daemon=True, name="CMC-Asset-Price-Snapshot").start()
 
     logging.info("[CACHE] Background threads started (balances, filters, and asset price snapshots)")

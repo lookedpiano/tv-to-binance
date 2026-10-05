@@ -9,6 +9,7 @@ from config._settings import (
     CMC_API_KEY,
     CMC_API_BASE_URL,
     CMC_PRICE_SNAPSHOT_PREFIX,
+    CMC_PRICE_SNAPSHOT_CHECK_INTERVAL,
     CMC_PRICE_SNAPSHOT_RETENTION_DAYS,
     TZ,
 )
@@ -659,7 +660,7 @@ def cmc_asset_price_snapshot_loop():
                 f"{period_id}"
             )
 
-            if get_.exists(redis_key):
+            if get_redis().exists(redis_key):
 
                 logging.info(
                     "[CMC] Snapshot already exists "
