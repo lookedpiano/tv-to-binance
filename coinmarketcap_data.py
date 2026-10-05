@@ -14,8 +14,7 @@ from config._settings import (
     TZ,
 )
 
-
-from binance_data import get_redis
+from redis_client import get_redis
 
 
 CMC_QUOTES_URL = (

@@ -7,7 +7,6 @@ import time
 import redis
 from decimal import Decimal
 from typing import Dict, List, Optional
-from urllib.parse import urlparse
 from datetime import datetime, timedelta
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 from binance.spot import Spot as Client
@@ -16,6 +15,7 @@ from utils import sanitize_filters
 from email_poll import start_email_polling_thread
 from security import is_outbound_ip_allowed
 
+from redis_client import get_redis
 from coinmarketcap_data import cmc_asset_price_snapshot_loop
 
 # -------------------------
@@ -143,31 +143,6 @@ def get_client() -> Client:
         return init_client()
     return _client
 
-# ==========================================================
-# ========== REDIS SETUP ===================================
-# ==========================================================
-_r = None
-
-def get_redis() -> redis.Redis:
-    """Return the active Redis client or raise if not initialized."""
-    if _r is None:
-        raise RuntimeError("Redis not initialized. Call init_redis() first.")
-    return _r
-
-def init_redis(redis_url: str):
-    """Initialize and log Redis connection safely."""
-    global _r
-    _r = redis.Redis.from_url(redis_url, decode_responses=True)
-
-    parsed = urlparse(redis_url)
-    safe_host = parsed.hostname or "unknown"
-    safe_db = parsed.path.lstrip("/") or "0"
-
-    # Mask sensitive parts for logging
-    masked_host = safe_host.split("-", 1)[0] + "-******" if "-" in safe_host else safe_host
-    masked_port = "******" if parsed.port else "unknown"
-
-    logging.info(f"[REDIS] Connected (host={masked_host}:{masked_port}, db={safe_db})")
 
 # ==========================================================
 # ========== HELPER ========== =============================
