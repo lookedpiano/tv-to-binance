@@ -115,9 +115,8 @@ def fetch_cmc_prices(cmc_ids):
     Fetch current USD prices for all supplied CoinMarketCap IDs.
 
     - Uses one request per batch.
-    - CMC supports up to 250 cryptocurrency IDs per request.
-    - CMC charges one credit per 250 returned cryptocurrencies.
-    - Returns a dictionary:
+    - CMC supports up to 250 IDs per request.
+    - Returns:
         {
             cmc_id: Decimal(price)
         }
@@ -147,7 +146,6 @@ def fetch_cmc_prices(cmc_ids):
     if not cmc_ids:
         return {}
 
-    # CMC supports up to 250 IDs per request
     BATCH_SIZE = 250
 
     batches = [
@@ -193,10 +191,6 @@ def fetch_cmc_prices(cmc_ids):
                 timeout=20,
             )
 
-            # --------------------------------------------------
-            # HTTP STATUS
-            # --------------------------------------------------
-
             logging.info(
                 "[CMC] HTTP response batch %d/%d: status=%s",
                 batch_number,
@@ -217,22 +211,49 @@ def fetch_cmc_prices(cmc_ids):
             response.raise_for_status()
 
             # --------------------------------------------------
-            # JSON RESPONSE
+            # PARSE JSON
             # --------------------------------------------------
 
             payload = response.json()
 
-            status = payload.get(
-                "status",
-                {},
+            if not isinstance(payload, dict):
+
+                logging.error(
+                    "[CMC] Unexpected response type: %s",
+                    type(payload).__name__,
+                )
+
+                continue
+
+            status = payload.get("status") or {}
+            data = payload.get("data") or []
+
+            # --------------------------------------------------
+            # LOG CMC STATUS
+            # --------------------------------------------------
+
+            logging.info(
+                "[CMC] Batch %d/%d: data=%d items, status_keys=%s",
+                batch_number,
+                total_batches,
+                len(data),
+                list(status.keys()) if isinstance(status, dict) else [],
             )
 
-            error_code = status.get(
-                "error_code",
+            # --------------------------------------------------
+            # EXPLICIT CMC ERROR
+            # --------------------------------------------------
+
+            error_code = (
+                status.get("error_code")
+                if isinstance(status, dict)
+                else None
+            )
+
+            if error_code not in (
+                None,
                 0,
-            )
-
-            if error_code:
+            ):
 
                 logging.error(
                     "[CMC] API error on batch %d/%d: "
@@ -243,23 +264,15 @@ def fetch_cmc_prices(cmc_ids):
                     status.get("error_message"),
                 )
 
-                logging.error(
-                    "[CMC] Response body: %s",
-                    response.text[:1000],
-                )
-
                 continue
 
             # --------------------------------------------------
-            # PARSE PRICES
+            # PARSE ASSETS
             # --------------------------------------------------
 
             batch_prices = 0
 
-            for asset in payload.get(
-                "data",
-                [],
-            ):
+            for asset in data:
 
                 try:
 
@@ -267,8 +280,6 @@ def fetch_cmc_prices(cmc_ids):
                         asset["id"]
                     )
 
-                    # CMC v3 returns quote as an array.
-                    # Find the USD quote.
                     usd_quote = next(
                         (
                             quote
@@ -284,16 +295,31 @@ def fetch_cmc_prices(cmc_ids):
                     if not usd_quote:
 
                         logging.warning(
-                            "[CMC] No USD quote for %s",
+                            "[CMC] No USD quote for asset "
+                            "id=%s symbol=%s",
+                            asset.get("id"),
+                            asset.get("symbol"),
+                        )
+
+                        continue
+
+                    raw_price = usd_quote.get(
+                        "price"
+                    )
+
+                    if raw_price is None:
+
+                        logging.warning(
+                            "[CMC] No price for asset "
+                            "id=%s symbol=%s",
+                            asset.get("id"),
                             asset.get("symbol"),
                         )
 
                         continue
 
                     price = Decimal(
-                        str(
-                            usd_quote["price"]
-                        )
+                        str(raw_price)
                     )
 
                     all_prices[cmc_id] = price
@@ -312,12 +338,10 @@ def fetch_cmc_prices(cmc_ids):
                         asset,
                     )
 
-            # --------------------------------------------------
-            # CREDIT INFORMATION
-            # --------------------------------------------------
-
-            credit_count = status.get(
-                "credit_count"
+            credit_count = (
+                status.get("credit_count")
+                if isinstance(status, dict)
+                else None
             )
 
             if credit_count is not None:
@@ -343,7 +367,7 @@ def fetch_cmc_prices(cmc_ids):
                 )
 
         # ------------------------------------------------------
-        # REQUEST TIMEOUT
+        # TIMEOUT
         # ------------------------------------------------------
 
         except requests.Timeout as e:
@@ -369,7 +393,7 @@ def fetch_cmc_prices(cmc_ids):
             )
 
         # ------------------------------------------------------
-        # OTHER REQUEST / HTTP ERROR
+        # OTHER REQUEST ERROR
         # ------------------------------------------------------
 
         except requests.RequestException as e:
@@ -409,10 +433,6 @@ def fetch_cmc_prices(cmc_ids):
                 total_batches,
                 e,
             )
-
-    # ----------------------------------------------------------
-    # FINAL RESULT
-    # ----------------------------------------------------------
 
     logging.info(
         "[CMC] Total prices received: %d/%d",
