@@ -1,6 +1,5 @@
 import json
 import logging
-from coinmarketcap_data import CMC_ASSET_MAP_REDIS_KEY
 from flask import Blueprint, render_template, jsonify, request
 from datetime import datetime
 from binance_data import (
@@ -343,7 +342,6 @@ def get_cmc_asset_price_snapshots():
                 key.endswith(":meta")
                 or key.endswith(":last")
                 or ":lock:" in key
-                or key == CMC_ASSET_MAP_REDIS_KEY
             ):
                 continue
 
@@ -402,7 +400,6 @@ def get_cmc_asset_price_snapshots_count():
                 key.endswith(":meta")
                 or key.endswith(":last")
                 or ":lock:" in key
-                or key == CMC_ASSET_MAP_REDIS_KEY
             ):
                 continue
 
