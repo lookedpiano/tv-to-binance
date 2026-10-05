@@ -114,10 +114,7 @@ def fetch_cmc_prices(cmc_ids):
     """
     Fetch current USD prices for all supplied CMC IDs.
 
-    IMPORTANT:
-    This performs ONE HTTP request for the entire batch.
-
-    CMC currently charges one credit per 250 returned cryptocurrencies.
+    CMC requests are batched in groups of up to 250 IDs.
     """
 
     if not CMC_API_KEY:
@@ -134,141 +131,245 @@ def fetch_cmc_prices(cmc_ids):
         for cmc_id in cmc_ids
     })
 
+    CMC_BATCH_SIZE = 250
+
+    all_prices = {}
+
+    total_batches = (
+        (len(cmc_ids) + CMC_BATCH_SIZE - 1)
+        // CMC_BATCH_SIZE
+    )
+
     logging.info(
-        "[CMC] Fetching prices for %d assets in one request",
+        "[CMC] Fetching prices for %d assets in %d batch%s",
+        len(cmc_ids),
+        total_batches,
+        "" if total_batches == 1 else "es",
+    )
+
+    for batch_index in range(
+        0,
+        len(cmc_ids),
+        CMC_BATCH_SIZE,
+    ):
+
+        batch = cmc_ids[
+            batch_index:
+            batch_index + CMC_BATCH_SIZE
+        ]
+
+        batch_number = (
+            batch_index // CMC_BATCH_SIZE
+        ) + 1
+
+        logging.info(
+            "[CMC] Requesting batch %d/%d with %d IDs",
+            batch_number,
+            total_batches,
+            len(batch),
+        )
+
+        try:
+
+            response = requests.get(
+                CMC_QUOTES_URL,
+                headers=get_cmc_headers(),
+                params={
+                    "id": ",".join(
+                        str(cmc_id)
+                        for cmc_id in batch
+                    ),
+                    "convert": "USD",
+                },
+                timeout=20,
+            )
+
+            if response.status_code == 429:
+
+                logging.warning(
+                    "[CMC] Rate limit reached on batch %d/%d",
+                    batch_number,
+                    total_batches,
+                )
+
+                continue
+
+            response.raise_for_status()
+
+            payload = response.json()
+
+            status = payload.get(
+                "status",
+                {},
+            )
+
+            error_code = status.get(
+                "error_code",
+                0,
+            )
+
+            if error_code:
+
+                logging.error(
+                    "[CMC] API error on batch %d/%d: "
+                    "code=%s message=%s",
+                    batch_number,
+                    total_batches,
+                    error_code,
+                    status.get("error_message"),
+                )
+
+                continue
+
+            batch_prices = {}
+
+            for asset in payload.get(
+                "data",
+                [],
+            ):
+
+                try:
+
+                    cmc_id = int(
+                        asset["id"]
+                    )
+
+                    # CMC v3 returns quote as an ARRAY.
+                    usd_quote = next(
+                        (
+                            quote
+                            for quote in asset.get(
+                                "quote",
+                                [],
+                            )
+                            if quote.get("symbol") == "USD"
+                        ),
+                        None,
+                    )
+
+                    if not usd_quote:
+
+                        logging.warning(
+                            "[CMC] No USD quote for %s",
+                            asset.get("symbol"),
+                        )
+
+                        continue
+
+                    price = Decimal(
+                        str(
+                            usd_quote["price"]
+                        )
+                    )
+
+                    batch_prices[cmc_id] = price
+
+                except (
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                    InvalidOperation,
+                ):
+
+                    logging.exception(
+                        "[CMC] Invalid asset response: %s",
+                        asset,
+                    )
+
+            all_prices.update(
+                batch_prices
+            )
+
+            credit_count = (
+                payload
+                .get("status", {})
+                .get("credit_count")
+            )
+
+            logging.info(
+                "[CMC] Batch %d/%d received %d/%d prices%s",
+                batch_number,
+                total_batches,
+                len(batch_prices),
+                len(batch),
+                (
+                    f" | credits={credit_count}"
+                    if credit_count is not None
+                    else ""
+                ),
+            )
+
+        except requests.Timeout as e:
+
+            logging.error(
+                "[CMC] Request timeout on batch %d/%d: "
+                "type=%s error=%r",
+                batch_number,
+                total_batches,
+                type(e).__name__,
+                e,
+            )
+
+            continue
+
+        except requests.ConnectionError as e:
+
+            logging.error(
+                "[CMC] Connection error on batch %d/%d: "
+                "type=%s error=%r",
+                batch_number,
+                total_batches,
+                type(e).__name__,
+                e,
+            )
+
+            continue
+
+        except requests.RequestException as e:
+
+            status_code = (
+                e.response.status_code
+                if e.response is not None
+                else 0
+            )
+
+            logging.error(
+                "[CMC] HTTP request failed on batch %d/%d: "
+                "type=%s status=%s error=%r",
+                batch_number,
+                total_batches,
+                type(e).__name__,
+                status_code,
+                e,
+            )
+
+            if e.response is not None:
+
+                logging.error(
+                    "[CMC] Response body: %s",
+                    e.response.text[:1000],
+                )
+
+            continue
+
+        except Exception:
+
+            logging.exception(
+                "[CMC] Unexpected error processing "
+                "batch %d/%d",
+                batch_number,
+                total_batches,
+            )
+
+            continue
+
+    logging.info(
+        "[CMC] Total prices received: %d/%d",
+        len(all_prices),
         len(cmc_ids),
     )
 
-    try:
-
-        response = requests.get(
-            CMC_QUOTES_URL,
-            headers=get_cmc_headers(),
-            params={
-                "id": ",".join(
-                    str(cmc_id)
-                    for cmc_id in cmc_ids
-                ),
-                "convert": "USD",
-            },
-            timeout=20,
-        )
-
-        if response.status_code == 429:
-
-            logging.warning(
-                "[CMC] Rate limit reached"
-            )
-
-            return {}
-
-        response.raise_for_status()
-
-        payload = response.json()
-
-        status = payload.get("status", {})
-
-        error_code = status.get(
-            "error_code",
-            0,
-        )
-
-        if error_code:
-
-            logging.error(
-                "[CMC] API error %s: %s",
-                error_code,
-                status.get("error_message"),
-            )
-
-            return {}
-
-        prices = {}
-
-        for asset in payload.get("data", []):
-
-            try:
-
-                cmc_id = int(
-                    asset["id"]
-                )
-
-                # V3 returns quote as an ARRAY.
-                usd_quote = next(
-                    (
-                        quote
-                        for quote in asset.get(
-                            "quote",
-                            [],
-                        )
-                        if quote.get("symbol") == "USD"
-                    ),
-                    None,
-                )
-
-                if not usd_quote:
-                    logging.warning(
-                        "[CMC] No USD quote for %s",
-                        asset.get("symbol"),
-                    )
-                    continue
-
-                price = Decimal(
-                    str(
-                        usd_quote["price"]
-                    )
-                )
-
-                prices[cmc_id] = price
-
-            except (
-                KeyError,
-                TypeError,
-                ValueError,
-                InvalidOperation,
-            ):
-
-                logging.exception(
-                    "[CMC] Invalid asset response: %s",
-                    asset,
-                )
-
-        credit_count = (
-            payload
-            .get("status", {})
-            .get("credit_count")
-        )
-
-        logging.info(
-            "[CMC] Received %d/%d prices"
-            "%s",
-            len(prices),
-            len(cmc_ids),
-            (
-                f" | credits={credit_count}"
-                if credit_count is not None
-                else ""
-            ),
-        )
-
-        return prices
-
-    except requests.RequestException as e:
-
-        logging.error(
-            "[CMC] Price request failed: %s",
-            e,
-        )
-
-        return {}
-
-    except Exception:
-
-        logging.exception(
-            "[CMC] Unexpected error fetching prices"
-        )
-
-        return {}
+    return all_prices
 
 
 # ---------------------------------------------------------------------------
