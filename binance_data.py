@@ -4,7 +4,6 @@ import random
 import logging
 import threading
 import time
-import redis
 from decimal import Decimal
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
@@ -27,11 +26,6 @@ from config._settings import (
     ASSET_PRICE_SNAPSHOT_CHECK_INTERVAL,
     ASSET_PRICE_SNAPSHOT_RETENTION_DAYS,
     ASSET_PRICE_SNAPSHOT_PREFIX,
-    CMC_API_KEY,
-    CMC_API_BASE_URL,
-    CMC_PRICE_SNAPSHOT_PREFIX,
-    CMC_PRICE_SNAPSHOT_CHECK_INTERVAL,
-    CMC_PRICE_SNAPSHOT_RETENTION_DAYS,
     DELAY_API_ACCESS_SECONDS,
     BINANCE_API_KEY,
     BINANCE_SECRET_KEY,

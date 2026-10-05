@@ -11,6 +11,7 @@ from config._settings import (
     CMC_PRICE_SNAPSHOT_PREFIX,
     CMC_PRICE_SNAPSHOT_CHECK_INTERVAL,
     CMC_PRICE_SNAPSHOT_RETENTION_DAYS,
+    CMC_ASSET_IDS,
     TZ,
 )
 
@@ -20,6 +21,11 @@ from redis_client import get_redis
 CMC_QUOTES_URL = (
     f"{CMC_API_BASE_URL}/v3/cryptocurrency/quotes/latest"
 )
+
+CMC_ASSET_IDS_NORMALIZED = {
+    str(symbol).upper(): int(cmc_id)
+    for symbol, cmc_id in CMC_ASSET_IDS.items()
+}
 
 
 # ---------------------------------------------------------------------------
@@ -56,86 +62,6 @@ def get_cmc_headers():
         "Accept": "application/json",
         "X-CMC_PRO_API_KEY": CMC_API_KEY,
     }
-
-
-# ---------------------------------------------------------------------------
-# CMC ID mapping
-# ---------------------------------------------------------------------------
-
-CMC_ASSET_MAP_REDIS_KEY = (
-    f"{CMC_PRICE_SNAPSHOT_PREFIX}:asset_map"
-)
-
-
-def set_cmc_asset_id(symbol, cmc_id):
-    """
-    Store one Bitunix/portfolio symbol -> CoinMarketCap ID mapping.
-    """
-
-    symbol = _normalise_symbol(symbol)
-
-    get_redis().hset(
-        CMC_ASSET_MAP_REDIS_KEY,
-        symbol,
-        str(int(cmc_id)),
-    )
-
-
-def set_cmc_asset_ids(asset_map):
-    """
-    Store multiple symbol -> CMC ID mappings.
-    """
-
-    if not asset_map:
-        return
-
-    mapping = {
-        _normalise_symbol(symbol): str(int(cmc_id))
-        for symbol, cmc_id in asset_map.items()
-    }
-
-    get_redis().hset(
-        CMC_ASSET_MAP_REDIS_KEY,
-        mapping=mapping,
-    )
-
-
-def get_cmc_asset_ids():
-    """
-    Return the cached CMC ID mapping.
-
-    Example:
-
-        {
-            "BTC": 1,
-            "ETH": 1027,
-            "SOL": 5426,
-        }
-    """
-
-    raw = get_redis().hgetall(CMC_ASSET_MAP_REDIS_KEY)
-
-    result = {}
-
-    for symbol, cmc_id in raw.items():
-
-        if isinstance(symbol, bytes):
-            symbol = symbol.decode()
-
-        if isinstance(cmc_id, bytes):
-            cmc_id = cmc_id.decode()
-
-        try:
-            result[symbol.upper()] = int(cmc_id)
-
-        except (TypeError, ValueError):
-            logging.warning(
-                "[CMC] Invalid cached asset ID: %s -> %s",
-                symbol,
-                cmc_id,
-            )
-
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -434,7 +360,7 @@ def fetch_and_cache_cmc_asset_price_snapshot():
     # Get CMC ID mapping
     # ---------------------------------------------------------
 
-    cmc_asset_ids = get_cmc_asset_ids()
+    cmc_asset_ids = CMC_ASSET_IDS_NORMALIZED
 
     requested_assets = {}
     missing_assets = []
