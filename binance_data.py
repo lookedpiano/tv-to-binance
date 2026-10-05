@@ -15,7 +15,7 @@ from utils import sanitize_filters
 from email_poll import start_email_polling_thread
 from security import is_outbound_ip_allowed
 
-from redis_client import get_redis
+from redis_client import init_redis, get_redis
 from coinmarketcap_data import cmc_asset_price_snapshot_loop
 
 # -------------------------
