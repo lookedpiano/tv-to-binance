@@ -244,16 +244,18 @@ def fetch_cmc_prices(cmc_ids):
             # EXPLICIT CMC ERROR
             # --------------------------------------------------
 
-            error_code = (
-                status.get("error_code")
-                if isinstance(status, dict)
-                else None
-            )
+            error_code = status.get("error_code", 0)
 
-            if error_code not in (
-                None,
-                0,
-            ):
+            try:
+                error_code = int(error_code)
+            except (TypeError, ValueError):
+                logging.warning(
+                    "[CMC] Invalid error_code returned by API: %r",
+                    error_code,
+                )
+                error_code = 0
+
+            if error_code != 0:
 
                 logging.error(
                     "[CMC] API error on batch %d/%d: "
