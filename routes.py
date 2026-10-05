@@ -12,6 +12,10 @@ from binance_data import (
     DAILY_BALANCE_SNAPSHOT_KEY,
     ASSET_PRICE_SNAPSHOT_PREFIX,
 )
+from coinmarketcap_data import (
+    CMC_PRICE_SNAPSHOT_PREFIX,
+    get_extreme_cmc_asset_price_changes,
+)
 from utils import should_log_request, load_ip_file, require_admin_key
 from security import verify_before_request_secret
 from config._settings import CMC_PRICE_SNAPSHOT_PREFIX, WEBHOOK_REQUEST_PATH, ALLOWED_SYMBOLS, ALPHA_TOKENS, ENABLE_WS_PRICE_CACHE, TZ
@@ -748,6 +752,140 @@ def extreme_asset_price_changes():
             "error": "Failed to calculate extreme asset price changes"
         }), 500
 
+
+@routes.route("/debug/cmc/asset-price-snapshots", methods=["GET"])
+def debug_cmc_asset_price_snapshots():
+    """
+    Debug endpoint: return all CMC asset price snapshots currently
+    stored in Redis, including the latest snapshot pointer.
+    """
+    try:
+        r = get_redis()
+
+        keys = sorted(
+            r.keys(f"{CMC_PRICE_SNAPSHOT_PREFIX}:*")
+        )
+
+        snapshots = []
+
+        for key in keys:
+
+            if isinstance(key, bytes):
+                key = key.decode()
+
+            # The "last" key is a Redis string pointer.
+            if key == f"{CMC_PRICE_SNAPSHOT_PREFIX}:last":
+                continue
+
+            # Ignore metadata keys.
+            if key.endswith(":meta"):
+                continue
+
+            # Ignore lock keys.
+            if ":lock:" in key:
+                continue
+
+            # Only process Redis hashes.
+            key_type = r.type(key)
+
+            if isinstance(key_type, bytes):
+                key_type = key_type.decode()
+
+            if key_type != "hash":
+                logging.warning(
+                    "[ROUTE] Skipping unexpected CMC Redis key type: "
+                    f"{key} ({key_type})"
+                )
+                continue
+
+            # -----------------------------------------------------
+            # Prices
+            # -----------------------------------------------------
+
+            raw = r.hgetall(key)
+
+            prices = {
+                (
+                    k.decode() if isinstance(k, bytes) else k
+                ): (
+                    v.decode() if isinstance(v, bytes) else v
+                )
+                for k, v in raw.items()
+            }
+
+            # -----------------------------------------------------
+            # Metadata
+            # -----------------------------------------------------
+
+            meta_key = f"{key}:meta"
+
+            raw_meta = r.hgetall(meta_key)
+
+            metadata = {
+                (
+                    k.decode() if isinstance(k, bytes) else k
+                ): (
+                    v.decode() if isinstance(v, bytes) else v
+                )
+                for k, v in raw_meta.items()
+            }
+
+            snapshots.append({
+                "key": key,
+                "prices": prices,
+                # Uncomment if you want metadata in the frontend.
+                # "metadata": metadata,
+            })
+
+        # ---------------------------------------------------------
+        # Latest snapshot pointer
+        # ---------------------------------------------------------
+
+        latest = r.get(
+            f"{CMC_PRICE_SNAPSHOT_PREFIX}:last"
+        )
+
+        if isinstance(latest, bytes):
+            latest = latest.decode()
+
+        return jsonify({
+            "count": len(snapshots),
+            "latest": latest,
+            "snapshots": snapshots,
+        }), 200
+
+    except Exception as e:
+
+        logging.exception(
+            f"[ROUTE] Failed to read CMC asset price snapshots: {e}"
+        )
+
+        return jsonify({
+            "error": "Failed to read CMC asset price snapshots"
+        }), 500
+
+
+@routes.route("/extreme-cmc-asset-price-changes", methods=["GET"])
+def extreme_cmc_asset_price_changes():
+    try:
+        result = get_extreme_cmc_asset_price_changes()
+
+        return jsonify(result), 200
+
+    except Exception as e:
+
+        logging.exception(
+            "[ROUTE] Failed to calculate extreme CMC "
+            f"asset price changes: {e}"
+        )
+
+        return jsonify({
+            "error": (
+                "Failed to calculate extreme CMC "
+                "asset price changes"
+            )
+        }), 500
+    
 
 # ==========================================================
 # ========== DASHBOARD======================================

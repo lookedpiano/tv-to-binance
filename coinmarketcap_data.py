@@ -736,6 +736,143 @@ def cleanup_old_cmc_snapshots():
         )
 
 
+def get_extreme_cmc_asset_price_changes():
+    """
+    Calculate the largest percentage price changes between
+    consecutive CMC asset price snapshots.
+
+    Returns the same general structure as the Binance
+    extreme asset price change calculation.
+    """
+
+    r = get_redis()
+
+    snapshots = []
+
+    for key in r.scan_iter(
+        match=f"{CMC_PRICE_SNAPSHOT_PREFIX}:*"
+    ):
+
+        key = (
+            key.decode()
+            if isinstance(key, bytes)
+            else key
+        )
+
+        # Ignore metadata, pointer and lock keys.
+        if (
+            key.endswith(":meta")
+            or key.endswith(":last")
+            or ":lock:" in key
+        ):
+            continue
+
+        raw = r.hgetall(key)
+
+        if not raw:
+            continue
+
+        prices = {}
+
+        for asset, price in raw.items():
+
+            asset = (
+                asset.decode()
+                if isinstance(asset, bytes)
+                else asset
+            )
+
+            price = (
+                price.decode()
+                if isinstance(price, bytes)
+                else price
+            )
+
+            try:
+                prices[asset] = Decimal(price)
+            except (InvalidOperation, TypeError, ValueError):
+                logging.warning(
+                    "[CMC] Invalid stored price for %s: %s",
+                    asset,
+                    price,
+                )
+
+        period = key.replace(
+            f"{CMC_PRICE_SNAPSHOT_PREFIX}:",
+            "",
+        )
+
+        snapshots.append({
+            "period": period,
+            "prices": prices,
+        })
+
+    # Need at least two snapshots to calculate changes.
+    if len(snapshots) < 2:
+        return {
+            "count": 0,
+            "source": "coinmarketcap",
+            "message": "Not enough CMC snapshots to calculate changes",
+            "changes": [],
+        }
+
+    # Chronological order.
+    snapshots.sort(
+        key=lambda snapshot: snapshot["period"]
+    )
+
+    changes = []
+
+    for index in range(1, len(snapshots)):
+
+        previous = snapshots[index - 1]
+        current = snapshots[index]
+
+        previous_prices = previous["prices"]
+        current_prices = current["prices"]
+
+        for asset in current_prices:
+
+            if asset not in previous_prices:
+                continue
+
+            old_price = previous_prices[asset]
+            new_price = current_prices[asset]
+
+            if old_price == 0:
+                continue
+
+            percentage_change = (
+                (new_price - old_price)
+                / old_price
+            ) * Decimal("100")
+
+            changes.append({
+                "asset": asset,
+                "previous_period": previous["period"],
+                "current_period": current["period"],
+                "previous_price": str(old_price),
+                "current_price": str(new_price),
+                "percentage_change": str(
+                    percentage_change
+                ),
+            })
+
+    # Largest absolute movements first.
+    changes.sort(
+        key=lambda item: abs(
+            Decimal(item["percentage_change"])
+        ),
+        reverse=True,
+    )
+
+    return {
+        "count": len(changes),
+        "source": "coinmarketcap",
+        "changes": changes,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Background thread
 # ---------------------------------------------------------------------------
