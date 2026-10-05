@@ -112,9 +112,15 @@ def get_current_cmc_price_snapshot_period():
 
 def fetch_cmc_prices(cmc_ids):
     """
-    Fetch current USD prices for all supplied CMC IDs.
+    Fetch current USD prices for all supplied CoinMarketCap IDs.
 
-    CMC requests are batched in groups of up to 250 IDs.
+    - Uses one request per batch.
+    - CMC supports up to 250 cryptocurrency IDs per request.
+    - CMC charges one credit per 250 returned cryptocurrencies.
+    - Returns a dictionary:
+        {
+            cmc_id: Decimal(price)
+        }
     """
 
     if not CMC_API_KEY:
@@ -126,19 +132,30 @@ def fetch_cmc_prices(cmc_ids):
     if not cmc_ids:
         return {}
 
-    cmc_ids = sorted({
-        int(cmc_id)
-        for cmc_id in cmc_ids
-    })
+    # Normalize and deduplicate IDs
+    try:
+        cmc_ids = sorted({
+            int(cmc_id)
+            for cmc_id in cmc_ids
+        })
+    except (TypeError, ValueError):
+        logging.exception(
+            "[CMC] Invalid CMC ID list"
+        )
+        return {}
 
-    CMC_BATCH_SIZE = 250
+    if not cmc_ids:
+        return {}
 
-    all_prices = {}
+    # CMC supports up to 250 IDs per request
+    BATCH_SIZE = 250
 
-    total_batches = (
-        (len(cmc_ids) + CMC_BATCH_SIZE - 1)
-        // CMC_BATCH_SIZE
-    )
+    batches = [
+        cmc_ids[i:i + BATCH_SIZE]
+        for i in range(0, len(cmc_ids), BATCH_SIZE)
+    ]
+
+    total_batches = len(batches)
 
     logging.info(
         "[CMC] Fetching prices for %d assets in %d batch%s",
@@ -147,29 +164,21 @@ def fetch_cmc_prices(cmc_ids):
         "" if total_batches == 1 else "es",
     )
 
-    for batch_index in range(
-        0,
-        len(cmc_ids),
-        CMC_BATCH_SIZE,
+    all_prices = {}
+
+    for batch_number, batch in enumerate(
+        batches,
+        start=1,
     ):
 
-        batch = cmc_ids[
-            batch_index:
-            batch_index + CMC_BATCH_SIZE
-        ]
-
-        batch_number = (
-            batch_index // CMC_BATCH_SIZE
-        ) + 1
-
-        logging.info(
-            "[CMC] Requesting batch %d/%d with %d IDs",
-            batch_number,
-            total_batches,
-            len(batch),
-        )
-
         try:
+
+            logging.info(
+                "[CMC] Requesting batch %d/%d with %d IDs",
+                batch_number,
+                total_batches,
+                len(batch),
+            )
 
             response = requests.get(
                 CMC_QUOTES_URL,
@@ -184,6 +193,17 @@ def fetch_cmc_prices(cmc_ids):
                 timeout=20,
             )
 
+            # --------------------------------------------------
+            # HTTP STATUS
+            # --------------------------------------------------
+
+            logging.info(
+                "[CMC] HTTP response batch %d/%d: status=%s",
+                batch_number,
+                total_batches,
+                response.status_code,
+            )
+
             if response.status_code == 429:
 
                 logging.warning(
@@ -195,6 +215,10 @@ def fetch_cmc_prices(cmc_ids):
                 continue
 
             response.raise_for_status()
+
+            # --------------------------------------------------
+            # JSON RESPONSE
+            # --------------------------------------------------
 
             payload = response.json()
 
@@ -219,9 +243,18 @@ def fetch_cmc_prices(cmc_ids):
                     status.get("error_message"),
                 )
 
+                logging.error(
+                    "[CMC] Response body: %s",
+                    response.text[:1000],
+                )
+
                 continue
 
-            batch_prices = {}
+            # --------------------------------------------------
+            # PARSE PRICES
+            # --------------------------------------------------
+
+            batch_prices = 0
 
             for asset in payload.get(
                 "data",
@@ -234,7 +267,8 @@ def fetch_cmc_prices(cmc_ids):
                         asset["id"]
                     )
 
-                    # CMC v3 returns quote as an ARRAY.
+                    # CMC v3 returns quote as an array.
+                    # Find the USD quote.
                     usd_quote = next(
                         (
                             quote
@@ -262,7 +296,9 @@ def fetch_cmc_prices(cmc_ids):
                         )
                     )
 
-                    batch_prices[cmc_id] = price
+                    all_prices[cmc_id] = price
+
+                    batch_prices += 1
 
                 except (
                     KeyError,
@@ -276,54 +312,65 @@ def fetch_cmc_prices(cmc_ids):
                         asset,
                     )
 
-            all_prices.update(
-                batch_prices
+            # --------------------------------------------------
+            # CREDIT INFORMATION
+            # --------------------------------------------------
+
+            credit_count = status.get(
+                "credit_count"
             )
 
-            credit_count = (
-                payload
-                .get("status", {})
-                .get("credit_count")
-            )
+            if credit_count is not None:
 
-            logging.info(
-                "[CMC] Batch %d/%d received %d/%d prices%s",
-                batch_number,
-                total_batches,
-                len(batch_prices),
-                len(batch),
-                (
-                    f" | credits={credit_count}"
-                    if credit_count is not None
-                    else ""
-                ),
-            )
+                logging.info(
+                    "[CMC] Batch %d/%d received %d/%d prices "
+                    "| credits=%s",
+                    batch_number,
+                    total_batches,
+                    batch_prices,
+                    len(batch),
+                    credit_count,
+                )
+
+            else:
+
+                logging.info(
+                    "[CMC] Batch %d/%d received %d/%d prices",
+                    batch_number,
+                    total_batches,
+                    batch_prices,
+                    len(batch),
+                )
+
+        # ------------------------------------------------------
+        # REQUEST TIMEOUT
+        # ------------------------------------------------------
 
         except requests.Timeout as e:
 
             logging.error(
-                "[CMC] Request timeout on batch %d/%d: "
-                "type=%s error=%r",
+                "[CMC] TIMEOUT on batch %d/%d: %r",
                 batch_number,
                 total_batches,
-                type(e).__name__,
                 e,
             )
 
-            continue
+        # ------------------------------------------------------
+        # CONNECTION ERROR
+        # ------------------------------------------------------
 
         except requests.ConnectionError as e:
 
             logging.error(
-                "[CMC] Connection error on batch %d/%d: "
-                "type=%s error=%r",
+                "[CMC] CONNECTION ERROR on batch %d/%d: %r",
                 batch_number,
                 total_batches,
-                type(e).__name__,
                 e,
             )
 
-            continue
+        # ------------------------------------------------------
+        # OTHER REQUEST / HTTP ERROR
+        # ------------------------------------------------------
 
         except requests.RequestException as e:
 
@@ -334,7 +381,7 @@ def fetch_cmc_prices(cmc_ids):
             )
 
             logging.error(
-                "[CMC] HTTP request failed on batch %d/%d: "
+                "[CMC] HTTP REQUEST ERROR on batch %d/%d: "
                 "type=%s status=%s error=%r",
                 batch_number,
                 total_batches,
@@ -350,18 +397,22 @@ def fetch_cmc_prices(cmc_ids):
                     e.response.text[:1000],
                 )
 
-            continue
+        # ------------------------------------------------------
+        # UNEXPECTED ERROR
+        # ------------------------------------------------------
 
-        except Exception:
+        except Exception as e:
 
             logging.exception(
-                "[CMC] Unexpected error processing "
-                "batch %d/%d",
+                "[CMC] UNEXPECTED ERROR on batch %d/%d: %r",
                 batch_number,
                 total_batches,
+                e,
             )
 
-            continue
+    # ----------------------------------------------------------
+    # FINAL RESULT
+    # ----------------------------------------------------------
 
     logging.info(
         "[CMC] Total prices received: %d/%d",
