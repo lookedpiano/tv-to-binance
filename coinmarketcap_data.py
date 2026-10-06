@@ -1,5 +1,6 @@
 import logging
 import time
+import threading
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -1052,3 +1053,15 @@ def cmc_asset_price_snapshot_loop():
         time.sleep(
             CMC_PRICE_SNAPSHOT_CHECK_INTERVAL
         )
+
+def start_cmc_background_cache():
+    if not CMC_API_KEY:
+        logging.info(
+            "[CMC] CMC_API_KEY not configured; "
+            "CMC snapshot process disabled."
+        )
+        return
+
+    threading.Thread(target=cmc_asset_price_snapshot_loop, daemon=True, name="CMC-Asset-Price-Snapshot").start()
+
+    logging.info("[CMC] CMC snapshot process started.")
