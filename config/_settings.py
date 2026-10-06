@@ -235,6 +235,10 @@ CMC_ASSET_IDS = {
     "SUN": 10529,
     "TAC": 37338,
     "TRX": 1958,
+    "ACH": 6958,
+    "ETC": 1321,
+    "FLUID": 10508,
+    "NOM": 38464,    
 }
 
 # -------------------------
@@ -320,6 +324,7 @@ ALLOWED_SYMBOLS = [
     "PUNDIXUSDT", "SIGNUSDT", "KITEUSDT", "ALPINEUSDT", "AWEUSDT", "CHRUSDT",
     "GASUSDT", "BEAMUSDT", "PROSUSDT", "SFPUSDT", "0GUSDT", "RSRUSDT",
     "MOVEUSDT", "ARXUSDT", "KERNELUSDT", "MEGAUSDT", "CUSDT", "MONUSDT",
+    "ACHUSDT",
     
 
 
