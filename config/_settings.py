@@ -243,6 +243,13 @@ CMC_ASSET_IDS = {
     "BENK": 30756,
     "PUNCH": 39600,
     "SNEK": 25264,
+    "ARPA": 4039,
+    "DIA": 6138,
+    "MOVR": 9285,
+    "NMR": 1732,
+    "RENDER": 5690,
+    "LUMIA": 33439,
+    "AI": 39883,
 }
 
 # -------------------------
@@ -328,7 +335,7 @@ ALLOWED_SYMBOLS = [
     "PUNDIXUSDT", "SIGNUSDT", "KITEUSDT", "ALPINEUSDT", "AWEUSDT", "CHRUSDT",
     "GASUSDT", "BEAMUSDT", "PROSUSDT", "SFPUSDT", "0GUSDT", "RSRUSDT",
     "MOVEUSDT", "ARXUSDT", "KERNELUSDT", "MEGAUSDT", "CUSDT", "MONUSDT",
-    "ACHUSDT",
+    "ACHUSDT", "DIAUSDT", "LUMIAUSDT", "AIGENSYNUSDT",
     
 
 
