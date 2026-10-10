@@ -254,6 +254,13 @@ CMC_ASSET_IDS = {
     "GMX": 11857,
     "AXL": 17799,
     "OGN": 5117,
+    "AXS": 6783,
+    "BAT": 1697,
+    "CTR": 39916,
+    "GLM": 1455,
+    "SAND": 6210,
+    "ZIL": 2469,
+
 }
 
 # -------------------------
@@ -340,6 +347,7 @@ ALLOWED_SYMBOLS = [
     "GASUSDT", "BEAMUSDT", "PROSUSDT", "SFPUSDT", "0GUSDT", "RSRUSDT",
     "MOVEUSDT", "ARXUSDT", "KERNELUSDT", "MEGAUSDT", "CUSDT", "MONUSDT",
     "ACHUSDT", "DIAUSDT", "LUMIAUSDT", "AIGENSYNUSDT", "DEEPUSDT", "OGNUSDT",
+    "CTRUSDT", "ZILUSDT",
     
 
 
