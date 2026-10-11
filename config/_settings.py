@@ -260,7 +260,8 @@ CMC_ASSET_IDS = {
     "GLM": 1455,
     "SAND": 6210,
     "ZIL": 2469,
-
+    "KAIA": 32880,
+    "ERA": 37374,
 }
 
 # -------------------------
@@ -347,7 +348,7 @@ ALLOWED_SYMBOLS = [
     "GASUSDT", "BEAMUSDT", "PROSUSDT", "SFPUSDT", "0GUSDT", "RSRUSDT",
     "MOVEUSDT", "ARXUSDT", "KERNELUSDT", "MEGAUSDT", "CUSDT", "MONUSDT",
     "ACHUSDT", "DIAUSDT", "LUMIAUSDT", "AIGENSYNUSDT", "DEEPUSDT", "OGNUSDT",
-    "CTRUSDT", "ZILUSDT",
+    "CTRUSDT", "ZILUSDT", "ERAUSDT",
     
 
 
