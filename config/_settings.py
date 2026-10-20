@@ -4,18 +4,6 @@ from zoneinfo import ZoneInfo
 
 CMC_ASSET_IDS_NEW = {
     # Main USDT pairs
-  
-    "ZEC": 1437,
-    "DASH": 131,
-    "ASTER": 36341,
-    "AIXBT": 34103,
-    "ATOM": 3794,
-    "TNSR": 30449,
-    "BEAMX": None,
-    "BONK": None,
-    "CAKE": None,
-    "CHZ": None,
-    "COOKIE": None,
     "CRV": None,
     "DYDX": None,
     "EGLD": None,
@@ -406,6 +394,18 @@ CMC_ASSET_IDS = {
     "SKL": 5691,
     "WAL": 36119,
     "XMR": 328,
+    "ZEC": 1437,
+    "DASH": 131,
+    "ASTER": 36341,
+    "AIXBT": 34103,
+    "ATOM": 3794,
+    "TNSR": 30449,
+    "BEAMX": 28298,
+    "BEAM": 28298,
+    "BONK": 23095,
+    "CAKE": 7186,
+    "CHZ": 4066,
+    "COOKIE": 31838,
 }
 
 # -------------------------
