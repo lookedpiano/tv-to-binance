@@ -115,7 +115,6 @@ CMC_ASSET_IDS_NEW = {
     "PEOPLE": None,
     "AEON": None,
     "COLLECT": None,
-    "CVX": None,
     "ACE": None,
     "MUBARAK": None,
     "OPEN": None,
@@ -406,6 +405,9 @@ CMC_ASSET_IDS = {
     "CAKE": 7186,
     "CHZ": 4066,
     "COOKIE": 31838,
+    "CVX": 9903,
+    "TAKE": 38175,
+    "IOST": 2405,
 }
 
 # -------------------------
@@ -492,7 +494,7 @@ ALLOWED_SYMBOLS = [
     "GASUSDT", "BEAMUSDT", "PROSUSDT", "SFPUSDT", "0GUSDT", "RSRUSDT",
     "MOVEUSDT", "ARXUSDT", "KERNELUSDT", "MEGAUSDT", "CUSDT", "MONUSDT",
     "ACHUSDT", "DIAUSDT", "LUMIAUSDT", "AIGENSYNUSDT", "DEEPUSDT", "OGNUSDT",
-    "CTRUSDT", "ZILUSDT", "ERAUSDT", "SKLUSDT", "XMRUSDT",
+    "CTRUSDT", "ZILUSDT", "ERAUSDT", "SKLUSDT", "XMRUSDT", "IOSTUSDT",
     
 
 
