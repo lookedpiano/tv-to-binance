@@ -79,7 +79,7 @@ CMC_ASSET_IDS_NEW = {
     "SPK": None,
     "AGLD": None,
     "ZBT": None,
-    "IRYS": None,
+    
     "RIF": None,
     "HYPER": None,
     "EPIC": None,
@@ -409,6 +409,8 @@ CMC_ASSET_IDS = {
     "TAKE": 38175,
     "IOST": 2405,
     "ELSA": 39387,
+    "AIOT": 36319,
+    "IRYS": 38978,
 }
 
 # -------------------------
