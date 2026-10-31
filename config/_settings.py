@@ -4,8 +4,6 @@ from zoneinfo import ZoneInfo
 
 CMC_ASSET_IDS_NEW = {
     # Main USDT pairs
-    "CRV": None,
-    "DYDX": None,
     "EGLD": None,
     "FLOKI": None,
     "FLUX": None,
@@ -412,6 +410,9 @@ CMC_ASSET_IDS = {
     "AIOT": 36319,
     "IRYS": 38978,
     "JCT": 38909,
+    "ICNT": 37070,
+    "CRV": 6538,
+    "DYDX": 28324,
 }
 
 # -------------------------
