@@ -4,27 +4,12 @@ from zoneinfo import ZoneInfo
 
 CMC_ASSET_IDS_NEW = {
     # Main USDT pairs
-    "EGLD": None,
-    "FLOKI": None,
     "FLUX": None,
-    "GALA": None,
-    "GMT": None,
     "IDEX": None,
-    "IO": None,
-    "JTO": None,
-    "LINK": None,
-    "LPT": None,
-    "MASK": None,
-    "NEAR": None,
-    "OM": None,
-    "PARTI": None,
     "PHA": None,
-    "PIXEL": None,
-    "RAY": None,
-    "SHIB": None,
-    "SUSHI": None,
-    "THE": None,
     "TON": None,
+    
+
     "TRUMP": None,
     "TURBO": None,
     "UMA": None,
@@ -414,6 +399,23 @@ CMC_ASSET_IDS = {
     "CRV": 6538,
     "DYDX": 28324,
     "DOOD": 35747,
+    "EGLD": 6892,
+    "FLOKI": 10804,
+    "GALA": 7080,
+    "GMT": 18069,
+    "IO": 29835,
+    "JTO": 28541,
+    "LINK": 1975,
+    "LPT": 3640,
+    "MASK": 8536,
+    "NEAR": 6535,
+    "OM": 6536,
+    "PARTI": 36102,
+    "PIXEL": 29335,
+    "RAY": 8526,
+    "SHIB": 5994,
+    "SUSHI": 6758,
+    "THE": 23335,
 }
 
 # -------------------------
