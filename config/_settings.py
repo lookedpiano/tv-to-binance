@@ -19,7 +19,6 @@ CMC_ASSET_IDS_NEW = {
     "WLFI": None,
     "GUN": None,
     "BERA": None,
-    "SXT": None,
     "MET": None,
     "RESOLV": None,
 
@@ -422,6 +421,7 @@ CMC_ASSET_IDS = {
     "TA": 37430,
     "ZAMA": 39332,
     "OPG": 39800,
+    "SXT": 36405,
 }
 
 # -------------------------
